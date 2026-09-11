@@ -128,6 +128,11 @@ export async function handleRequest(
         }
       }
     }
+    if (url.pathname === "/slack/commands")
+      return Response.json({
+        response_type: "ephemeral",
+        text: "슬래시 명령은 종료했어요. 채널에 원씽을 자연어로 남기거나 ‘내 상태’라고 입력해 주세요.",
+      });
     const today = koreaDate(timestamp);
     const operation =
       url.pathname === "/slack/commands"
@@ -143,7 +148,7 @@ export async function handleRequest(
         if (env.INVITATIONS_ENABLED !== "true" || !env.INVITE_SIGNING_SECRET) {
           return Response.json({
             response_type: "ephemeral",
-            text: "초대제는 준비 중입니다. 지금은 /one으로 잔디를 사용할 수 있습니다.",
+            text: "초대제는 준비 중입니다. 지금은 채널에 ‘내 상태’라고 입력해 잔디를 확인할 수 있습니다.",
           });
         }
         ctx.waitUntil(

@@ -110,19 +110,14 @@ async function personalReminder(
     await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: job.channelId,
       ...(typeof ts === "string" ? { thread_ts: ts } : {}),
-      text,
+      text: `${text}\n개인 안내를 끄려면 “알림 설정”이라고 남겨주세요.`,
       blocks: [
-        { type: "section", text: { type: "mrkdwn", text } },
         {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              action_id: "community_stop",
-              text: { type: "plain_text", text: "개인 알림 끄기" },
-              value: JSON.stringify({ ownerId: job.userId, key: job.date }),
-            },
-          ],
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `${text}\n개인 안내를 끄려면 “알림 설정”이라고 남겨주세요.`,
+          },
         },
       ],
     });

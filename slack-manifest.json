@@ -8,21 +8,11 @@
     "bot_user": {
       "display_name": "원씽 잔디",
       "always_online": false
-    },
-    "slash_commands": [
-      {
-        "command": "/one",
-        "url": "https://your-worker.workers.dev/slack/commands",
-        "description": "오늘의 원씽 작성, 확인, 공유",
-        "usage_hint": "[오늘 할 일 | 보기 | 공유 | 기록 YYYY-MM-DD]",
-        "should_escape": false
-      }
-    ]
+    }
   },
   "oauth_config": {
     "scopes": {
       "bot": [
-        "commands",
         "users:read",
         "users:read.email",
         "app_mentions:read",

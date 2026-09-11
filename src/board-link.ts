@@ -41,7 +41,9 @@ export async function readBoardLink(token: string, secret: string): Promise<Boar
     throw new InputError("보드 주소가 유효하지 않습니다.");
   const decoded = object(JSON.parse(atob(data.replaceAll("-", "+").replaceAll("_", "/"))));
   if (typeof decoded.expires !== "number" || decoded.expires < Date.now() / 1000)
-    throw new InputError("보드 주소가 만료되었습니다. /one으로 다시 확인해 주세요.");
+    throw new InputError(
+      "보드 주소가 만료되었습니다. 채널에 ‘내 상태’라고 입력해 다시 확인해 주세요.",
+    );
   const snapshot: Snapshot = {
     startDate: date(decoded.origin),
     palette: palette(decoded.palette),

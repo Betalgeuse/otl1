@@ -51,7 +51,7 @@ export async function processRecord(
         ? "기존 참여자의 초대가 필요합니다. /one 가입 뒤에 받은 초대 코드를 입력해 주세요."
         : error instanceof RangeError || error instanceof InputError
           ? error.message
-          : "처리를 확인하지 못했습니다. /one으로 기록을 확인한 뒤 다시 시도해 주세요.";
+          : "처리를 확인하지 못했습니다. ‘내 상태’로 기록을 확인한 뒤 다시 시도해 주세요.";
     try {
       await reply(operation.responseUrl, {
         response_type: "ephemeral",

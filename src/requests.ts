@@ -88,7 +88,7 @@ export function interaction(
         kind: "denied",
         identity,
         responseUrl: slackResponseUrl(rawMetadata),
-        text: "/one으로 보드를 다시 열고 색상 설정을 눌러 주세요.",
+        text: "‘내 상태’로 보드를 다시 열고 색상 변경을 눌러 주세요.",
       };
     const metadata = object(JSON.parse(rawMetadata));
     const responseUrl = slackResponseUrl(metadata.responseUrl);
@@ -135,7 +135,7 @@ export function interaction(
       kind: "denied",
       identity,
       responseUrl,
-      text: "보드 작성자만 변경할 수 있습니다. 본인 보드는 /one으로 다시 열어 주세요.",
+      text: "보드 작성자만 변경할 수 있습니다. 본인 보드는 ‘내 상태’로 다시 열어 주세요.",
     };
   if (action.action_id === "settings")
     return {
