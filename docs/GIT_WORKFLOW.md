@@ -11,3 +11,9 @@
 - 원격 저장소와 push는 별도 설정한다. 현재 작업은 로컬 Git 기록이다.
 
 운영 전 상태와 이관 근거는 [DATABASE_NORMALIZATION.md](DATABASE_NORMALIZATION.md)에 기록했다.
+
+## 공개 저장소 게시
+
+운영 기록이 포함된 기존 로컬 이력은 공개로 push하지 않는다. `node scripts/export-public.mjs`로 코드·합성 테스트·설정 예시·공개 설치 명세만 `/tmp/otl1-public`에 생성한다. 공개본은 별도 Git 첫 커밋으로 게시하며 원본 회원 자료와 운영 식별자를 포함하지 않는다. 공개용006은 기존 운영 예외를 담지 않는 신규 설치용 변형이다. 공개 DB에도 충돌 확인을 생략하지 않는다.
+
+게시 전 공개 트리와 이력을 검사하고 frozen-lock 설치·lint·typecheck·build·신규 DB 설치 테스트를 통과해야 한다. 운영 브랜치의 `--all`, `--mirror`, 전체 태그 push는 사용하지 않는다. 공개 저장소의 devDependencies는 기존 필수 개발 도구 버전을 고정해 새 환경에서도 재현할 수 있게 한다.
