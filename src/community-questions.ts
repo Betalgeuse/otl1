@@ -37,6 +37,14 @@ export async function answerCommunityQuestion(
     await textReply(context, "잠시 후 다시 질문해 주세요. 기록은 바꾸지 않았어요.");
     return true;
   }
+  if (
+    /주말|토요일|일요일/.test(text) &&
+    /필수|의무|선택/.test(text) &&
+    !/등록해|저장해|수정해|바꿔|처리해|기록해|쉴게|쉬었|했어요/.test(text)
+  ) {
+    await textReply(context, ANSWERS.weekend);
+    return true;
+  }
   if (!context.env.AI) {
     await textReply(context, ANSWERS.unknown);
     return true;
