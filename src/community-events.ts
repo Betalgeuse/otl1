@@ -52,9 +52,10 @@ export async function handleCommunityEvent(
   const source = string(event.ts);
   const stamp = Number(source);
   if (!Number.isFinite(stamp) || Math.abs(Date.now() / 1000 - stamp) > 300) return true;
-  const text = string(event.text)
-    .replace(/<@U0C0ASC06BW>/g, "")
-    .trim();
+  const rawText = string(event.text);
+  const text = (
+    env.COMMUNITY_BOT_USER_ID ? rawText.split(`<@${env.COMMUNITY_BOT_USER_ID}>`).join("") : rawText
+  ).trim();
   if (!text) return true;
   const scope = { teamId: env.SLACK_TEAM_ID, channelId: string(event.channel), userId };
   const store = new CommunityStore(new NeonStore(env.DATABASE_URL));

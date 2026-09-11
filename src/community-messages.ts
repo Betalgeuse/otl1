@@ -82,6 +82,16 @@ export function communityStatusMessage(input: StatusCard): Json {
       alt_text: `${input.date} 원씽 잔디. ${status}`,
     });
   }
+  if (input.boardUrl)
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "plain_text",
+          text: "주말은 선택 참여예요. 잔디의 O는 주말 미참여이며 실패를 뜻하지 않아요.",
+        },
+      ],
+    });
   if (input.earlierNotice)
     blocks.push({ type: "section", text: { type: "mrkdwn", text: input.earlierNotice } });
   if (actions.length) blocks.push({ type: "actions", elements: actions });

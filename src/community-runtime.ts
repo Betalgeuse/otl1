@@ -12,6 +12,7 @@ export type CommunityEnv = {
   readonly BOARD_SIGNING_SECRET: string;
   readonly PUBLIC_BASE_URL: string;
   readonly COMMUNITY_ENABLED?: string;
+  readonly COMMUNITY_BOT_USER_ID?: string;
   readonly DATABASE_MAINTENANCE?: string;
   readonly COMMUNITY_CLOCK?: ClockBinding;
   readonly COMMUNITY_CHANNEL_ID?: string;

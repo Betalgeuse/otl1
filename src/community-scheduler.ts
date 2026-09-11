@@ -1,3 +1,4 @@
+import { isWeekend } from "./calendar";
 import { customBotEmoji } from "./community-emoji";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
@@ -39,6 +40,8 @@ function parseSchedule(value: unknown): Schedule {
   return { enabled: body.enabled, goalTime, reviewTime };
 }
 function promptText(date: string, kind: Kind): string {
+  if (isWeekend(date))
+    return `${date} 주말 원씽은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 이 스레드나 채널에 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
   return kind === "goal"
     ? `${date} 오늘의 원씽!!! :seedling: 오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지는 무엇인가요? 그 일과 이유를 이 글의 스레드에 남겨주세요. 가장 중요한 일부터 같이 해봅시다 :muscle:`
     : `${date} 오늘 원씽은 어떠셨나요? :memo: 해낸 만큼, 느낀 점 한 줄을 이 글의 스레드에 남겨주세요. 다 못 했어도 괜찮아요!!! :penguin:`;
@@ -56,7 +59,7 @@ async function commonPrompt(
   try {
     const response = await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: scope.channelId,
-      text: `${await customBotEmoji(env.SLACK_BOT_TOKEN, promptText(date, kind))} <!channel>`,
+      text: `${await customBotEmoji(env.SLACK_BOT_TOKEN, promptText(date, kind))}${isWeekend(date) ? "" : " <!channel>"}`,
     });
     const ts = string(response.ts);
     if (!/^\d+\.\d+$/.test(ts)) throw new InputError("Slack timestamp missing");
@@ -151,6 +154,7 @@ export async function runCommunitySchedule(
     const schedule = parseSchedule(settings.body);
     if (schedule.enabled) {
       for (const kind of ["goal", "review"] as const) {
+        if (isWeekend(date) && kind === "review") continue;
         const due = kind === "goal" ? schedule.goalTime : schedule.reviewTime;
         const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
         const late = minutes(minute) - minutes(due);
@@ -158,6 +162,7 @@ export async function runCommunitySchedule(
       }
     }
   }
+  if (isWeekend(date)) return { common, personal };
   for (const job of await store.due(scope.teamId, scope.channelId, nowDate.toISOString())) {
     if (job.teamId !== scope.teamId || job.channelId !== scope.channelId || job.date !== date)
       continue;

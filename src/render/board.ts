@@ -42,6 +42,10 @@ function drawCell(
   }
   switch (cell.status) {
     case "empty":
+      if (cell.optional) {
+        label(raster, "O", { center: { x: centerX, y: box.y + 18 }, ink });
+        return;
+      }
       raster.rect({ x: box.x + 18, y: box.y + 23, width: 14, height: 4 }, ink);
       return;
     case "written":

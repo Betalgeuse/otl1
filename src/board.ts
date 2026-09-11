@@ -1,3 +1,4 @@
+import { isWeekend } from "./calendar";
 export type Palette = {
   readonly empty: string;
   readonly written: string;
@@ -21,6 +22,7 @@ export type Cell = {
   readonly date: string;
   readonly status: "empty" | "written" | "complete";
   readonly future: boolean;
+  readonly optional?: boolean;
   readonly today: boolean;
 };
 
@@ -69,6 +71,7 @@ export function buildBoard(snapshot: Snapshot, today: string, anchor = today): B
       date,
       status: goal === undefined ? "empty" : goal.completed ? "complete" : "written",
       future: stamp > current,
+      optional: goal === undefined && isWeekend(date),
       today: stamp === current,
     };
   });
