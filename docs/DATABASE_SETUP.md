@@ -7,6 +7,7 @@
 ```sh
 psql -X -v ON_ERROR_STOP=1 -f migrations/001_initial.sql -f migrations/005_community.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/006_normalized_foundation.sql -f migrations/007_normalized_legacy.sql
+psql -X -v ON_ERROR_STOP=1 -f migrations/008_default_reminders.sql
 ```
 
 006과007은 반드시 한 트랜잭션에서 적용합니다.002–004의 별도 초대·가입 정책은 이 설치에 포함하지 않습니다. 공개006은 신규 설치용이며 특정 운영 회원이나 사전 승인된 예외를 포함하지 않습니다.

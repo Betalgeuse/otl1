@@ -123,6 +123,9 @@ export class CommunityStore {
       undoKey: string(v.undoKey),
     };
   }
+  async enrollReminders(input: CommunityScope): Promise<SupportPreferences> {
+    return preferences(await this.call("enroll_reminders", input));
+  }
   async preferences(
     input: CommunityScope,
     patch: PreferencePatch = {},

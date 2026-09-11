@@ -6,8 +6,8 @@ import { randomUUID } from "node:crypto";
 const exec = promisify(execFile);
 const base = { teamId: `QA-${randomUUID()}`, channelId: "admin", userId: "owner", date: "2026-09-11" };
 async function call(op, input = {}) {
-  const payload = JSON.stringify({ ...base, now: "2026-09-11T09:30:00Z", ...input }).replaceAll("'", "''");
-  const { stdout } = await exec("psql", ["-h", process.env.COMMUNITY_PG_SOCKET ?? "/tmp/otl-community-pg", "-p", process.env.COMMUNITY_PG_PORT ?? "55439", "-d", process.env.COMMUNITY_PG_DATABASE ?? "postgres", "-XAt", "-v", "ON_ERROR_STOP=1", "-c", `SELECT otl.community_execute('${op}','${payload}'::jsonb)`]);
+  const payload = JSON.stringify({ ...(op === "preferences" ? {goalTime:"10:00",reviewTime:"18:00"} : {}), ...base, now: "2026-09-11T09:30:00Z", ...input }).replaceAll("'", "''");
+  const { stdout } = await exec("psql", ["-h", process.env.COMMUNITY_PG_SOCKET ?? "/tmp/otl-community-pg", "-p", process.env.COMMUNITY_PG_PORT ?? "55439", "-d", process.env.COMMUNITY_PG_DATABASE ?? "postgres", "-XAtq", "-v", "ON_ERROR_STOP=1", "-c", `DO $$ BEGIN IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='otl' AND table_name='community_preferences' AND column_name='eligible_from') THEN UPDATE otl.community_preferences SET eligible_from='2026-09-10' WHERE team_id='${base.teamId}'; END IF; END $$; SELECT otl.community_execute('${op}','${payload}'::jsonb)`]);
   return JSON.parse(stdout);
 }
 
@@ -67,7 +67,7 @@ async function legacy(userId) {
   return JSON.parse(stdout);
 }
 assert.equal((await legacy("owner")).goals.length, 0);
-if (process.env.COMMUNITY_PG_DATABASE) await exec("psql", ["-h", process.env.COMMUNITY_PG_SOCKET ?? "/tmp/otl-community-pg", "-p", process.env.COMMUNITY_PG_PORT ?? "55439", "-d", process.env.COMMUNITY_PG_DATABASE, "-XAt", "-v", "ON_ERROR_STOP=1", "-c", `UPDATE otl.workspaces SET primary_goal_channel_id='public' WHERE team_id='${base.teamId}'`]);
+if (process.env.COMMUNITY_PG_DATABASE) await exec("psql", ["-h", process.env.COMMUNITY_PG_SOCKET ?? "/tmp/otl-community-pg", "-p", process.env.COMMUNITY_PG_PORT ?? "55439", "-d", process.env.COMMUNITY_PG_DATABASE, "-XAtq", "-v", "ON_ERROR_STOP=1", "-c", `UPDATE otl.workspaces SET primary_goal_channel_id='public' WHERE team_id='${base.teamId}'`]);
 await call("change", { userId: "synced", ...(process.env.COMMUNITY_PG_DATABASE ? {channelId:"public"} : {}), action: "goal", key: "synced-goal", text: "공개 원씽", syncLegacy: true });
 assert.equal((await legacy("synced")).goals[0].text, "공개 원씽");
 await exec("psql", ["-h", process.env.COMMUNITY_PG_SOCKET ?? "/tmp/otl-community-pg", "-p", process.env.COMMUNITY_PG_PORT ?? "55439", "-d", process.env.COMMUNITY_PG_DATABASE ?? "postgres", "-XAt", "-c", `UPDATE otl.profiles SET complete_color='#123456',start_date='2026-09-01' WHERE team_id='${base.teamId}' AND user_id='synced'`]);

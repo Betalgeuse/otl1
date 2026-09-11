@@ -8,8 +8,9 @@ import { runCommunitySchedule } from "../src/community-scheduler.ts";
 const exec = promisify(execFile);
 const store = new CommunityStore({
   async queryJson(_query, params) {
-    const payload = params[1].replaceAll("'", "''");
-    const { stdout } = await exec("psql", ["-h", "/tmp/otl-community-pg", "-p", "55439", "-d", process.env.COMMUNITY_PG_DATABASE ?? "postgres", "-XAt", "-v", "ON_ERROR_STOP=1", "-c", `SELECT otl.community_execute('${params[0]}','${payload}'::jsonb)`]);
+    const parsed=JSON.parse(params[1]); if(params[0]==="preferences"){parsed.goalTime ??= "10:00";parsed.reviewTime ??= "18:00";}
+    const payload = JSON.stringify(parsed).replaceAll("'", "''");
+    const { stdout } = await exec("psql", ["-h", "/tmp/otl-community-pg", "-p", "55439", "-d", process.env.COMMUNITY_PG_DATABASE ?? "postgres", "-XAtq", "-v", "ON_ERROR_STOP=1", "-c", `DO $$ BEGIN IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='otl' AND table_name='community_preferences' AND column_name='eligible_from') THEN UPDATE otl.community_preferences SET eligible_from='2026-09-10' WHERE team_id='${parsed.teamId}'; END IF; END $$; SELECT otl.community_execute('${params[0]}','${payload}'::jsonb)`]);
     return JSON.parse(stdout);
   },
 });

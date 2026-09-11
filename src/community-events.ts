@@ -1,5 +1,6 @@
 import { adminCommand, captureFeedback } from "./community-admin";
 import { groupCard, settingsCard } from "./community-controls";
+import { enrollReminderMember } from "./community-enrollment";
 import { messageDate } from "./community-followup";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
@@ -29,6 +30,7 @@ export async function handleCommunityEvent(
   )
     return false;
   const event = object(data.event);
+  await enrollReminderMember(event, env);
   if (await welcomeTownhallMember(event, env)) return true;
   if (
     ![
