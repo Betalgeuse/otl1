@@ -1,0 +1,12 @@
+{
+  "name": "onething-slack-garden",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir .output",
+    "lint": "biome check src",
+    "typecheck": "bun x --no-install tsc --noEmit",
+    "deploy": "wrangler deploy"
+  }
+}

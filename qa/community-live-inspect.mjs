@@ -1,0 +1,15 @@
+import {writeFileSync,mkdirSync} from 'node:fs';
+import {CommunityStore} from '../src/community-store.ts';
+import {NeonStore} from '../src/store.ts';
+import {koreaDate} from '../src/input.ts';
+process.loadEnvFile('.dev.vars');
+const channel='C0C0AMK8068';const userId='U0BV52VENTD';
+const thread=process.argv[2];
+const method=thread?'conversations.replies':'conversations.history';
+const q=new URLSearchParams({channel,limit:'30',...(thread?{ts:thread}:{oldest:'1789053500'})});
+const r=await fetch('https://slack.com/api/'+method+'?'+q,{headers:{Authorization:`Bearer ${process.env.SLACK_BOT_TOKEN}`}});const d=await r.json();if(!d.ok)throw Error(d.error);
+const store=new CommunityStore(new NeonStore(process.env.DATABASE_URL));const scope={teamId:process.env.SLACK_TEAM_ID,channelId:channel,userId};
+const state=await store.day({...scope,date:koreaDate(Date.now()/1000)});const prefs=await store.preferences(scope);
+const result={checkedAt:new Date().toISOString(),state,prefs,messages:d.messages.map(m=>({ts:m.ts,text:m.text,replies:m.reply_count,reactions:m.reactions?.map(r=>r.name),blocks:m.blocks})),hasMore:d.has_more};
+mkdirSync('.omx/qa/v001-v019',{recursive:true});writeFileSync(`.omx/qa/v001-v019/readback-${thread??'channel'}.json`,JSON.stringify(result,null,2));
+console.log(JSON.stringify({...result,messages:result.messages.map(({blocks,...m})=>m)}));

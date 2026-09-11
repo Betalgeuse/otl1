@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {createHmac} from 'node:crypto';
+import {writeFileSync} from 'node:fs';
+import {CommunityStore} from '../src/community-store.ts';
+import {NeonStore} from '../src/store.ts';
+import {koreaDate} from '../src/input.ts';
+process.loadEnvFile('.dev.vars');
+const scope={teamId:process.env.SLACK_TEAM_ID,channelId:'C0C0AMK8068',userId:'U0BV52VENTD'};const store=new CommunityStore(new NeonStore(process.env.DATABASE_URL));const dayScope={...scope,date:koreaDate(Date.now()/1000)};const before=await store.day(dayScope);
+const payload={type:'block_actions',team:{id:scope.teamId},user:{id:'U0OTHERQA1'},container:{channel_id:scope.channelId},message:{ts:String(Date.now()/1000)},actions:[{action_id:'community_undo',action_ts:String(Date.now()/1000),value:JSON.stringify({ownerId:scope.userId,key:'undo:change:1789054482.286699'})}]};
+const body=new URLSearchParams({payload:JSON.stringify(payload)}).toString();const ts=String(Math.floor(Date.now()/1000));const signature='v0='+createHmac('sha256',process.env.SLACK_SIGNING_SECRET).update(`v0:${ts}:${body}`).digest('hex');
+const response=await fetch(process.env.PUBLIC_BASE_URL+'/slack/interactions',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','x-slack-request-timestamp':ts,'x-slack-signature':signature},body});const answer=await response.json();assert.match(answer.text,/사용할 수 없습니다|본인 기록/);assert.deepEqual(await store.day(dayScope),before);
+const forged=await fetch(process.env.PUBLIC_BASE_URL+'/slack/interactions',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','x-slack-request-timestamp':ts,'x-slack-signature':'v0=bad'},body});assert.equal(forged.status,401);
+const result={checkedAt:new Date().toISOString(),wrongActorDenied:true,dayUnchanged:true,badSignature:forged.status,scope:'synthetic signed negative HTTP tests; real UI happy paths separate'};writeFileSync('.omx/qa/v001-v019/security.json',JSON.stringify(result,null,2));console.log(result);
