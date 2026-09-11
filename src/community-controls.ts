@@ -1,13 +1,13 @@
 import { armCommunityClock } from "./community-clock";
 import { communityConfirmationMessage } from "./community-messages";
 import { isCommunityAdmin, requireCommunityAdmin } from "./community-permissions";
-import { type CommunityContext, post, scopedValue, textReply } from "./community-runtime";
+import { type CommunityContext, ephemeral, post, scopedValue } from "./community-runtime";
 import { type Json, object, string } from "./input";
 import { openView } from "./slack-api";
 
 export async function settingsCard(context: CommunityContext): Promise<void> {
   const prefs = await context.store.preferences(context.scope);
-  await post(
+  await ephemeral(
     context,
     communityConfirmationMessage(
       `개인 안내: ${prefs.enabled ? "켜짐" : "꺼짐"}\n원씽 ${prefs.goalTime} · 후기 ${prefs.reviewTime} (한국 시간)`,
@@ -15,19 +15,34 @@ export async function settingsCard(context: CommunityContext): Promise<void> {
         {
           label: "시간·수신 설정",
           actionId: "community_settings",
-          value: scopedValue(context.scope, context.date),
+          value: JSON.stringify({
+            ownerId: context.scope.userId,
+            key: context.date,
+            thread: context.thread,
+            source: context.source,
+          }),
         },
         {
           label: "알림 중지",
           actionId: "community_stop",
-          value: scopedValue(context.scope, context.date),
+          value: JSON.stringify({
+            ownerId: context.scope.userId,
+            key: context.date,
+            thread: context.thread,
+            source: context.source,
+          }),
         },
         ...(isCommunityAdmin(context.scope, context.env)
           ? [
               {
                 label: "설정 시각으로 QA",
                 actionId: "community_test_schedule",
-                value: scopedValue(context.scope, context.date),
+                value: JSON.stringify({
+                  ownerId: context.scope.userId,
+                  key: context.date,
+                  thread: context.thread,
+                  source: context.source,
+                }),
               },
             ]
           : []),
@@ -166,7 +181,9 @@ export function readSettings(
 export async function stopSettings(context: CommunityContext): Promise<void> {
   await context.store.preferences(context.scope, { enabled: false });
   await armCommunityClock(context.env, context.scope.channelId);
-  await textReply(context, "개인 안내를 껐어요. 대기 중인 원씽·후기 알림도 멈췄습니다. ☕");
+  await ephemeral(context, {
+    text: "개인 안내를 껐어요. 대기 중인 원씽·후기 알림도 멈췄습니다. ☕",
+  });
 }
 
 export async function openShoutout(

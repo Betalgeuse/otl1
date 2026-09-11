@@ -5,13 +5,7 @@ import { earlierDayNotice } from "./community-followup";
 import { generateEncouragement } from "./community-language";
 import { communityConfirmationMessage, communityStatusMessage } from "./community-messages";
 import { correctMilestone, emitMilestones } from "./community-milestones";
-import {
-  type CommunityContext,
-  payloadRecord,
-  post,
-  scopedValue,
-  textReply,
-} from "./community-runtime";
+import { type CommunityContext, ephemeral, scopedValue, textReply } from "./community-runtime";
 import { addReactions, removeReactions, socialReactions } from "./community-social";
 import type { CommunityDay, DayChange } from "./community-types";
 import { DEFAULT_PALETTE, koreaDate, object, string } from "./input";
@@ -117,7 +111,7 @@ export async function confirmChange(
                 },
               ]),
         ];
-  await post(
+  await ephemeral(
     context,
     communityConfirmationMessage(
       action === "goal"
@@ -175,14 +169,7 @@ export async function applyChange(context: CommunityContext, change: DayChange):
       revision: result.day.revision,
     },
   });
-  const card = payloadRecord(await statusMessage(context, result.day, undoRecordKey));
-  const posted = await post(context, card);
-  await context.store.putRecord({
-    ...context.scope,
-    key: `card:${result.undoKey}`,
-    kind: "card",
-    body: { ts: posted },
-  });
+  await publishStatus(context, result.day, undoRecordKey);
   if (change.action === "undo") return;
   try {
     await addReactions(context.env.SLACK_BOT_TOKEN, {
@@ -252,17 +239,26 @@ export async function undoChange(context: CommunityContext, key: string): Promis
     ts: string(data.source),
     names,
   });
-  const card = await context.store.getRecord({ ...context.scope, key: `card:${undoKey}` });
-  if (card) {
-    const ts = string(object(card.body).ts);
-    const message = payloadRecord(await statusMessage(context, result.day, null));
-    const { callSlack } = await import("./community-social");
-    await callSlack(context.env.SLACK_BOT_TOKEN, "chat.update", {
-      ...message,
-      channel: context.scope.channelId,
-      ts,
-    });
-  }
+  await publishStatus(context, result.day, null);
   await correctMilestone(context, undoKey);
   await textReply(context, "방금 변경을 되돌렸어요. ↩️");
+}
+
+export async function publishStatus(
+  context: CommunityContext,
+  day: CommunityDay,
+  undoKey: string | null,
+): Promise<string> {
+  if (!context.env.COMMUNITY_CLOCK) throw new Error("Garden coordinator unavailable");
+  return context.env.COMMUNITY_CLOCK.getByName(
+    `${context.scope.teamId}:${context.scope.channelId}`,
+  ).publishGarden({
+    userId: context.scope.userId,
+    channelId: context.scope.channelId,
+    date: day.date,
+    source: context.source,
+    thread: context.thread,
+    key: context.key,
+    undoKey,
+  });
 }

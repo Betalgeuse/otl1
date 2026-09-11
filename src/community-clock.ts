@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { publishGardenNow } from "./community-garden";
 import type { CommunityEnv } from "./community-runtime";
 import { runCommunitySchedule } from "./community-scheduler";
 import { CommunityStore } from "./community-store";
@@ -12,10 +13,20 @@ type LastRun = {
   readonly failure?: string;
 };
 type ClockInspection = { readonly next: number | null; readonly lastRun: LastRun | null };
+export type GardenRequest = {
+  readonly userId: string;
+  readonly channelId: string;
+  readonly date: string;
+  readonly source: string;
+  readonly thread: string;
+  readonly key: string;
+  readonly undoKey: string | null;
+};
 export interface ClockBinding {
   getByName(name: string): {
     refresh(channelId: string): Promise<{ readonly next: number | null }>;
     inspect(): Promise<ClockInspection>;
+    publishGarden(input: GardenRequest): Promise<string>;
   };
 }
 
@@ -51,6 +62,38 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
       () => undefined,
     );
     return result;
+  }
+
+  publishGarden(input: GardenRequest): Promise<string> {
+    return this.serialize(async () => {
+      if (
+        this.env.DATABASE_MAINTENANCE === "true" ||
+        ![this.env.COMMUNITY_CHANNEL_ID, this.env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(
+          input.channelId,
+        ) ||
+        !/^[UW][A-Z0-9]+$/.test(input.userId) ||
+        (input.channelId === this.env.COMMUNITY_CHANNEL_ID &&
+          input.userId !== this.env.COMMUNITY_ADMIN_ID)
+      )
+        throw new InputError("Garden scope unavailable");
+      return publishGardenNow(
+        {
+          env: this.env,
+          store: new CommunityStore(new NeonStore(this.env.DATABASE_URL)),
+          scope: {
+            teamId: this.env.SLACK_TEAM_ID,
+            channelId: input.channelId,
+            userId: input.userId,
+          },
+          date: input.date,
+          thread: input.thread,
+          source: input.source,
+          key: input.key,
+        },
+        input.date,
+        input.undoKey,
+      );
+    });
   }
 
   refresh(channelId: string): Promise<{ readonly next: number | null }> {

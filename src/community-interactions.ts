@@ -3,12 +3,14 @@ import { armCommunityClock } from "./community-clock";
 import { openSettings, openShoutout, readSettings, stopSettings } from "./community-controls";
 import { enablePublicSchedule } from "./community-cutover";
 import { escapeSlackText } from "./community-messages";
+import { openCommunityPalette, submitCommunityPalette } from "./community-palette";
 import { authorizeCommunityAction } from "./community-permissions";
-import { applyChange, statusMessage, undoChange } from "./community-records";
+import { applyChange, publishStatus, undoChange } from "./community-records";
 import {
   actionIdentity,
   type CommunityContext,
   type CommunityEnv,
+  ephemeral,
   post,
   textReply,
 } from "./community-runtime";
@@ -41,9 +43,12 @@ export async function communityInteraction(
     throw new InputError("본인이 연 화면에서 다시 시도해 주세요.");
   const store = new CommunityStore(new NeonStore(env.DATABASE_URL));
   const message = data.message ? object(data.message) : null;
-  const source = metadata ? string(metadata.source) : string(message?.ts);
-  const thread = metadata ? string(metadata.thread) : string(message?.thread_ts ?? message?.ts);
-  const context: CommunityContext = {
+  const container = data.container ? object(data.container) : null;
+  const source = metadata ? string(metadata.source) : string(message?.ts ?? container?.message_ts);
+  const thread = metadata
+    ? string(metadata.thread)
+    : string(message?.thread_ts ?? container?.thread_ts ?? message?.ts ?? container?.message_ts);
+  let context: CommunityContext = {
     env,
     scope,
     store,
@@ -53,6 +58,7 @@ export async function communityInteraction(
     key: `interaction:${action?.action_ts ?? view?.id}`,
   };
   if (view) {
+    if (id === "community_palette_submit") return submitCommunityPalette(context, view, waitUntil);
     if (id === "community_settings_submit" || id === "community_group_submit") {
       const prefs = readSettings(view, id === "community_group_submit");
       if ("errors" in prefs)
@@ -62,10 +68,9 @@ export async function communityInteraction(
           if (id === "community_group_submit") await store.setGroupSchedule(scope, prefs);
           else await store.preferences(scope, prefs);
           await armCommunityClock(env, scope.channelId);
-          await textReply(
-            context,
-            `설정 저장! 원씽 ${prefs.goalTime} · 후기 ${prefs.reviewTime} · ${prefs.enabled ? "켜짐" : "꺼짐"} (한국 시간)`,
-          );
+          await ephemeral(context, {
+            text: `설정 저장! 원씽 ${prefs.goalTime} · 후기 ${prefs.reviewTime} · ${prefs.enabled ? "켜짐" : "꺼짐"} (한국 시간)`,
+          });
         })(),
       );
       return Response.json({ response_action: "clear" });
@@ -110,6 +115,17 @@ export async function communityInteraction(
   const key = string(value.key);
   if (id !== "community_shoutout" && ownerId !== scope.userId)
     throw new InputError("본인 기록만 변경할 수 있어요.");
+  if (value.thread !== undefined || value.source !== undefined) {
+    const thread = string(value.thread);
+    const source = string(value.source);
+    if (!/^\d+\.\d{6}$/.test(thread) || !/^\d+\.\d{6}$/.test(source))
+      throw new InputError("기록 위치를 확인할 수 없어요.");
+    context = { ...context, thread, source };
+  }
+  if (id === "community_palette") {
+    await openCommunityPalette(context, string(data.trigger_id), key);
+    return new Response(null, { status: 200 });
+  }
   if (id === "community_settings" || id === "community_group_settings") {
     await openSettings(context, string(data.trigger_id), id === "community_group_settings");
     return new Response(null, { status: 200 });
@@ -126,12 +142,12 @@ export async function communityInteraction(
           type: error instanceof Error ? error.name : "Unknown",
         }),
       );
-      await textReply(
-        context,
-        error instanceof InputError
-          ? error.message
-          : "처리를 확인하지 못했어요. 현재 상태를 확인해 주세요.",
-      );
+      await ephemeral(context, {
+        text:
+          error instanceof InputError
+            ? error.message
+            : "처리를 확인하지 못했어요. 현재 상태를 확인해 주세요.",
+      });
     }),
   );
   return new Response(null, { status: 200 });
@@ -152,7 +168,7 @@ async function processAction(context: CommunityContext, id: string, key: string)
   }
   if (id === "community_status") {
     const day = await context.store.day({ ...context.scope, date: date(key) });
-    await post(context, await statusMessage(context, day, null));
+    await publishStatus(context, day, null);
     return;
   }
   if (id === "community_release_preview") {
@@ -204,7 +220,7 @@ async function processAction(context: CommunityContext, id: string, key: string)
   if (!["confirm", "complete", "partial", "not_done", "rest", "reflection"].includes(selected))
     throw new InputError("지원하지 않는 동작입니다.");
   if (!(await context.store.claimRecord({ ...context.scope, key }))) {
-    await textReply(context, "이미 처리한 선택이에요.");
+    await ephemeral(context, { text: "이미 처리한 선택이에요." });
     return;
   }
   const targetDate = date(data.date);

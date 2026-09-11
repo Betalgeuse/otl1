@@ -35,7 +35,8 @@ assert.equal((await store.getRecord({ ...scope, key: "group-schedule" })).body.e
 await store.preferences(scope, { enabled: true, goalTime: "10:00", reviewTime: "18:00" });
 assert.deepEqual(await runCommunitySchedule(env, store, morning), { common: 0, personal: 1 });
 assert.equal(messages.at(-1).thread_ts, "1234567.1");
-assert.equal(messages.at(-1).blocks[1].elements[0].action_id, "community_stop");
+assert.equal(messages.at(-1).blocks.some(block=>block.type==="actions"), false);
+assert.match(messages.at(-1).text,/알림 설정/);
 assert.deepEqual(await runCommunitySchedule(env, store, morning), { common: 0, personal: 0 });
 await store.change({ ...scope, date: "2026-09-11", key: "goal", action: "goal", text: "운동" });
 await store.change({ ...scope, date: "2026-09-11", key: "rest", action: "rest" });

@@ -11,7 +11,7 @@ let effects=0;const sent=[];
 const store=new Proxy({}, {get:()=>async()=>{effects++;return {enabled:false,goalTime:'10:00',reviewTime:'18:00'};}});
 const ctx={env,scope,store,date:'2026-09-11',source:'1.1',thread:'1.1',key:'test'};
 const original=globalThis.fetch;
-globalThis.fetch=async(url,options)=>{effects++;sent.push(JSON.parse(options.body));return Response.json({ok:true,ts:'1.2'});};
+globalThis.fetch=async(url,options)=>{effects++;sent.push(JSON.parse(options.body));return Response.json({ok:true,ts:'1.2',message_ts:'1.2'});};
 try {
  for(const changed of [{userId:'UMEMBER'},{channelId:'CPUBLIC'},{teamId:'TOTHER'}]) {
   const other={...ctx,scope:{...scope,...changed}};

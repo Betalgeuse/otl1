@@ -31,6 +31,8 @@ const adminActions = new Set([
   "community_live_schedule",
 ]);
 const memberActions = new Set([
+  "community_palette",
+  "community_palette_submit",
   "community_settings",
   "community_settings_submit",
   "community_shoutout",

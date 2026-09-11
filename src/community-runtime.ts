@@ -64,6 +64,15 @@ export async function textReply(context: CommunityContext, text: string): Promis
   await post(context, { text });
 }
 
+export async function ephemeral(context: CommunityContext, message: Json): Promise<string> {
+  const result = await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postEphemeral", {
+    ...payloadRecord(message),
+    channel: context.scope.channelId,
+    user: context.scope.userId,
+  });
+  return string(result.message_ts);
+}
+
 export function payloadRecord(value: Json): { readonly [key: string]: Json } {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new InputError("메시지 형식이 올바르지 않습니다.");

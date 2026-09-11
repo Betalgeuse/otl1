@@ -4,7 +4,7 @@ import { messageDate } from "./community-followup";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
-import { applyChange, confirmChange, statusMessage } from "./community-records";
+import { applyChange, confirmChange, publishStatus } from "./community-records";
 import {
   type CommunityContext,
   type CommunityEnv,
@@ -133,7 +133,7 @@ async function processMessage(
   if (await answerCommunityQuestion(context, text, addressed)) return;
   const day = await context.store.day({ ...context.scope, date: context.date });
   if (/^(내 상태|원씽 보기|상태 보기)$/.test(text)) {
-    await post(context, await statusMessage(context, day, null));
+    await publishStatus(context, day, null);
     return;
   }
   if (text.length > 1000) {
