@@ -13,10 +13,11 @@ mkdirSync(destination, { recursive: true });
 writeFileSync(marker, 'Curated public source snapshot; no private Git history.\n');
 const write = (path, text) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); writeFileSync(join(destination,path),text); };
 const copy = (path) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); cpSync(join(root,path),join(destination,path),{recursive:true}); };
-for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','scripts/slack-manifest.mjs']) copy(path);
-const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
+for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','migrations/008_default_reminders.sql','scripts/slack-manifest.mjs']) copy(path);
+const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','default-reminders.mjs','reminder-enrollment.mjs','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
 for (const name of checks) copy(`qa/${name}`);
 copy('docs/COMMUNITY_QUESTIONS.md');
+write('docs/DEFAULT_REMINDERS.md',readFileSync(join(root,'docs/DEFAULT_REMINDERS.md'),'utf8').replace(/이번 적용 직후에는[\s\S]*?## 이관·검증/, '## 이관·검증')); 
 write('docs/GARDEN_CONTROLS.md',readFileSync(join(root,'docs/GARDEN_CONTROLS.md'),'utf8').split('## 18시 안내 점검')[0]);
 for (const name of readdirSync(join(root,'qa')).filter(name=>/^(community-weekend[^/]*|weekends)\.mjs$/.test(name))) copy(`qa/${name}`);
 write('.gitignore',readFileSync(join(root,'.gitignore'),'utf8')+'\n.public-export\n');
@@ -97,6 +98,7 @@ write('docs/DATABASE_SETUP.md',`# PostgreSQL 설치 및 구조
 \`\`\`sh
 psql -X -v ON_ERROR_STOP=1 -f migrations/001_initial.sql -f migrations/005_community.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/006_normalized_foundation.sql -f migrations/007_normalized_legacy.sql
+psql -X -v ON_ERROR_STOP=1 -f migrations/008_default_reminders.sql
 \`\`\`
 
 006과007은 반드시 한 트랜잭션에서 적용합니다.002–004의 별도 초대·가입 정책은 이 설치에 포함하지 않습니다. 공개006은 신규 설치용이며 특정 운영 회원이나 사전 승인된 예외를 포함하지 않습니다.
