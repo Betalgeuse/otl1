@@ -1,0 +1,12 @@
+# Fill locally; never commit the completed file.
+SLACK_TEAM_ID=
+SLACK_SIGNING_SECRET=
+SLACK_BOT_TOKEN=
+DATABASE_URL=
+BOARD_SIGNING_SECRET=
+PUBLIC_BASE_URL=
+INVITE_SIGNING_SECRET=
+COMMUNITY_OWNER_ID=
+
+# Bot user ID used to recognize an optional mention.
+COMMUNITY_BOT_USER_ID=

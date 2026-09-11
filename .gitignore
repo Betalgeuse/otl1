@@ -1,0 +1,23 @@
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+.wrangler/
+.output/
+node_modules/
+.omx/
+.DS_Store
+
+# Local snapshots and member data are not source fixtures.
+qa/*results*.json
+qa/*evidence*.json
+qa/community-public-baseline.json
+qa/llm-goal-before.sha256
+docs/qa/
+*.dump
+*.backup
+backups/
+qa/*.json
+!qa/llm-cases.json
+
+.public-export

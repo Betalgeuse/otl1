@@ -1,0 +1,71 @@
+import type { ClockBinding } from "./community-clock";
+import { callSlack } from "./community-social";
+import type { CommunityStore } from "./community-store";
+import type { CommunityScope } from "./community-types";
+import { InputError, type Json, object, string } from "./input";
+import type { IntentAI } from "./intent";
+
+export type CommunityEnv = {
+  readonly SLACK_TEAM_ID: string;
+  readonly SLACK_BOT_TOKEN: string;
+  readonly DATABASE_URL: string;
+  readonly BOARD_SIGNING_SECRET: string;
+  readonly PUBLIC_BASE_URL: string;
+  readonly COMMUNITY_ENABLED?: string;
+  readonly COMMUNITY_BOT_USER_ID?: string;
+  readonly DATABASE_MAINTENANCE?: string;
+  readonly COMMUNITY_CLOCK?: ClockBinding;
+  readonly COMMUNITY_CHANNEL_ID?: string;
+  readonly COMMUNITY_ADMIN_ID?: string;
+  readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
+  readonly COMMUNITY_RELEASE_CHANNEL_ID?: string;
+  readonly AI?: IntentAI;
+  readonly INTENT_RATE_LIMITER?: {
+    limit(input: { readonly key: string }): Promise<{ readonly success: boolean }>;
+  };
+};
+export type CommunityContext = {
+  readonly env: CommunityEnv;
+  readonly store: CommunityStore;
+  readonly scope: CommunityScope;
+  readonly date: string;
+  readonly thread: string;
+  readonly source: string;
+  readonly key: string;
+};
+export function scopedValue(scope: CommunityScope, key: string): string {
+  return JSON.stringify({ ownerId: scope.userId, key });
+}
+export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv) {
+  const teamId = string(object(data.team).id);
+  const userId = string(object(data.user).id);
+  const channelId = data.container
+    ? string(object(data.container).channel_id)
+    : string(object(JSON.parse(string(object(data.view).private_metadata))).channelId);
+  if (
+    teamId !== env.SLACK_TEAM_ID ||
+    ![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) ||
+    (channelId === env.COMMUNITY_CHANNEL_ID && userId !== env.COMMUNITY_ADMIN_ID) ||
+    !/^[UW][A-Z0-9]+$/.test(userId)
+  )
+    throw new InputError("이 동작은 사용할 수 없습니다.");
+  return { teamId, channelId, userId };
+}
+export async function post(context: CommunityContext, message: Json): Promise<string> {
+  const payload = payloadRecord(message);
+  const result = await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
+    ...payload,
+    channel: context.scope.channelId,
+    thread_ts: context.thread,
+  });
+  return string(result.ts);
+}
+export async function textReply(context: CommunityContext, text: string): Promise<void> {
+  await post(context, { text });
+}
+
+export function payloadRecord(value: Json): { readonly [key: string]: Json } {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new InputError("메시지 형식이 올바르지 않습니다.");
+  return Object.fromEntries(Object.entries(value));
+}

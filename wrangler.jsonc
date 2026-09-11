@@ -1,0 +1,55 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "onething-community",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-12-01",
+  "workers_dev": true,
+  "vars": {
+    "DATABASE_MAINTENANCE": "false",
+    "INVITATIONS_ENABLED": "false",
+    "DAILY_SCRUM_CHANNEL_ID": "C_REPLACE_DAILY",
+    "LLM_PILOT_CHANNEL_ID": "C_REPLACE_ADMIN",
+    "LLM_PILOT_USER_ID": "U_REPLACE_ADMIN",
+    "COMMUNITY_ENABLED": "true",
+    "COMMUNITY_CHANNEL_ID": "C_REPLACE_ADMIN",
+    "COMMUNITY_ADMIN_ID": "U_REPLACE_ADMIN",
+    "COMMUNITY_BOT_USER_ID": "U_REPLACE_BOT",
+    "COMMUNITY_RELEASE_CHANNEL_ID": "C_REPLACE_TOWNHALL",
+    "COMMUNITY_PUBLIC_CHANNEL_ID": "C_REPLACE_DAILY"
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COMMUNITY_CLOCK",
+        "class_name": "CommunityClock"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "community-clock-v1",
+      "new_sqlite_classes": [
+        "CommunityClock"
+      ]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "INTENT_RATE_LIMITER",
+      "namespace_id": "202609101",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    }
+  ],
+  "triggers": {
+    "crons": []
+  },
+  "observability": {
+    "enabled": true
+  }
+}
