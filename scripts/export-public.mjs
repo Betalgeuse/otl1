@@ -14,8 +14,9 @@ writeFileSync(marker, 'Curated public source snapshot; no private Git history.\n
 const write = (path, text) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); writeFileSync(join(destination,path),text); };
 const copy = (path) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); cpSync(join(root,path),join(destination,path),{recursive:true}); };
 for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','scripts/slack-manifest.mjs']) copy(path);
-const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
+const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
 for (const name of checks) copy(`qa/${name}`);
+copy('docs/COMMUNITY_QUESTIONS.md');
 for (const name of readdirSync(join(root,'qa')).filter(name=>/^(community-weekend[^/]*|weekends)\.mjs$/.test(name))) copy(`qa/${name}`);
 write('.gitignore',readFileSync(join(root,'.gitignore'),'utf8')+'\n.public-export\n');
 const config=JSON.parse(readFileSync(join(root,'wrangler.jsonc'),'utf8'));

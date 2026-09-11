@@ -3,6 +3,7 @@ import { groupCard, settingsCard } from "./community-controls";
 import { messageDate } from "./community-followup";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
+import { answerCommunityQuestion } from "./community-questions";
 import { applyChange, confirmChange, statusMessage } from "./community-records";
 import {
   type CommunityContext,
@@ -66,7 +67,11 @@ export async function handleCommunityEvent(
   await store.putRecord({ ...scope, key, kind: "incoming", body: { date, thread } });
   if (!(await store.claimRecord({ ...scope, key }))) return true;
   try {
-    await processMessage(context, text);
+    await processMessage(
+      context,
+      text,
+      Boolean(env.COMMUNITY_BOT_USER_ID && rawText.includes(`<@${env.COMMUNITY_BOT_USER_ID}>`)),
+    );
     await store.finishRecord({ ...scope, key }, "sent");
   } catch (error) {
     console.error(
@@ -86,7 +91,11 @@ export async function handleCommunityEvent(
   return true;
 }
 
-async function processMessage(context: CommunityContext, text: string): Promise<void> {
+async function processMessage(
+  context: CommunityContext,
+  text: string,
+  addressed: boolean,
+): Promise<void> {
   if (await captureFeedback(context, text)) return;
   if (
     context.scope.channelId === context.env.COMMUNITY_RELEASE_CHANNEL_ID &&
@@ -121,6 +130,7 @@ async function processMessage(context: CommunityContext, text: string): Promise<
     );
     return;
   }
+  if (await answerCommunityQuestion(context, text, addressed)) return;
   const day = await context.store.day({ ...context.scope, date: context.date });
   if (/^(내 상태|원씽 보기|상태 보기)$/.test(text)) {
     await post(context, await statusMessage(context, day, null));
