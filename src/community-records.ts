@@ -1,6 +1,7 @@
 import { buildBoard } from "./board";
 import { boardLink } from "./board-link";
 import { customBotEmoji, randomCustomEmoji } from "./community-emoji";
+import { earlierDayNotice } from "./community-followup";
 import { generateEncouragement } from "./community-language";
 import { communityConfirmationMessage, communityStatusMessage } from "./community-messages";
 import { correctMilestone, emitMilestones } from "./community-milestones";
@@ -49,6 +50,11 @@ export async function statusMessage(
     today: day.date,
   });
   return communityStatusMessage({
+    earlierNotice: await earlierDayNotice(
+      context,
+      history,
+      day.date < koreaDate(Date.now() / 1000) ? day.date : koreaDate(Date.now() / 1000),
+    ),
     userId: day.userId,
     date: day.date,
     goal: day.goal || null,
@@ -93,10 +99,23 @@ export async function confirmChange(
           { label: "완료했어요", actionId: "community_complete", value },
           { label: "일부 진행했어요", actionId: "community_partial", value },
           { label: "못 했어요", actionId: "community_not_done", value },
-          { label: "오늘 쉬어요", actionId: "community_rest", value },
+          {
+            label: day.date === koreaDate(Date.now() / 1000) ? "오늘 쉬어요" : "이날 쉬었어요",
+            actionId: "community_rest",
+            value,
+          },
           ...(action === "reflection"
             ? []
-            : [{ label: "오늘 후기로 남기기", actionId: "community_reflection", value }]),
+            : [
+                {
+                  label:
+                    day.date === koreaDate(Date.now() / 1000)
+                      ? "오늘 후기로 남기기"
+                      : "이날 후기로 남기기",
+                  actionId: "community_reflection",
+                  value,
+                },
+              ]),
         ];
   await post(
     context,

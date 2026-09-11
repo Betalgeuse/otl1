@@ -1,6 +1,6 @@
 # 원씽 잔디: 첫 버전 기획 초안
 
-현재 운영 기준은 **v0.0.30**입니다. 회원·채널 관계와 단일 목표 원본은 [DB 정규화 명세](docs/DATABASE_NORMALIZATION.md), 다음 기능 순서는 [버전 목록](docs/UPDATE_HISTORY.md), 커밋 규칙은 [Git 작업 원칙](docs/GIT_WORKFLOW.md)을 따릅니다. 아래 초기 설정 설명의001과 달리 현재 DB는005 및006·007 이관도 사용합니다.002~004는 별도 초대 정책이므로 일괄 적용하지 마세요.
+현재 운영 기준은 **v0.0.31**입니다. 회원·채널 관계와 단일 목표 원본은 [DB 정규화 명세](docs/DATABASE_NORMALIZATION.md), 다음 기능 순서는 [버전 목록](docs/UPDATE_HISTORY.md), 커밋 규칙은 [Git 작업 원칙](docs/GIT_WORKFLOW.md)을 따릅니다. 아래 초기 설정 설명의001과 달리 현재 DB는005 및006·007 이관도 사용합니다.002~004는 별도 초대 정책이므로 일괄 적용하지 마세요.
 
 슬랙에서 하루 한 문장으로 오늘의 원씽을 정하고, 작은 칸을 채우며 참여를 이어가는 커뮤니티 봇.
 
@@ -130,7 +130,7 @@ Slack [이미지 블록 문서](https://docs.slack.dev/reference/block-kit/block
 
 Slack HTTP 이벤트 → Cloudflare Workers → Neon PostgreSQL.
 
-앞선 대화에서 추천한 구성이며 사용자가 최종 선택한 것은 아니다. 현재 배포된 앱이나 연결된 Slack 워크스페이스는 없다.
+앞선 대화에서 추천한 구성이며 사용자가 최종 선택한 것은 아니다. 이는 초기 검토 기록이며, 현재 운영·배포 상태는 문서 상단의 버전 목록을 따른다.
 
 Slack의 [선택 메뉴](https://docs.slack.dev/reference/block-kit/block-elements/select-menu-element/)와 텍스트 입력을 설정창에 사용하는 방식을 제안한다. 사용자 지정 색상 보드는 생성한 이미지를 [이미지 요소](https://docs.slack.dev/reference/block-kit/block-elements/image-element/)로 표시하는 후보를 검토한다. 이는 문서에 근거한 설계 제안이며 Slack에서 실제 렌더링·갱신을 검증하지 않았다.
 

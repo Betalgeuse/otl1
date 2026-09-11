@@ -1,6 +1,7 @@
 import { InputError, type Json } from "./input";
 
 export type StatusCard = {
+  readonly earlierNotice?: string | null;
   readonly userId: string;
   readonly date: string;
   readonly goal: string | null;
@@ -81,8 +82,10 @@ export function communityStatusMessage(input: StatusCard): Json {
       alt_text: `${input.date} 원씽 잔디. ${status}`,
     });
   }
+  if (input.earlierNotice)
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: input.earlierNotice } });
   if (actions.length) blocks.push({ type: "actions", elements: actions });
-  return { text, blocks };
+  return { text: input.earlierNotice ? `${text}\n\n${input.earlierNotice}` : text, blocks };
 }
 
 export function communityConfirmationMessage(

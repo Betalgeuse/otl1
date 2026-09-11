@@ -1,5 +1,6 @@
 import { adminCommand, captureFeedback } from "./community-admin";
 import { groupCard, settingsCard } from "./community-controls";
+import { messageDate } from "./community-followup";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { applyChange, confirmChange, statusMessage } from "./community-records";
@@ -59,12 +60,7 @@ export async function handleCommunityEvent(
   const store = new CommunityStore(new NeonStore(env.DATABASE_URL));
   const key = `incoming:${source}`;
   const thread = string(event.thread_ts ?? event.ts);
-  const prompt = await store.getRecord({
-    ...scope,
-    userId: string(env.COMMUNITY_ADMIN_ID),
-    key: `prompt:${thread}`,
-  });
-  const date = prompt ? string(object(prompt.body).date) : koreaDate(stamp);
+  const date = await messageDate(store, scope, string(env.COMMUNITY_ADMIN_ID), source, thread);
   const context = { env, store, scope, key, thread, source, date };
   await store.putRecord({ ...scope, key, kind: "incoming", body: { date, thread } });
   if (!(await store.claimRecord({ ...scope, key }))) return true;
