@@ -25,7 +25,7 @@ export async function boardMessage(snapshot: Snapshot, options: MessageOptions):
     ? `${options.anchor}의 원씽\n${active.text}`
     : options.anchor < options.today
       ? `${options.anchor}에는 목표를 작성하지 않았습니다.`
-      : "오늘의 원씽을 한 문장으로 시작해 보세요.\n/one 책 10쪽 읽기";
+      : "오늘의 원씽을 한 문장으로 시작해 보세요.\n오늘 원씽은 책 10쪽 읽기";
   const actions: Json[] = [];
   if (active && options.anchor <= options.today) {
     actions.push({
@@ -78,13 +78,13 @@ export async function boardMessage(snapshot: Snapshot, options: MessageOptions):
       },
       { type: "image", image_url: await boardLink(board, options.link), alt_text: alt },
       { type: "section", text: { type: "plain_text", text: `${summary}\n${goalText}` } },
-      { type: "actions", elements: actions },
+      ...(options.sharedBy ? [] : [{ type: "actions", elements: actions }]),
       {
         type: "context",
         elements: [
           {
             type: "plain_text",
-            text: "— 미작성 · 점 작성 · 체크 완료 · 점선 예정\n이전 기록: /one 기록 YYYY-MM-DD · 완료와 색상은 작성자만 변경할 수 있습니다.",
+            text: "— 미작성 · 점 작성 · 체크 완료 · 점선 예정\n이전 날짜 글의 스레드에서 기록을 확인해 주세요. · 완료와 색상은 작성자만 변경할 수 있습니다.",
           },
         ],
       },

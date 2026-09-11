@@ -12,8 +12,7 @@ console.log(JSON.stringify({
   display_information: { name: "원씽 잔디", description: "오늘의 한 문장으로 채우는 나의 잔디", background_color: "#216E39" },
   features: {
     bot_user: { display_name: "원씽 잔디", always_online: false },
-    slash_commands: [{ command: "/one", url: `${url.origin}/slack/commands`, description: "오늘의 원씽 작성, 확인, 공유", usage_hint: "[오늘 할 일 | 보기 | 공유 | 기록 YYYY-MM-DD]", should_escape: false }],
   },
-  oauth_config: { scopes: { bot: ["commands", "users:read", "users:read.email", "app_mentions:read", "channels:history", "channels:read", "groups:history", "chat:write", "reactions:write", "emoji:read"] } },
+  oauth_config: { scopes: { bot: ["users:read", "users:read.email", "app_mentions:read", "channels:history", "channels:read", "groups:history", "chat:write", "reactions:write", "emoji:read"] } },
   settings: { event_subscriptions: { request_url: `${url.origin}/slack/events`, bot_events: ["app_mention", "message.channels", "message.groups", "member_joined_channel"] }, interactivity: { is_enabled: true, request_url: `${url.origin}/slack/interactions` }, org_deploy_enabled: false, socket_mode_enabled: false, token_rotation_enabled: false },
 }, null, 2));
