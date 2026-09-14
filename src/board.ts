@@ -74,7 +74,7 @@ export function buildBoard(snapshot: Snapshot, today: string, anchor = today): B
       optional: goal === undefined && isWeekend(date),
       today: stamp === current,
     };
-  });
+  }).filter((cell) => !cell.optional);
   return {
     cells,
     palette: snapshot.palette,
