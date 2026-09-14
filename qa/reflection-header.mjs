@@ -30,8 +30,23 @@ const success=[
  ['후기: 완료.\n다음 일정은 9/15에 있어요','complete',null],
  ['  후기: 완료!!! 좋았어요  ','complete',null],
 ];
-for(const [source,outcome,date] of success){assert.deepEqual(parseReflectionHeader(source,today),{date,outcome,text:source.trim()},source);count++;}
+for(const [source,outcome,date] of success){assert.deepEqual(parseReflectionHeader(source,today),{date,outcome,text:source.trim(),hasReflection:outcome!=='rest'},source);count++;}
+for (const source of ['후기: 완료.', '후기: 완료', '후기: 완료!!!', '후기: 9/14: 완료.', '후기: 완료. ✅', '후기: 완료. :party_parrot:', '후기: 부분 완료.', '후기: 미완료.', '후기: 휴식. 편히 쉬었어요']) {
+  assert.equal(parseReflectionHeader(source,today)?.hasReflection,false,source); count++;
+}
 const rejected=[
+ '후기: 완료. 하지만 아직 절반밖에 못 했어요.',
+ '후기: 완료. 사실은 아직 다 못했어요.',
+ '후기: 완료. 앞의 완료는 오타이고 부분 완료예요.',
+ '후기: 완료. 라고 쓰면 완료 처리되나요?',
+ '후기: 완료. 민수는 다 했지만 저는 못했어요.',
+ '후기: 완료. 즐거웠어요. 그런데 절반만 했어요.',
+ '후기: 완료. 즐거웠어요. 실제로는 미완료예요.',
+ '후기: 완료. 즐거웠어요. 이것은 예시입니다.',
+ '후기: 완료. 시간이 걸렸어요. 완료가 아니라 부분 완료입니다.',
+ '후기: 완료. 처음에는 괜찮았는데 달성하지 않았어요.',
+ '후기: 미완료. 앞 문장은 오타예요. 모두 완료했어요.',
+
  '후기: 완료 예정입니다', '후기: 완료할 예정이에요','후기: 완료 아님','후기: 완료하지 못했어요',
  '후기: 완료했으면 좋겠어요','후기: 완료했나요?','후기: 목표는 완료하는 것',
  '후기: 완료?','후기: 완료했어요?','후기: 완료라고 친구가 말했어요',

@@ -67,7 +67,7 @@ export async function confirmChange(
   action: DayChange["action"],
   outcome?: DayChange["outcome"],
 ) {
-  const key = `pending:${context.source}`;
+  const key = `pending:${context.key}`;
   await context.store.putRecord({
     ...context.scope,
     key,

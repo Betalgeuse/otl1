@@ -60,7 +60,7 @@ export async function prepareRecordEdit(context: CommunityContext, text: string)
     });
     return true;
   }
-  const key = `edit:${context.source}`;
+  const key = `edit:${context.key}`;
   await context.store.putRecord({
     ...context.scope,
     key,

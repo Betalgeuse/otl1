@@ -20,9 +20,15 @@ export async function handleReflectionReport(
     if (
       /^(?:[\s*#>-]*)(?:(?:\[?\d[\d./\-월일\s]*\]?)[\s:：]*)?(?:후기|회고)[\s*]*[:：\n]/u.test(text)
     ) {
-      await ephemeral(context, {
-        text: "후기에서 완료 여부를 확실히 구분하지 못했어요. ‘완료’, ‘부분 완료’, ‘미완료’, ‘휴식’ 중 상태와 후기를 알려주세요. 기록은 바꾸지 않았어요.",
-      });
+      if (/수정|바꿔|정정|변경/.test(text)) return false;
+      const target = (await context.store.history(context.scope)).find(
+        (day) => day.date === context.date,
+      );
+      if (target?.goal) await confirmChange(context, target, text, "reflection");
+      else
+        await ephemeral(context, {
+          text: "후기 날짜와 등록된 목표를 먼저 확인해 주세요. 기록은 바꾸지 않았어요.",
+        });
       return true;
     }
     return false;
@@ -53,14 +59,16 @@ export async function handleReflectionReport(
   const base = {
     ...context.scope,
     date: targetDate,
-    key: `change:${context.source}`,
+    key: `change:${context.key}`,
     expectedRevision: day.revision,
   };
   await applyChange(
     target,
     report.outcome === "rest"
       ? { ...base, action: "rest" }
-      : { ...base, action: "reflection", text: report.text, outcome: report.outcome },
+      : report.hasReflection
+        ? { ...base, action: "reflection", text: report.text, outcome: report.outcome }
+        : { ...base, action: report.outcome },
   );
   return true;
 }

@@ -5,6 +5,7 @@ export type ReflectionHeader = {
   readonly date: string | null;
   readonly outcome: HeaderOutcome;
   readonly text: string;
+  readonly hasReflection: boolean;
 };
 const DATE = String.raw`(?:\d{4}[-.]\d{1,2}[-.]\d{1,2}|\d{1,2}[/.]\d{1,2}|\d{1,2}월\s*\d{1,2}일)`;
 const DATE_PREFIX = new RegExp(String.raw`^(?:\[(${DATE})\]|(${DATE}))(?=\s|[:：]|$)\s*[:：]?\s*`);
@@ -61,7 +62,18 @@ export function parseReflectionHeader(text: string, today: string): ReflectionHe
     if (/^[ \t]*[?？]/.test(tail)) return null;
     if (/^[\s.!。！,:：]*(?:예정|아니|아님|아직|사실\s*아직|못|하지\s*못|미완|취소)/.test(tail))
       return null;
-    return { date, outcome, text: original };
+    if (/오타|정정|취소|예시|가정|라고\s*쓰|처리되|처리해|했으면|했더라면|아니라|[?？]/.test(tail))
+      return null;
+    if (
+      outcome === "complete" &&
+      /못|않|아니|아님|미완|부분|절반|거의|아직|안\s*(?:했|한|끝|달성|완료)/.test(tail)
+    )
+      return null;
+    if (outcome !== "complete" && /(?:모두|전부|다)\s*(?:완료|달성|했)|완료했|달성했/.test(tail))
+      return null;
+    const substance = tail.replace(/:[a-zA-Z0-9_+-]+:/g, "");
+    const hasReflection = outcome !== "rest" && /[\p{L}\p{N}]/u.test(substance);
+    return { date, outcome, text: original, hasReflection };
   }
   return null;
 }
