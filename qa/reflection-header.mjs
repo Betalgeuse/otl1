@@ -59,3 +59,5 @@ const rejected=[
 for(const source of rejected){assert.equal(parseReflectionHeader(source,today),null,source);count++;}
 for(const source of ['후기: 9/31: 완료. 좋아요','후기: 9/15: 완료. 좋아요','후기: 2025-02-29: 완료. 좋아요','후기: 9/14: 완료. 좋아요\n9/13: 미완료. 아쉬워요','9/13 후기: 9/14: 완료. 좋아요', '후기: 9/14: 완료. 좋아요\n9/13 후기: 미완료. 아쉬워요']){assert.throws(()=>parseReflectionHeader(source,today),InputError,source);count++;}
 console.log(`${count} reflection header cases passed`);
+for(const input of ['후기: 완료. 실제로는 실패했어요.','후기: 완료. 라는 문장은 예문입니다.','후기: 완료. 라는 말은 거짓말이에요.'])assert.equal(parseReflectionHeader(input,'2026-09-14'),null);
+console.log('3 additional independent-review counterexamples passed');

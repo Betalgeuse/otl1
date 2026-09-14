@@ -62,7 +62,11 @@ export function parseReflectionHeader(text: string, today: string): ReflectionHe
     if (/^[ \t]*[?？]/.test(tail)) return null;
     if (/^[\s.!。！,:：]*(?:예정|아니|아님|아직|사실\s*아직|못|하지\s*못|미완|취소)/.test(tail))
       return null;
-    if (/오타|정정|취소|예시|가정|라고\s*쓰|처리되|처리해|했으면|했더라면|아니라|[?？]/.test(tail))
+    if (
+      /실패|거짓|예문|실제로|사실|농담|(?:이?라)는|오타|정정|취소|예시|가정|라고\s*쓰|처리되|처리해|했으면|했더라면|아니라|[?？]/.test(
+        tail,
+      )
+    )
       return null;
     if (
       outcome === "complete" &&

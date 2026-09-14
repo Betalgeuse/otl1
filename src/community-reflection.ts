@@ -21,7 +21,7 @@ export async function handleReflectionReport(
       /^(?:[\s*#>-]*)(?:(?:\[?\d[\d./\-월일\s]*\]?)[\s:：]*)?(?:후기|회고)[\s*]*[:：\n]/u.test(text)
     ) {
       if (/수정|바꿔|정정|변경/.test(text)) return false;
-      if (/\d{1,2}[/.]\d{1,2}|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}월\s*\d{1,2}일/.test(text)) {
+      if (/\d|어제|그제|지난|과거/.test(text)) {
         await ephemeral(context, {
           text: "날짜가 있는 후기의 수행 상태를 확실히 구분하지 못했어요. 한 날짜와 완료·부분 완료·미완료·휴식을 명확히 알려주세요. 아직 저장하지 않았어요.",
         });
