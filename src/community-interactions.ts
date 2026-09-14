@@ -2,6 +2,7 @@ import { publishRelease, releasePreview } from "./community-admin";
 import { armCommunityClock } from "./community-clock";
 import { openSettings, openShoutout, readSettings, stopSettings } from "./community-controls";
 import { enablePublicSchedule } from "./community-cutover";
+import { confirmedRecordEdit } from "./community-edits";
 import { escapeSlackText } from "./community-messages";
 import { openCommunityPalette, submitCommunityPalette } from "./community-palette";
 import { authorizeCommunityAction } from "./community-permissions";
@@ -234,7 +235,8 @@ async function processAction(context: CommunityContext, id: string, key: string)
   };
   const base = { ...context.scope, date: targetDate, key, expectedRevision: revision };
   let change: DayChange;
-  if (selected === "confirm" && action === "goal")
+  if (selected === "confirm" && action === "edit") change = confirmedRecordEdit(base, data);
+  else if (selected === "confirm" && action === "goal")
     change = { ...base, action: "goal", text: string(data.text) };
   else if (selected === "rest") change = { ...base, action: "rest" };
   else if (selected === "reflection")

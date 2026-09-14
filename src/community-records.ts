@@ -137,6 +137,10 @@ export async function applyChange(context: CommunityContext, change: DayChange):
     await textReply(context, "이미 반영된 기록이에요.");
     return;
   }
+  if (change.preserveOutcome) {
+    await publishStatus(context, result.day, null);
+    return;
+  }
   const kind =
     change.action === "goal"
       ? "registered"
