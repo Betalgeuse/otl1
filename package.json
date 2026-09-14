@@ -6,7 +6,14 @@
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run --outdir .output",
     "lint": "biome check src",
-    "typecheck": "bun x --no-install tsc --noEmit",
-    "deploy": "wrangler deploy"
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "test:unit": "node scripts/test-unit.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.6",
+    "typescript": "7.1.0-dev.20260809.1",
+    "wrangler": "4.62.0"
   }
 }

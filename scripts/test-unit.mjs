@@ -1,0 +1,14 @@
+import { execFileSync } from 'node:child_process';
+
+// Explicit allowlist excludes scripts that load live credentials or migrate databases.
+const suites = [
+  'community-admin-access', 'community-clock', 'community-emoji', 'community-followup',
+  'community-questions', 'private-controls', 'garden-publication', 'slash-retirement',
+  'reminder-enrollment', 'weekend-hidden', 'community-edit-language', 'natural-edits',
+  'current-garden', 'reflection-header', 'reflection-routing', 'slack-message-edit',
+  'community-guide', 'townhall-milestones', 'brand-copy', 'community-language-check',
+  'community-language-variety', 'community-social', 'community-townhall',
+  'community-welcome', 'migration-maintenance', 'weekends',
+];
+for (const suite of suites) execFileSync('bun', [`qa/${suite}.mjs`], { stdio: 'inherit' });
+console.log(`Passed ${suites.length} isolated synthetic suites.`);
