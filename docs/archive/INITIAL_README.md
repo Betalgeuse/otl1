@@ -2,23 +2,23 @@
 
 # 원씽 잔디: 첫 버전 기획 초안
 
-현재 운영 기준은 **v0.0.49**입니다. 회원·채널 관계와 단일 목표 원본은 [DB 정규화 명세](../../docs/DATABASE_NORMALIZATION.md), 다음 기능 순서는 [버전 목록](../../docs/UPDATE_HISTORY.md), 커밋 규칙은 [Git 작업 원칙](../../docs/GIT_WORKFLOW.md)을 따릅니다. 아래 초기 설정 설명의001과 달리 현재 DB는005 및006·007 이관도 사용합니다.002~004는 별도 초대 정책이므로 일괄 적용하지 마세요.
+현재 운영 기준은 **v0.0.49**입니다. 회원·채널 관계와 단일 목표 원본은 [DB 정규화 명세](DATABASE_NORMALIZATION.md), 다음 기능 순서는 [버전 목록](../UPDATE_HISTORY.md), 커밋 규칙은 [Git 작업 원칙](GIT_WORKFLOW.md)을 따릅니다. 아래 초기 설정 설명의001과 달리 현재 DB는005 및006·007 이관도 사용합니다.002~004는 별도 초대 정책이므로 일괄 적용하지 마세요.
 
 슬랙에서 하루 한 문장으로 오늘의 원씽을 정하고, 작은 칸을 채우며 참여를 이어가는 커뮤니티 봇.
 
-상태: 공개 잔디 배포 완료. 실제 Slack에서 `/one` 응답·이미지·색상 설정 모달을 확인했다. 자연어 입력과 개인 관리 홈은 다음 설계 단계이며 실제 모바일 검증도 남아 있다. 현재 사용법과 연결 순서는 [설정 안내](../../docs/SETUP.md)를 따른다. 아래 내용은 초기 기획 기록이며 미정 표현이 남은 항목의 현재 구현 선택은 설정 안내에 기록했다.
+상태: 공개 잔디 배포 완료. 실제 Slack에서 `/one` 응답·이미지·색상 설정 모달을 확인했다. 자연어 입력과 개인 관리 홈은 다음 설계 단계이며 실제 모바일 검증도 남아 있다. 현재 사용법과 연결 순서는 [설정 안내](SETUP.md)를 따른다. 아래 내용은 초기 기획 기록이며 미정 표현이 남은 항목의 현재 구현 선택은 설정 안내에 기록했다.
 
 배포 상태 확인: https://otl1-onething-garden.zzzaydenzz.workers.dev/health
 
-Cloudflare 개발 도구 설치 기록: [CLOUDFLARE_SETUP.md](../../docs/CLOUDFLARE_SETUP.md)
+Cloudflare 개발 도구 설치 기록: [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md)
 
-추가 개발 중인 사람 간 초대제: [INVITATIONS.md](../../docs/INVITATIONS.md). 월별 초대권과 가입 검증은 로컬에서 검증했으며, 팀 구성 답변과 운영자 지정 전에는 배포하지 않는다.
+추가 개발 중인 사람 간 초대제: [INVITATIONS.md](INVITATIONS.md). 월별 초대권과 가입 검증은 로컬에서 검증했으며, 팀 구성 답변과 운영자 지정 전에는 배포하지 않는다.
 
 ## 커뮤니티와 자연어 UX 문서
 
-- [6개 사례 벤치마크](../../docs/COMMUNITY_BENCHMARK.md): 실제 기능, 가져올 원리, 효과를 확인하지 못한 부분.
-- [커뮤니티 운영안](../../docs/COMMUNITY_OPERATING_MODEL.md): 목표 설정 채널·일일 실천 채널·개인 관리 화면의 역할.
-- [자연어 UX와 도입 순서](../../docs/NATURAL_LANGUAGE_UX.md): DM 평문 → 공개 확인 → 기존 카드부터 작게 시작.
+- [6개 사례 벤치마크](../research/COMMUNITY_BENCHMARK.md): 실제 기능, 가져올 원리, 효과를 확인하지 못한 부분.
+- [커뮤니티 운영안](COMMUNITY_OPERATING_MODEL.md): 목표 설정 채널·일일 실천 채널·개인 관리 화면의 역할.
+- [자연어 UX와 도입 순서](NATURAL_LANGUAGE_UX.md): DM 평문 → 공개 확인 → 기존 카드부터 작게 시작.
 
 ## 사용자가 정한 방향
 
