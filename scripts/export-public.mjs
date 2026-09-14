@@ -14,7 +14,7 @@ writeFileSync(marker, 'Curated public source snapshot; no private Git history.\n
 const write = (path, text) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); writeFileSync(join(destination,path),text); };
 const copy = (path) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); cpSync(join(root,path),join(destination,path),{recursive:true}); };
 for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','migrations/008_default_reminders.sql','scripts/slack-manifest.mjs']) copy(path);
-const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','default-reminders.mjs','reminder-enrollment.mjs','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
+const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','default-reminders.mjs','reminder-enrollment.mjs','weekend-hidden.mjs','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
 for (const name of checks) copy(`qa/${name}`);
 copy('docs/COMMUNITY_QUESTIONS.md');
 write('docs/DEFAULT_REMINDERS.md',readFileSync(join(root,'docs/DEFAULT_REMINDERS.md'),'utf8').replace(/이번 적용 직후에는[\s\S]*?## 이관·검증/, '## 이관·검증'));
@@ -84,7 +84,7 @@ write('docs/WEEKEND_PARTICIPATION.md',`# 주말 선택 참여
 - 안내: “주말 원씽은 선택이에요!!! 오늘 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!”
 - 주말 저녁 공통 후기 안내와 개인 등록·후기 재촉은 보내지 않습니다.
 - 기록한 목표의 완료, 부분 진행, 후기, 휴식은 평일과 같은 날짜별 원본에 저장합니다.
-- 미참여 주말은 실패가 아니며 월요일에도 밀린 날짜로 재촉하지 않습니다. 잔디에서 선택 참여일임을 구분합니다.
+- 미참여 주말은 실패가 아니며 월요일에도 밀린 날짜로 재촉하지 않습니다. 목표를 등록하지 않은 주말은 잔디 칸 자체를 표시하지 않습니다.
 - 과거 날짜에 답글을 남기면 원래 연결된 날짜만 변경합니다. 오늘 기록으로 섞지 않습니다.
 
 날짜 판정은 실행 서버의 현지 요일이 아니라 해당 기록 날짜와 한국 시간을 기준으로 합니다. 자동 미완료 처리와 목표 완료만으로 후기까지 제출 처리하는 동작은 없습니다.
