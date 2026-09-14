@@ -16,13 +16,14 @@ export async function statusMessage(
   day: CommunityDay,
   undoKey: string | null,
 ) {
+  const boardDate = koreaDate(Date.now() / 1000);
   const history = (await context.store.history(context.scope)).filter(
-    (item) => item.goal && item.date <= day.date,
+    (item) => item.goal && item.date <= boardDate,
   );
   const legacy = await new NeonStore(context.env.DATABASE_URL).execute({
     teamId: context.scope.teamId,
     userId: context.scope.userId,
-    today: day.date,
+    today: boardDate,
     date: day.date,
     action: "get",
     text: "",
@@ -30,7 +31,7 @@ export async function statusMessage(
     eventTime: Date.now() / 1000,
   });
   const snapshot = {
-    startDate: history[0]?.date ?? day.date,
+    startDate: history[0]?.date ?? boardDate,
     palette: legacy.palette,
     goals: history.map((item) => ({
       date: item.date,
@@ -38,17 +39,14 @@ export async function statusMessage(
       completed: item.outcome === "complete",
     })),
   };
-  const url = await boardLink(buildBoard(snapshot, day.date, day.date), {
+  const url = await boardLink(buildBoard(snapshot, boardDate, boardDate), {
     baseUrl: context.env.PUBLIC_BASE_URL,
     secret: context.env.BOARD_SIGNING_SECRET,
-    today: day.date,
+    today: boardDate,
   });
   return communityStatusMessage({
-    earlierNotice: await earlierDayNotice(
-      context,
-      history,
-      day.date < koreaDate(Date.now() / 1000) ? day.date : koreaDate(Date.now() / 1000),
-    ),
+    earlierNotice: await earlierDayNotice(context, history, boardDate),
+    boardDate,
     userId: day.userId,
     date: day.date,
     goal: day.goal || null,
