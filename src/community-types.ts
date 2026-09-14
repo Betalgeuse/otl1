@@ -16,6 +16,7 @@ export type CommunityDay = DayScope & {
 };
 export type DayChange = DayScope & {
   readonly syncLegacy?: boolean;
+  readonly preserveOutcome?: boolean;
   readonly key: string;
   readonly action: "goal" | "complete" | "partial" | "not_done" | "reflection" | "rest" | "undo";
   readonly text?: string;

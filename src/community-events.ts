@@ -1,5 +1,6 @@
 import { adminCommand, captureFeedback } from "./community-admin";
 import { groupCard, settingsCard } from "./community-controls";
+import { prepareRecordEdit } from "./community-edits";
 import { enrollReminderMember } from "./community-enrollment";
 import { messageDate } from "./community-followup";
 import { classifyCommunityIntent } from "./community-language";
@@ -132,6 +133,7 @@ async function processMessage(
     );
     return;
   }
+  if (await prepareRecordEdit(context, text)) return;
   if (await answerCommunityQuestion(context, text, addressed)) return;
   const day = await context.store.day({ ...context.scope, date: context.date });
   if (/^(내 상태|원씽 보기|상태 보기)$/.test(text)) {

@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { parseEditDate, classifyRecordEdit } from '../src/community-edit-language.ts';
+const today='2026-09-14';
+assert.deepEqual(parseEditDate('나 9/13 목표 수정',today,[]),{date:'2026-09-13',text:'나  목표 수정'});
+assert.equal(parseEditDate('어제 목표 완료',today,[]).date,'2026-09-13');
+assert.equal(parseEditDate('그제 목표 완료',today,[]).date,'2026-09-12');
+assert.equal(parseEditDate('2026-09-09 목표 완료',today,[]).date,'2026-09-09');
+assert.equal(parseEditDate('9월 8일 목표 완료',today,[]).date,'2026-09-08');
+assert.equal(parseEditDate('목표 수정',today,[]),null);
+assert.equal(parseEditDate('12/31 수정',today,['2025-12-31']).date,'2025-12-31');
+for(const value of ['2/30 수정','9/15 수정','9/8 과 9/9 수정','어제 9/13 수정','2026-13-01 수정']) assert.throws(()=>parseEditDate(value,today,[]));
+assert.throws(()=>parseEditDate('9/8 수정',today,['2025-09-08','2026-09-08']));
+const ai=value=>({run:async()=>({response:JSON.stringify(value)})});
+assert.equal((await classifyRecordEdit(ai({kind:'goal',text:'책 10쪽 읽기',outcome:null}),'목표를 책 10쪽 읽기로 수정해줘')).kind,'goal');
+assert.equal((await classifyRecordEdit(ai({kind:'goal',text:'없는 목표',outcome:null}),'목표를 책 읽기로 수정해줘')).kind,'unclear');
+assert.equal((await classifyRecordEdit(ai({kind:'reflection',text:'재미있었어요',outcome:'complete'}),'나 목표 달성 했는데 수정해줄 수 있니? 후기: 재미있었어요')).outcome,'complete');
+assert.equal((await classifyRecordEdit(ai({kind:'reflection',text:'재미',outcome:null}),'후기: 재미있었어요')).kind,'unclear');
+assert.equal((await classifyRecordEdit(ai({kind:'complete',text:null,outcome:'complete'}),'친구가 완료했대')).kind,'unclear');
+assert.equal((await classifyRecordEdit(ai({kind:'complete',text:null,outcome:'complete'}),'“완료했어요”라고 친구가 말했어요')).kind,'unclear');
+assert.equal((await classifyRecordEdit(ai({kind:'goal',text:'책 읽기',outcome:'complete'}),'목표를 책 읽기로 수정')).kind,'unclear');
+assert.equal((await classifyRecordEdit({run:async()=>({response:'not json'})},'수정')).kind,'unclear');
+const reflectionNull=ai({kind:'reflection',text:'재미있었어요',outcome:null});
+assert.equal((await classifyRecordEdit(reflectionNull,'나 목표 달성 했는데 수정해줄 수 있니? 후기: 재미있었어요')).outcome,'complete');
+for (const phrase of ['목표 못 달성했어요','목표 안 달성했어요','목표 거의 달성했어요','목표 달성했으면','목표 달성했니?','목표 달성했어요?','목표 달성했다고 가정하면','목표 달성했는데 사실 못했어']) {
+  assert.notEqual((await classifyRecordEdit(reflectionNull,`${phrase} 후기: 재미있었어요`)).outcome,'complete');
+  assert.notEqual((await classifyRecordEdit(ai({kind:'reflection',text:'재미있었어요',outcome:'complete'}),`${phrase} 후기: 재미있었어요`)).outcome,'complete');
+}
+assert.equal((await classifyRecordEdit(ai({kind:'goal',text:'목표를 QA 자료 두 쪽 읽기로 수정해줘',outcome:null}),'목표를 QA 자료 두 쪽 읽기로 수정해줘')).text,'QA 자료 두 쪽 읽기');
+assert.equal((await classifyRecordEdit(ai({kind:'goal',text:'목표 수정해줘',outcome:null}),'목표 수정해줘')).kind,'unclear');
+console.log('edit date and interpretation boundaries passed');
