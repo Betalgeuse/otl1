@@ -13,10 +13,11 @@ mkdirSync(destination, { recursive: true });
 writeFileSync(marker, 'Curated public source snapshot; no private Git history.\n');
 const write = (path, text) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); writeFileSync(join(destination,path),text); };
 const copy = (path) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); cpSync(join(root,path),join(destination,path),{recursive:true}); };
-for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','migrations/008_default_reminders.sql','migrations/009_welcome_guides.sql','migrations/010_first_registration.sql','scripts/slack-manifest.mjs']) copy(path);
+for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','migrations/008_default_reminders.sql','migrations/009_welcome_guides.sql','migrations/010_first_registration.sql','scripts/slack-manifest.mjs','scripts/test-unit.mjs','scripts/check.mjs']) copy(path);
 const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','default-reminders.mjs','reminder-enrollment.mjs','weekend-hidden.mjs','community-edit-language.mjs','natural-edits.mjs','current-garden.mjs','reflection-header.mjs','reflection-routing.mjs','slack-message-edit.mjs','community-guide.mjs','townhall-milestones.mjs','brand-copy.mjs','first-registration.sql','edit-storage.sql','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
 for (const name of checks) copy(`qa/${name}`);
 copy('docs/COMMUNITY_QUESTIONS.md');
+copy('docs/TESTING.md');
 copy('docs/NATURAL_RECORD_EDITS.md');
 copy('docs/REFLECTION_RELIABILITY.md');
 copy('docs/TOWNHALL_ONBOARDING.md');
@@ -63,7 +64,7 @@ Bun, Node.js 24, PostgreSQL 17이 필요합니다. 먼저 bun install --frozen-l
 
 ## 검증
 
-네트워크 없는 기본 확인:
+기본 검증은 bun run check 한 번으로 실행합니다. 운영 DB 이관이나 실제 Slack 발송은 포함하지 않습니다. 개별 검사:
 
 \`\`\`sh
 bun qa/community-admin-access.mjs
