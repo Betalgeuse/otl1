@@ -8,6 +8,7 @@ export function messageEvent(raw: Record<string, unknown>): Record<string, unkno
   const changedAt = string(edited?.ts ?? raw.event_ts ?? raw.ts);
   return {
     ...message,
+    channel: raw.channel,
     type: "message",
     subtype: undefined,
     edit_ts: changedAt,
