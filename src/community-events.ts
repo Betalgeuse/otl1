@@ -7,6 +7,7 @@ import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
 import { applyChange, confirmChange, publishStatus } from "./community-records";
+import { handleReflectionReport } from "./community-reflection";
 import {
   type CommunityContext,
   type CommunityEnv,
@@ -18,6 +19,7 @@ import { CommunityStore } from "./community-store";
 import type { DayChange } from "./community-types";
 import { welcomeTownhallMember } from "./community-welcome";
 import { InputError, koreaDate, object, string } from "./input";
+import { messageEvent } from "./slack-message-event";
 import { NeonStore } from "./store";
 
 export async function handleCommunityEvent(
@@ -30,7 +32,7 @@ export async function handleCommunityEvent(
     data.team_id !== env.SLACK_TEAM_ID
   )
     return false;
-  const event = object(data.event);
+  const event = messageEvent(object(data.event));
   await enrollReminderMember(event, env);
   if (await welcomeTownhallMember(event, env)) return true;
   if (
@@ -54,7 +56,7 @@ export async function handleCommunityEvent(
   )
     return true;
   const source = string(event.ts);
-  const stamp = Number(source);
+  const stamp = Number(event.edit_ts ?? source);
   if (!Number.isFinite(stamp) || Math.abs(Date.now() / 1000 - stamp) > 300) return true;
   const rawText = string(event.text);
   const text = (
@@ -63,13 +65,17 @@ export async function handleCommunityEvent(
   if (!text) return true;
   const scope = { teamId: env.SLACK_TEAM_ID, channelId: string(event.channel), userId };
   const store = new CommunityStore(new NeonStore(env.DATABASE_URL));
-  const key = `incoming:${source}`;
+  const key = `incoming:${source}${event.edit_ts ? `:edit:${string(event.edit_ts)}` : ""}`;
   const thread = string(event.thread_ts ?? event.ts);
   const date = await messageDate(store, scope, string(env.COMMUNITY_ADMIN_ID), source, thread);
   const context = { env, store, scope, key, thread, source, date };
   await store.putRecord({ ...scope, key, kind: "incoming", body: { date, thread } });
   if (!(await store.claimRecord({ ...scope, key }))) return true;
   try {
+    if (event.edit_ts && !/후기|회고|수정|정정|변경/.test(text)) {
+      await store.finishRecord({ ...scope, key }, "sent");
+      return true;
+    }
     await processMessage(
       context,
       text,
@@ -133,6 +139,7 @@ async function processMessage(
     );
     return;
   }
+  if (await handleReflectionReport(context, text)) return;
   if (await prepareRecordEdit(context, text)) return;
   if (await answerCommunityQuestion(context, text, addressed)) return;
   const day = await context.store.day({ ...context.scope, date: context.date });
@@ -162,7 +169,7 @@ async function processMessage(
   const base = {
     ...context.scope,
     date: context.date,
-    key: `change:${context.source}`,
+    key: `change:${context.key}`,
     expectedRevision: day.revision,
   };
   switch (intent.intent) {
