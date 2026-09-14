@@ -54,7 +54,7 @@ export function command(
   const invitation = invitationCommand(text, { identity, responseUrl });
   if (invitation) return invitation;
   if (text.length > 200 || /[\r\n]/.test(text))
-    throw new InputError("오늘의 원씽을 200자 이내 한 줄로 작성해 주세요.");
+    throw new InputError("오늘의 ONE THING을 200자 이내 한 줄로 작성해 주세요.");
   const history = /^기록\s+(.+)$/.exec(text);
   const selectedDate = history ? date(history[1]) : context.today;
   return {

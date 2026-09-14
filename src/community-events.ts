@@ -3,6 +3,7 @@ import { groupCard, settingsCard } from "./community-controls";
 import { prepareRecordEdit } from "./community-edits";
 import { enrollReminderMember } from "./community-enrollment";
 import { messageDate } from "./community-followup";
+import { deliverWelcomeGuide } from "./community-guide";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
@@ -33,6 +34,7 @@ export async function handleCommunityEvent(
   )
     return false;
   const event = messageEvent(object(data.event));
+  if (await deliverWelcomeGuide(event, env)) return true;
   await enrollReminderMember(event, env);
   if (await welcomeTownhallMember(event, env)) return true;
   if (
@@ -129,7 +131,7 @@ async function processMessage(
   if (/^샤라웃( 보내기)?$/.test(text)) {
     await post(
       context,
-      communityConfirmationMessage("오늘 원씽을 함께한 동료에게 한마디!!! 🙌", [
+      communityConfirmationMessage("오늘 ONE THING을 함께한 동료에게 한마디!!! 🙌", [
         {
           label: "샤라웃 보내기",
           actionId: "community_shoutout",
@@ -150,7 +152,7 @@ async function processMessage(
   if (text.length > 1000) {
     await textReply(
       context,
-      "내용이 길어요. 원씽은 200자, 후기는 이 대화에서 1,000자 이내로 알려주세요.",
+      "내용이 길어요. ONE THING은 200자, 후기는 이 대화에서 1,000자 이내로 알려주세요.",
     );
     return;
   }

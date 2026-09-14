@@ -1,4 +1,4 @@
-# 원씽 커뮤니티 봇
+# ONE THING 커뮤니티 봇
 
 하루의 최우선순위인 중요한 일 한 가지를 Slack에서 기록하고, 완료·부분 진행·후기·휴식을 함께 나누는 봇입니다. Cloudflare Workers, Durable Objects, Neon PostgreSQL을 사용합니다.
 
@@ -33,3 +33,5 @@ bun qa/community-followup.mjs
 DB 테스트는 [설치 문서](docs/DATABASE_SETUP.md)의 폐기 가능한 로컬 DB에서만 실행하세요. 공개본은 실제 회원 기록, 운영 증거, 비공개 Slack 링크와 이전 비공개 Git 이력을 포함하지 않는 새 스냅샷입니다. 테스트 통과가 배포 환경의 실제 메시지 전달을 보장하지는 않습니다.
 
 한글 표현 참고 자료의 라이선스는 docs/vendor/im-not-ai/LICENSE에 있습니다.
+
+환영·첫 등록/완료/후기의 townhall 게시와 최신 안내글 전달은 [운영 명세](docs/TOWNHALL_ONBOARDING.md)를 따릅니다. 가이드 원본 채널과 관리자 메시지 timestamp를 설정하세요.

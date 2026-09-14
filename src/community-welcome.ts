@@ -31,7 +31,7 @@ export async function welcomeTownhallMember(
     return true;
   const store = new CommunityStore(new NeonStore(env.DATABASE_URL));
   const scope = { teamId: env.SLACK_TEAM_ID, channelId, userId, key: "townhall-welcome" };
-  const text = `<@${userId}> 어서 오세요!!!! 🎉🐧🙌\n원씽 하나씩, 같이 해봐요!!!${env.COMMUNITY_PUBLIC_CHANNEL_ID ? ` 오늘 최우선순위로 먼저 해결할 중요한 일 한 가지를 <#${env.COMMUNITY_PUBLIC_CHANNEL_ID}>에 편하게 남겨주세요 🌱` : ""}\n다들 환영 이모지 하나씩 부탁해요!!! 🥳`;
+  const text = `<@${userId}> 어서 오세요!!!! 🎉🐧🙌\n*ONE THING* 하나씩, 같이 해봐요!!!${env.COMMUNITY_PUBLIC_CHANNEL_ID ? ` 오늘 최우선순위로 먼저 해결할 중요한 일 한 가지를 <#${env.COMMUNITY_PUBLIC_CHANNEL_ID}>에 편하게 남겨주세요 🌱` : ""}\n다들 환영 이모지 하나씩 부탁해요!!! <!channel> 🥳`;
   await store.putRecord({
     ...scope,
     kind: "welcome",

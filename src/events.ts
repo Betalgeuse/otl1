@@ -43,8 +43,8 @@ export async function handleMention(
     event.type === "app_mention" || /(^|\s)(오늘|원씽|할\s*일|목표)(\s|은|을|이|:|$)/.test(text);
   const reply =
     text.length > 0 && candidate && !/(\s|^)(도와|뭐|무엇|어떻게|왜)(\s|$)/.test(text)
-      ? `오늘의 원씽 초안으로 등록할까요?\n“${text.slice(0, 200)}”`
-      : "오늘의 원씽을 한 가지 문장으로 적어 주세요. 예: 책 10쪽 읽기";
+      ? `오늘의 ONE THING 초안으로 등록할까요?\n“${text.slice(0, 200)}”`
+      : "오늘의 ONE THING을 한 가지 문장으로 적어 주세요. 예: 책 10쪽 읽기";
   const blocks: readonly Json[] =
     text.length > 0
       ? [

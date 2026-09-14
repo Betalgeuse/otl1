@@ -70,7 +70,7 @@ async function invitationText(operation: InvitationOperation, services: Services
     });
     switch (status) {
       case "joined":
-        return "초대 수락이 완료됐습니다. /one 뒤에 오늘의 원씽을 한 문장으로 작성해 보세요.";
+        return "초대 수락이 완료됐습니다. /one 뒤에 오늘의 ONE THING을 한 문장으로 작성해 보세요.";
       case "already_joined":
         return "이미 참여 중입니다. /one으로 내 기록을 확인해 주세요.";
       case "wrong_recipient":

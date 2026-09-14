@@ -50,7 +50,7 @@ export function communityStatusMessage(input: StatusCard): Json {
     unknown: "완료 여부 미확인",
   } as const;
   const status = input.rest ? "오늘은 쉬어요 ☕" : labels[input.outcome];
-  const text = `${input.date} 원씽 · ${status}\n목표: ${input.goal ?? "아직 등록하지 않았어요"}\n후기: ${input.reflection ?? "아직 남기지 않았어요"}`;
+  const text = `${input.date} *ONE THING* · ${status}\n목표: ${input.goal ?? "아직 등록하지 않았어요"}\n후기: ${input.reflection ?? "아직 남기지 않았어요"}`;
   const actions: Json[] = [];
   if (input.undoValue)
     actions.push(button({ label: "되돌리기", actionId: "community_undo", value: input.undoValue }));
@@ -64,15 +64,22 @@ export function communityStatusMessage(input: StatusCard): Json {
     );
   const blocks: Json[] = [
     {
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: `${slackMention(input.userId)} · ${escapeSlackText(input.date)} · 한국 시간`,
-        },
-      ],
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `${slackMention(input.userId)} · ${escapeSlackText(input.date)} *ONE THING* · ${status} · 한국 시간`,
+      },
     },
-    { type: "section", text: { type: "plain_text", text: text.slice(0, 2900) } },
+    {
+      type: "section",
+      text: {
+        type: "plain_text",
+        text: `목표: ${input.goal ?? "아직 등록하지 않았어요"}\n후기: ${input.reflection ?? "아직 남기지 않았어요"}`.slice(
+          0,
+          2900,
+        ),
+      },
+    },
   ];
   if (input.boardUrl) {
     const url = new URL(input.boardUrl);
@@ -80,7 +87,7 @@ export function communityStatusMessage(input: StatusCard): Json {
     blocks.push({
       type: "image",
       image_url: url.href,
-      alt_text: `${input.boardDate ?? input.date}까지의 원씽 잔디`,
+      alt_text: `${input.boardDate ?? input.date}까지의 ONE THING 잔디`,
     });
   }
   if (input.boardUrl)
@@ -102,15 +109,34 @@ export function communityStatusMessage(input: StatusCard): Json {
 export function communityConfirmationMessage(
   text: string,
   choices: readonly CommunityChoice[],
+  format: "plain_text" | "mrkdwn" = "plain_text",
 ): Json {
   if (choices.length < 1 || choices.length > 5)
     throw new InputError("확인 선택지는 1~5개여야 합니다.");
+  const [heading = "", ...body] = text.split("\n");
+  const branded = format === "plain_text" && heading.includes("ONE THING");
+  const sections: Json[] = branded
+    ? [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: escapeSlackText(heading).replace(/\*?ONE THING\*?/g, "*ONE THING*"),
+          },
+        },
+        ...(body.length
+          ? [
+              {
+                type: "section",
+                text: { type: "plain_text", text: body.join("\n").slice(0, 2900) },
+              },
+            ]
+          : []),
+      ]
+    : [{ type: "section", text: { type: format, text: text.slice(0, 2900) } }];
   return {
     text,
-    blocks: [
-      { type: "section", text: { type: "plain_text", text: text.slice(0, 2900) } },
-      { type: "actions", elements: choices.map(button) },
-    ],
+    blocks: [...sections, { type: "actions", elements: choices.map(button) }],
   };
 }
 

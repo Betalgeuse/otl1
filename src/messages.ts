@@ -21,11 +21,15 @@ export async function boardMessage(snapshot: Snapshot, options: MessageOptions):
     .map((cell) => `Day ${cell.day} ${cell.date}: ${cell.future ? "예정" : labels[cell.status]}`)
     .join(", ");
   const summary = `완료 ${complete} · 작성 중 ${written}`;
+  const goalHeading =
+    active || options.anchor < options.today
+      ? `${options.anchor}의 *ONE THING*`
+      : "오늘의 *ONE THING*을 한 문장으로 시작해 보세요.";
   const goalText = active
-    ? `${options.anchor}의 원씽\n${active.text}`
+    ? active.text
     : options.anchor < options.today
       ? `${options.anchor}에는 목표를 작성하지 않았습니다.`
-      : "오늘의 원씽을 한 문장으로 시작해 보세요.\n오늘 원씽은 책 10쪽 읽기";
+      : "오늘 ONE THING은 책 10쪽 읽기";
   const actions: Json[] = [];
   if (active && options.anchor <= options.today) {
     actions.push({
@@ -53,13 +57,13 @@ export async function boardMessage(snapshot: Snapshot, options: MessageOptions):
   return {
     response_type: options.sharedBy ? "in_channel" : "ephemeral",
     replace_original: options.replace,
-    text: `${summary}\n${goalText}\n${alt}`,
+    text: `${summary}\n${goalHeading}\n${goalText}\n${alt}`,
     blocks: [
       {
         type: "header",
         text: {
           type: "plain_text",
-          text: options.sharedBy ? "함께하는 원씽 잔디" : "나의 원씽 잔디",
+          text: options.sharedBy ? "함께하는 ONE THING 잔디" : "나의 ONE THING 잔디",
         },
       },
       ...(options.sharedBy
@@ -77,7 +81,8 @@ export async function boardMessage(snapshot: Snapshot, options: MessageOptions):
         ],
       },
       { type: "image", image_url: await boardLink(board, options.link), alt_text: alt },
-      { type: "section", text: { type: "plain_text", text: `${summary}\n${goalText}` } },
+      { type: "section", text: { type: "mrkdwn", text: `${summary}\n${goalHeading}` } },
+      { type: "section", text: { type: "plain_text", text: goalText } },
       ...(options.sharedBy ? [] : [{ type: "actions", elements: actions }]),
       {
         type: "context",

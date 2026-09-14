@@ -17,13 +17,13 @@ export function pilotReply(result: Interpretation): string {
   const suffix = "\n자연어 해석 테스트입니다. 목표·후기·휴식 기록은 변경하지 않았어요.";
   switch (result.intent) {
     case "goal":
-      return `오늘 원씽을 등록하려는 뜻으로 이해했어요.${suffix}`;
+      return `오늘 *ONE THING*을 등록하려는 뜻으로 이해했어요.${suffix}`;
     case "rest":
       return `오늘은 쉬겠다는 뜻으로 이해했어요.${suffix}`;
     case "ignore":
       return `목표나 수행 상태에 대한 본인 보고로 보지 않았어요.${suffix}`;
     case "unclear":
-      return `오늘 원씽을 완료하셨나요? 완료·일부 진행·못함·오늘 쉬기 중 하나로 알려주세요.${suffix}`;
+      return `오늘 *ONE THING*을 완료하셨나요? 완료·일부 진행·못함·오늘 쉬기 중 하나로 알려주세요.${suffix}`;
     case "reflection": {
       const labels = {
         complete: "완료",
@@ -31,7 +31,7 @@ export function pilotReply(result: Interpretation): string {
         not_done: "미수행",
         unknown: "확인 필요",
       };
-      return `오늘 원씽을 완료하셨나요? 문장에서는 ‘${labels[result.outcome]}’로 이해했어요.${suffix}`;
+      return `오늘 *ONE THING*을 완료하셨나요? 문장에서는 ‘${labels[result.outcome]}’로 이해했어요.${suffix}`;
     }
     default:
       return exhaustive(result.intent);

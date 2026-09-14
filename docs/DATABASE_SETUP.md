@@ -45,3 +45,7 @@ node qa/normalized-legacy.mjs
 ```
 
 기본 소켓 /tmp/otl-community-pg, 포트55439를 사용합니다. DB 이름은 테스트마다 다를 수 있으므로 COMMUNITY_PG_DATABASE를 명시하세요. 실제 운영 백업을 공개 테스트 fixture로 사용하지 마세요.
+
+## 환영 가이드·첫 등록
+
+008까지 적용 후009_welcome_guides.sql과010_first_registration.sql을 순서대로 적용합니다. COMMUNITY_WELCOME_CHANNEL_ID와 COMMUNITY_GUIDE_SOURCE_TS는 관리자가 작성한 원본 채널·메시지로 설정하세요.

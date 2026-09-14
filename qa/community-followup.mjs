@@ -6,7 +6,7 @@ const history=[day,{...day,date:'2026-09-09',outcome:'partial',reflection:'절�
 assert.deepEqual(unresolvedDays(history,'2026-09-11').map(d=>d.date),['2026-09-08','2026-09-07']);
 assert.equal(unresolvedDays([{...day,goal:''}],'2026-09-11').length,0);
 let writes=0;const store={async listRecords(){return [{body:{date:'2026-09-08',sourceUrls:['https://test.slack.com/archives/CQA/p1788831150368149']}}];},async getRecord(){return null;}};
-const notice=await earlierDayNotice({scope,store},history,'2026-09-11');assert.match(notice,/2026-09-08 원씽 글/);assert.doesNotMatch(notice,/2026-09-09|2026-09-10/);assert.equal(writes,0);
+const notice=await earlierDayNotice({scope,store},history,'2026-09-11');assert.match(notice,/2026-09-08 ONE THING 글/);assert.doesNotMatch(notice,/2026-09-09|2026-09-10/);assert.equal(writes,0);
 const source=String(Date.parse('2026-09-11T03:00:00Z')/1000),thread=String(Date.parse('2026-09-08T01:00:00Z')/1000);
 assert.equal(await messageDate(store,scope,'UADMIN',source,thread),'2026-09-08');
 assert.equal(await messageDate(store,scope,'UADMIN',source,source),'2026-09-11');
@@ -18,4 +18,4 @@ assert.equal(unresolvedDays([{...day,outcome:'pending',reflection:'후기는 썼
 assert.equal(unresolvedDays([{...day,outcome:'not_done',reflection:'못한 이유'}],'2026-09-11').length,0);
 assert.equal(await earlierDayNotice({scope,store},[{...day,resting:true}],'2026-09-11'),null);
 console.log('PASS partial-without-review stays open; reviewed noncompletion closed; rest suppresses notice');
-const onlyStatus=await earlierDayNotice({scope,store},[{...day,reflection:'이미 쓴 후기'}],'2026-09-11');assert.match(onlyStatus,/원씽 글>: 완료 여부\n/);assert.doesNotMatch(onlyStatus,/완료 여부와 후기/);
+const onlyStatus=await earlierDayNotice({scope,store},[{...day,reflection:'이미 쓴 후기'}],'2026-09-11');assert.match(onlyStatus,/ONE THING 글>: 완료 여부\n/);assert.doesNotMatch(onlyStatus,/완료 여부와 후기/);

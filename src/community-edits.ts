@@ -36,7 +36,7 @@ export async function prepareRecordEdit(context: CommunityContext, text: string)
   const day = history.find((d) => d.date === targetDate);
   if (!day?.goal) {
     await ephemeral(context, {
-      text: `${targetDate}에는 수정할 원씽이 없어요. 날짜를 다시 확인해 주세요.`,
+      text: `${targetDate}에는 수정할 ONE THING이 없어요. 날짜를 다시 확인해 주세요.`,
     });
     return true;
   }
@@ -96,7 +96,7 @@ export async function prepareRecordEdit(context: CommunityContext, text: string)
   await ephemeral(
     context,
     communityConfirmationMessage(
-      `${targetDate} 원씽 수정 확인\n대상 목표: ${day.goal}\n변경 항목: ${labels[edit.kind]}\n이전: ${before}\n수정: ${next}${edit.outcome ? `\n완료 여부: ${labels[edit.outcome]}` : ""}\n${edit.kind === "goal" ? "후기·완료 여부·휴식은 그대로 유지해요." : "이 날짜의 기록만 바꿔요."}`,
+      `${targetDate} ONE THING 수정 확인\n대상 목표: ${day.goal}\n변경 항목: ${labels[edit.kind]}\n이전: ${before}\n수정: ${next}${edit.outcome ? `\n완료 여부: ${labels[edit.outcome]}` : ""}\n${edit.kind === "goal" ? "후기·완료 여부·휴식은 그대로 유지해요." : "이 날짜의 기록만 바꿔요."}`,
       [
         {
           label: "이 날짜 기록 수정",

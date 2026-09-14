@@ -44,7 +44,7 @@ export async function handleReflectionReport(
   const day = (await context.store.history(context.scope)).find((d) => d.date === targetDate);
   if (!day?.goal) {
     await ephemeral(context, {
-      text: `${targetDate}에는 등록된 원씽이 없어요. 목표와 날짜를 먼저 확인해 주세요. 후기는 아직 저장하지 않았어요.`,
+      text: `${targetDate}에는 등록된 ONE THING이 없어요. 목표와 날짜를 먼저 확인해 주세요. 후기는 아직 저장하지 않았어요.`,
     });
     return true;
   }

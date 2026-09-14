@@ -176,15 +176,15 @@ export type EncouragementInput = {
 const EMOJI = ["🐣", "🦦", "🦖", "🦭", "🐙", "🐿️"];
 const TEMPLATES: Record<EncouragementKind, readonly [string, string, string, string]> = {
   goal: [
-    "오늘 원씽 출발!!! 같이 해봐요",
+    "오늘 *ONE THING* 출발!!! 같이 해봐요",
     "오늘 할 한 가지 정했네요!!! 응원할게요",
-    "원씽 접수!!! 한 걸음씩 가봐요",
+    "*ONE THING* 접수!!! 한 걸음씩 가봐요",
     "오늘의 한 가지 등장!!! 같이 달려봐요",
   ],
   completion: [
     "오늘 한 가지 해냈네요!!! 박수!!!",
-    "원씽 완료라니!!! 하이파이브!!!",
-    "해냈다 해냈어!!! 오늘 원씽에 박수 보내요",
+    "*ONE THING* 완료라니!!! 하이파이브!!!",
+    "해냈다 해냈어!!! 오늘 *ONE THING*에 박수 보내요",
     "오늘의 한 가지 끝!!! 같이 축하해요",
   ],
   reflection: [
@@ -194,9 +194,9 @@ const TEMPLATES: Record<EncouragementKind, readonly [string, string, string, str
     "한 줄 나눠줬네요!!! 내일도 같이 가봐요",
   ],
   first_goal: [
-    "첫 원씽 달성!!! 시작부터 한 건 했네요!!!",
+    "첫 *ONE THING* 달성!!! 시작부터 한 건 했네요!!!",
     "첫 완료 찍었다!!! 같이 축하해요",
-    "드디어 첫 원씽 완료!!! 박수 받아요",
+    "드디어 첫 *ONE THING* 완료!!! 박수 받아요",
     "첫 달성 등장!!! 하이파이브!!!",
   ],
   first_reflection: [
@@ -206,7 +206,7 @@ const TEMPLATES: Record<EncouragementKind, readonly [string, string, string, str
     "첫 후기 도착!!! 오늘 얘기 들려줘서 고마워요",
   ],
   rest: [
-    "오늘은 푹 쉬어요! 다음 원씽 때 또 만나요",
+    "오늘은 푹 쉬어요! 다음 *ONE THING* 때 또 만나요",
     "오늘은 쉬는 날!!! 편히 쉬어요",
     "쉬어가기로 했군요! 다음에 또 만나요",
     "오늘은 숨 고르기!!! 잘 쉬고 와요",

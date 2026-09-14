@@ -29,6 +29,7 @@ export type ChangeResult = {
   readonly changed: boolean;
   readonly conflict: boolean;
   readonly firstGoal: boolean;
+  readonly firstRegistration?: boolean;
   readonly firstReflection: boolean;
   readonly undoKey: string;
 };

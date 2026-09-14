@@ -10,7 +10,7 @@ export async function settingsCard(context: CommunityContext): Promise<void> {
   await ephemeral(
     context,
     communityConfirmationMessage(
-      `개인 안내: ${prefs.enabled ? "켜짐" : "꺼짐"}\n원씽 ${prefs.goalTime} · 후기 ${prefs.reviewTime} (한국 시간)`,
+      `개인 안내: ${prefs.enabled ? "켜짐" : "꺼짐"}\n*ONE THING* ${prefs.goalTime} · 후기 ${prefs.reviewTime} (한국 시간)`,
       [
         {
           label: "시간·수신 설정",
@@ -47,6 +47,7 @@ export async function settingsCard(context: CommunityContext): Promise<void> {
             ]
           : []),
       ],
+      "mrkdwn",
     ),
   );
 }
@@ -55,7 +56,7 @@ export async function groupCard(context: CommunityContext): Promise<void> {
   await post(
     context,
     communityConfirmationMessage(
-      "공통 원씽·후기 안내를 우리 봇이 맡습니다. 설정된 채널에만 게시합니다.",
+      "공통 *ONE THING*·후기 안내를 우리 봇이 맡습니다. 설정된 채널에만 게시합니다.",
       [
         {
           label: "공통 안내 설정",
@@ -70,13 +71,14 @@ export async function groupCard(context: CommunityContext): Promise<void> {
         ...(context.scope.channelId === context.env.COMMUNITY_CHANNEL_ID
           ? [
               {
-                label: "원씽 채널에 10시·18시 적용",
+                label: "ONE THING 채널에 10시·18시 적용",
                 actionId: "community_live_schedule",
                 value: scopedValue(context.scope, context.date),
               },
             ]
           : []),
       ],
+      "mrkdwn",
     ),
   );
 }
@@ -122,13 +124,13 @@ export async function openSettings(
           text: {
             type: "plain_text",
             text: group
-              ? "원씽·후기 공통 안내 시각을 설정합니다."
-              : "개인 안내는 기본 켜짐(평일 원씽 11시·후기 20시)이에요. 종류별 하루 1회이며 주말·가입 당일·휴식·제출 후에는 재촉하지 않아요. 언제든 끌 수 있고 08:00~21:59 사이로 바꿀 수 있어요.",
+              ? "ONE THING·후기 공통 안내 시각을 설정합니다."
+              : "개인 안내는 기본 켜짐(평일 ONE THING 11시·후기 20시)이에요. 종류별 하루 1회이며 주말·가입 당일·휴식·제출 후에는 재촉하지 않아요. 언제든 끌 수 있고 08:00~21:59 사이로 바꿀 수 있어요.",
           },
         },
         field(
           "goal",
-          "원씽 시각 (HH:MM)",
+          "ONE THING 시각 (HH:MM)",
           group ? (typeof data.goalTime === "string" ? data.goalTime : "10:00") : prefs.goalTime,
         ),
         field(
@@ -182,7 +184,7 @@ export async function stopSettings(context: CommunityContext): Promise<void> {
   await context.store.preferences(context.scope, { enabled: false });
   await armCommunityClock(context.env, context.scope.channelId);
   await ephemeral(context, {
-    text: "개인 안내를 껐어요. 대기 중인 원씽·후기 알림도 멈췄습니다. ☕",
+    text: "개인 안내를 껐어요. 대기 중인 *ONE THING*·후기 알림도 멈췄습니다. ☕",
   });
 }
 
@@ -220,7 +222,7 @@ export async function openShoutout(
         {
           type: "input",
           block_id: "message",
-          label: { type: "plain_text", text: "어떤 원씽이나 도움을 응원하나요?" },
+          label: { type: "plain_text", text: "어떤 ONE THING이나 도움을 응원하나요?" },
           element: {
             type: "plain_text_input",
             action_id: "value",

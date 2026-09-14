@@ -131,7 +131,7 @@ export async function handleRequest(
     if (url.pathname === "/slack/commands")
       return Response.json({
         response_type: "ephemeral",
-        text: "슬래시 명령은 종료했어요. 채널에 원씽을 자연어로 남기거나 ‘내 상태’라고 입력해 주세요.",
+        text: "슬래시 명령은 종료했어요. 채널에 ONE THING을 자연어로 남기거나 ‘내 상태’라고 입력해 주세요.",
       });
     const today = koreaDate(timestamp);
     const operation =
