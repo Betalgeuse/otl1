@@ -24,6 +24,6 @@ export async function enablePublicSchedule(context: CommunityContext): Promise<v
     );
   await textReply(
     context,
-    `원씽 채널의 봇 안내를 켰어요. 매일 오전 10시 원씽, 오후 6시 후기입니다.\n다음 예약: ${new Date(armed.next + 9 * 3600000).toISOString().slice(0, 16).replace("T", " ")} (한국 시간)\n기존 Slack 반복 알림은 별도로 제거해야 중복되지 않아요.`,
+    `*ONE THING* 채널의 봇 안내를 켰어요. 매일 오전 10시 *ONE THING*, 오후 6시 후기입니다.\n다음 예약: ${new Date(armed.next + 9 * 3600000).toISOString().slice(0, 16).replace("T", " ")} (한국 시간)\n기존 Slack 반복 알림은 별도로 제거해야 중복되지 않아요.`,
   );
 }

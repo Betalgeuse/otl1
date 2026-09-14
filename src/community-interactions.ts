@@ -70,7 +70,7 @@ export async function communityInteraction(
           else await store.preferences(scope, prefs);
           await armCommunityClock(env, scope.channelId);
           await ephemeral(context, {
-            text: `설정 저장! 원씽 ${prefs.goalTime} · 후기 ${prefs.reviewTime} · ${prefs.enabled ? "켜짐" : "꺼짐"} (한국 시간)`,
+            text: `설정 저장! ONE THING ${prefs.goalTime} · 후기 ${prefs.reviewTime} · ${prefs.enabled ? "켜짐" : "꺼짐"} (한국 시간)`,
           });
         })(),
       );

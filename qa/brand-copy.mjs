@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import { mock } from 'bun:test';
+mock.module('cloudflare:workers', () => ({ DurableObject: class {} }));
+const { communityStatusMessage, communityConfirmationMessage } = await import('../src/community-messages.ts');
+const { boardMessage } = await import('../src/messages.ts');
+const { groupCard, openSettings } = await import('../src/community-controls.ts');
+const goal = '원씽 공부 *내 문장* <@UOTHER>';
+const reflection = '원씽 후기: ONE THING을 읽었어요.';
+const card = communityStatusMessage({userId:'UADMIN', date:'2026-09-14', goal, outcome:'complete', reflection, rest:false, undoValue:null, boardUrl:'https://example.test/board.png'});
+assert.equal(card.blocks[0].text.type, 'mrkdwn');
+assert.match(card.blocks[0].text.text, /\*ONE THING\*/);
+assert.equal(card.blocks[1].text.type, 'plain_text');
+assert.equal(card.blocks[1].text.text, `목표: ${goal}\n후기: ${reflection}`);
+assert.equal(card.blocks.find(b=>b.type==='image').alt_text, '2026-09-14까지의 ONE THING 잔디');
+const confirmation = communityConfirmationMessage(goal, [{label:'확인',actionId:'confirm',value:'1'}]);
+assert.equal(confirmation.blocks[0].text.type, 'plain_text');
+assert.equal(confirmation.blocks[0].text.text, goal);
+const board = await boardMessage({startDate:'2026-09-14', goals:[{date:'2026-09-14',text:goal,completed:true}], palette:{empty:'#eeeeee',written:'#aaddaa',complete:'#006600'}}, {ownerId:'UADMIN',today:'2026-09-14',anchor:'2026-09-14',link:{baseUrl:'https://example.test',secret:'test-only',today:'2026-09-14'},replace:false,sharedBy:null});
+assert.ok(board.blocks.some(b=>b.type==='section' && b.text.type==='mrkdwn' && b.text.text.includes('*ONE THING*')));
+assert.ok(board.blocks.some(b=>b.type==='section' && b.text.type==='plain_text' && b.text.text===goal));
+const sent=[];
+const original=globalThis.fetch;
+globalThis.fetch=async(_url, init)=>{sent.push(JSON.parse(init.body));return Response.json({ok:true,ts:'1.1'});};
+const ctx={scope:{teamId:'TQA',channelId:'CADMIN',userId:'UADMIN'},env:{SLACK_TEAM_ID:'TQA',COMMUNITY_CHANNEL_ID:'CADMIN',COMMUNITY_ADMIN_ID:'UADMIN',SLACK_BOT_TOKEN:'test'},store:{preferences:async()=>({enabled:true,goalTime:'11:00',reviewTime:'20:00'}),getRecord:async()=>null},date:'2026-09-14',source:'1.1',thread:'1.1'};
+try {
+ await groupCard(ctx);
+ const message=sent.at(-1);
+ assert.equal(message.blocks[0].text.type,'mrkdwn');
+ assert.match(message.blocks[0].text.text,/\*ONE THING\*/);
+ const apply=message.blocks[1].elements.find(b=>b.action_id==='community_live_schedule');
+ assert.equal(apply.text.type,'plain_text');
+ assert.equal(apply.text.text,'ONE THING 채널에 10시·18시 적용');
+ await openSettings(ctx,'test-trigger',false);
+ const view=sent.at(-1).view;
+ assert.equal(view.blocks.find(b=>b.block_id==='goal').label.text,'ONE THING 시각 (HH:MM)');
+ assert.ok(!JSON.stringify(view).includes('*ONE THING*'));
+} finally {globalThis.fetch=original;}
+console.log('brand-copy: bold bot headings, plain labels, and unchanged user text passed');

@@ -48,10 +48,10 @@ export async function earlierDayNotice(
         })
       : null;
     const label =
-      typeof link === "string" ? `<${link}|${day.date} 원씽 글>` : `${day.date} 원씽 글`;
+      typeof link === "string" ? `<${link}|${day.date} ONE THING 글>` : `${day.date} ONE THING 글`;
     return `• ${label}: ${day.outcome === "pending" ? (day.reflection.trim() ? "완료 여부" : "완료 여부와 후기") : "후기"}`;
   });
-  return `이전 원씽도 한 번 돌아봐요!!!\n${lines.join("\n")}\n해당 날짜 글의 스레드에 아직 남기지 않은 완료 여부나 후기를 알려주세요. 이미 쓴 후기는 다시 쓰지 않아도 돼요. 일부만 했다면 그대로, 쉬었던 날이면 쉬었다고 알려주세요.${missing.length > 3 ? `\n이외에 확인할 날짜가 ${missing.length - 3}일 더 있어요.` : ""}\n답변하지 않았다고 자동으로 미완료 처리하지 않아요.`;
+  return `이전 *ONE THING*도 한 번 돌아봐요!!!\n${lines.join("\n")}\n해당 날짜 글의 스레드에 아직 남기지 않은 완료 여부나 후기를 알려주세요. 이미 쓴 후기는 다시 쓰지 않아도 돼요. 일부만 했다면 그대로, 쉬었던 날이면 쉬었다고 알려주세요.${missing.length > 3 ? `\n이외에 확인할 날짜가 ${missing.length - 3}일 더 있어요.` : ""}\n답변하지 않았다고 자동으로 미완료 처리하지 않아요.`;
 }
 
 export async function messageDate(

@@ -41,10 +41,10 @@ function parseSchedule(value: unknown): Schedule {
 }
 function promptText(date: string, kind: Kind): string {
   if (isWeekend(date))
-    return `${date} 주말 원씽은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 이 스레드나 채널에 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
+    return `${date} 주말 *ONE THING*은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 이 스레드나 채널에 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
   return kind === "goal"
-    ? `${date} 오늘의 원씽!!! :seedling: 오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지는 무엇인가요? 그 일과 이유를 이 글의 스레드에 남겨주세요. 가장 중요한 일부터 같이 해봅시다 :muscle:`
-    : `${date} 오늘 원씽은 어떠셨나요? :memo: 해낸 만큼, 느낀 점 한 줄을 이 글의 스레드에 남겨주세요. 다 못 했어도 괜찮아요!!! :penguin:`;
+    ? `${date} 오늘의 *ONE THING*!!! :seedling: 오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지는 무엇인가요? 그 일과 이유를 이 글의 스레드에 남겨주세요. 가장 중요한 일부터 같이 해봅시다 :muscle:`
+    : `${date} 오늘 *ONE THING*은 어떠셨나요? :memo: 해낸 만큼, 느낀 점 한 줄을 이 글의 스레드에 남겨주세요. 다 못 했어도 괜찮아요!!! :penguin:`;
 }
 async function commonPrompt(
   env: CommunityScheduleEnv,
@@ -104,7 +104,7 @@ async function personalReminder(
     env.SLACK_BOT_TOKEN,
     job.kind === "goal"
       ? `<@${job.userId}> 오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지를 여기 남겨볼까요? 중요한 일부터 시작해봐요!!! :seedling:`
-      : `<@${job.userId}> 오늘 원씽은 어떠셨나요? 해낸 만큼 후기 한 줄 남겨주세요!!! :memo: 오늘 쉬실 거라면 그렇게 말해주셔도 돼요.`,
+      : `<@${job.userId}> 오늘 *ONE THING*은 어떠셨나요? 해낸 만큼 후기 한 줄 남겨주세요!!! :memo: 오늘 쉬실 거라면 그렇게 말해주셔도 돼요.`,
   );
   try {
     await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {

@@ -1,12 +1,12 @@
 {
   "display_information": {
-    "name": "원씽 잔디",
+    "name": "ONE THING 잔디",
     "description": "오늘의 한 문장으로 채우는 나의 잔디",
     "background_color": "#216E39"
   },
   "features": {
     "bot_user": {
-      "display_name": "원씽 잔디",
+      "display_name": "ONE THING 잔디",
       "always_online": false
     }
   },

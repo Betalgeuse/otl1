@@ -3,7 +3,7 @@ const applied=[],confirmed=[],messages=[];mock.module('../src/community-records.
 try{assert.equal(await handleReflectionReport(context,text),true);assert.equal(applied.length,1);assert.equal(confirmed.length,0);assert.equal(applied[0].d.date,'2026-09-14');assert.equal(applied[0].d.action,'reflection');assert.equal(applied[0].d.outcome,'complete');assert.equal(applied[0].d.text,text);assert.equal(applied[0].d.expectedRevision,7);assert.equal(applied[0].d.userId,'UQA');
 await handleReflectionReport(context,text.replace('9/14','9/13'));assert.equal(confirmed.length,1);assert.equal(confirmed[0][0].date,'2026-09-13');assert.equal(applied.length,1);
 for(const patch of [{reflection:'existing'},{resting:true},{outcome:'not_done'}]){await handleReflectionReport({...context,store:{async history(){return[{...day,...patch}];}}},text);}assert.equal(applied.length,1);assert.equal(confirmed.length,4);
-await handleReflectionReport({...context,store:{async history(){return[];}}},text);assert.match(messages.at(-1).text,/등록된 원씽이 없/);assert.equal(applied.length,1);
+await handleReflectionReport({...context,store:{async history(){return[];}}},text);assert.match(messages.at(-1).text,/등록된 ONE THING이 없/);assert.equal(applied.length,1);
 await handleReflectionReport(context,text.replace('9/14','9/31'));assert.equal(applied.length,1);
 console.log('PASS actual multiline first review auto-saves scoped date+verbatim body; past/overwrite/rest/conflict confirm; missing/invalid no writes');}finally{Date.now=originalNow;}
 Date.now=()=>Date.parse('2026-09-14T03:00:00Z');

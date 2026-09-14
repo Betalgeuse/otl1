@@ -30,7 +30,7 @@ export async function adminCommand(context: CommunityContext, text: string): Pro
       } as const;
       const rows = days.map(
         (day) =>
-          `${slackMention(day.userId)} · 원씽 ${day.goal ? "등록" : "미등록"} · ${day.resting ? "휴식" : labels[day.outcome]} · 후기 ${day.reflection ? "제출" : "미제출"}`,
+          `${slackMention(day.userId)} · *ONE THING* ${day.goal ? "등록" : "미등록"} · ${day.resting ? "휴식" : labels[day.outcome]} · 후기 ${day.reflection ? "제출" : "미제출"}`,
       );
       await textReply(
         context,

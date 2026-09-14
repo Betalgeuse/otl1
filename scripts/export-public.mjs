@@ -13,12 +13,13 @@ mkdirSync(destination, { recursive: true });
 writeFileSync(marker, 'Curated public source snapshot; no private Git history.\n');
 const write = (path, text) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); writeFileSync(join(destination,path),text); };
 const copy = (path) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); cpSync(join(root,path),join(destination,path),{recursive:true}); };
-for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','migrations/008_default_reminders.sql','scripts/slack-manifest.mjs']) copy(path);
-const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','default-reminders.mjs','reminder-enrollment.mjs','weekend-hidden.mjs','community-edit-language.mjs','natural-edits.mjs','current-garden.mjs','reflection-header.mjs','reflection-routing.mjs','slack-message-edit.mjs','edit-storage.sql','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
+for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','migrations/008_default_reminders.sql','migrations/009_welcome_guides.sql','migrations/010_first_registration.sql','scripts/slack-manifest.mjs']) copy(path);
+const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','default-reminders.mjs','reminder-enrollment.mjs','weekend-hidden.mjs','community-edit-language.mjs','natural-edits.mjs','current-garden.mjs','reflection-header.mjs','reflection-routing.mjs','slack-message-edit.mjs','community-guide.mjs','townhall-milestones.mjs','brand-copy.mjs','first-registration.sql','edit-storage.sql','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
 for (const name of checks) copy(`qa/${name}`);
 copy('docs/COMMUNITY_QUESTIONS.md');
 copy('docs/NATURAL_RECORD_EDITS.md');
 copy('docs/REFLECTION_RELIABILITY.md');
+copy('docs/TOWNHALL_ONBOARDING.md');
 write('docs/DEFAULT_REMINDERS.md',readFileSync(join(root,'docs/DEFAULT_REMINDERS.md'),'utf8').replace(/이번 적용 직후에는[\s\S]*?## 이관·검증/, '## 이관·검증'));
 write('docs/GARDEN_CONTROLS.md',readFileSync(join(root,'docs/GARDEN_CONTROLS.md'),'utf8').split('## 18시 안내 점검')[0]);
 for (const name of readdirSync(join(root,'qa')).filter(name=>/^(community-weekend[^/]*|weekends)\.mjs$/.test(name))) copy(`qa/${name}`);
@@ -26,7 +27,7 @@ write('.gitignore',readFileSync(join(root,'.gitignore'),'utf8')+'\n.public-expor
 const config=JSON.parse(readFileSync(join(root,'wrangler.jsonc'),'utf8'));
 delete config.account_id;
 config.name='onething-community';
-config.vars={DATABASE_MAINTENANCE:'false',INVITATIONS_ENABLED:'false',DAILY_SCRUM_CHANNEL_ID:'C_REPLACE_DAILY',LLM_PILOT_CHANNEL_ID:'C_REPLACE_ADMIN',LLM_PILOT_USER_ID:'U_REPLACE_ADMIN',COMMUNITY_ENABLED:'true',COMMUNITY_CHANNEL_ID:'C_REPLACE_ADMIN',COMMUNITY_ADMIN_ID:'U_REPLACE_ADMIN',COMMUNITY_BOT_USER_ID:'U_REPLACE_BOT',COMMUNITY_RELEASE_CHANNEL_ID:'C_REPLACE_TOWNHALL',COMMUNITY_PUBLIC_CHANNEL_ID:'C_REPLACE_DAILY'};
+config.vars={COMMUNITY_WELCOME_CHANNEL_ID:'C_REPLACE_WELCOME',COMMUNITY_GUIDE_SOURCE_TS:'0.000001',DATABASE_MAINTENANCE:'false',INVITATIONS_ENABLED:'false',DAILY_SCRUM_CHANNEL_ID:'C_REPLACE_DAILY',LLM_PILOT_CHANNEL_ID:'C_REPLACE_ADMIN',LLM_PILOT_USER_ID:'U_REPLACE_ADMIN',COMMUNITY_ENABLED:'true',COMMUNITY_CHANNEL_ID:'C_REPLACE_ADMIN',COMMUNITY_ADMIN_ID:'U_REPLACE_ADMIN',COMMUNITY_BOT_USER_ID:'U_REPLACE_BOT',COMMUNITY_RELEASE_CHANNEL_ID:'C_REPLACE_TOWNHALL',COMMUNITY_PUBLIC_CHANNEL_ID:'C_REPLACE_DAILY'};
 write('wrangler.jsonc',JSON.stringify(config,null,2)+'\n');
 const packageMetadata = JSON.parse(readFileSync(join(root,'package.json'),'utf8'));
 packageMetadata.devDependencies = { '@biomejs/biome':'2.5.6', typescript:'7.1.0-dev.20260809.1', wrangler:'4.62.0' };
@@ -101,6 +102,7 @@ write('docs/DATABASE_SETUP.md',`# PostgreSQL 설치 및 구조
 psql -X -v ON_ERROR_STOP=1 -f migrations/001_initial.sql -f migrations/005_community.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/006_normalized_foundation.sql -f migrations/007_normalized_legacy.sql
 psql -X -v ON_ERROR_STOP=1 -f migrations/008_default_reminders.sql
+psql -X -v ON_ERROR_STOP=1 -f migrations/009_welcome_guides.sql -f migrations/010_first_registration.sql
 \`\`\`
 
 006과007은 반드시 한 트랜잭션에서 적용합니다.002–004의 별도 초대·가입 정책은 이 설치에 포함하지 않습니다. 공개006은 신규 설치용이며 특정 운영 회원이나 사전 승인된 예외를 포함하지 않습니다.
