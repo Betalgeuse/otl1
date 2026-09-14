@@ -10,6 +10,7 @@ export type StatusCard = {
   readonly rest: boolean;
   readonly undoValue: string | null;
   readonly boardUrl?: string;
+  readonly boardDate?: string;
   readonly statusValue?: string;
   readonly settingsValue?: string;
 };
@@ -79,7 +80,7 @@ export function communityStatusMessage(input: StatusCard): Json {
     blocks.push({
       type: "image",
       image_url: url.href,
-      alt_text: `${input.date} 원씽 잔디. ${status}`,
+      alt_text: `${input.boardDate ?? input.date}까지의 원씽 잔디`,
     });
   }
   if (input.boardUrl)
