@@ -9,9 +9,6 @@ node_modules/
 .DS_Store
 
 # Local snapshots and member data are not source fixtures.
-qa/*results*.json
-qa/*evidence*.json
-qa/community-public-baseline.json
 qa/llm-goal-before.sha256
 docs/qa/
 *.dump

@@ -19,16 +19,12 @@ Bun, Node.js 24, PostgreSQL 17이 필요합니다. 먼저 bun install --frozen-l
 
 ## 검증
 
-네트워크 없는 기본 확인:
-
 ```sh
-bun qa/community-admin-access.mjs
-bun qa/community-clock.mjs
-bun qa/community-language-check.mjs
-bun qa/community-social.mjs
-bun qa/community-townhall.mjs
-bun qa/community-followup.mjs
+bun install --frozen-lockfile
+bun run check
 ```
+
+check는 lint·타입 검사·26개 격리된 합성 회귀·배포 없는 빌드를 실행합니다. 운영 DB나 실제 Slack 발송은 호출하지 않습니다. 개별 검사와 DB 테스트는 [검증 안내](docs/TESTING.md)를 따릅니다.
 
 DB 테스트는 [설치 문서](docs/DATABASE_SETUP.md)의 폐기 가능한 로컬 DB에서만 실행하세요. 공개본은 실제 회원 기록, 운영 증거, 비공개 Slack 링크와 이전 비공개 Git 이력을 포함하지 않는 새 스냅샷입니다. 테스트 통과가 배포 환경의 실제 메시지 전달을 보장하지는 않습니다.
 
