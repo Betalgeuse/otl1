@@ -11,3 +11,6 @@ try{const n=applied.length;for(const input of ['후기:\n9/14: 완료 예정입�
 
 Date.now=()=>Date.parse('2026-09-14T03:00:00Z');
 try{const before=applied.length;await handleReflectionReport(context,'후기: 완료.');assert.equal(applied.length,before+1);assert.equal(applied.at(-1).d.action,'complete');assert.equal(applied.at(-1).d.text,undefined);for(const text of ['후기: 완료. 하지만 아직 절반밖에 못 했어요.','후기: 완료. 사실은 아직 다 못했어요.','후기: 완료. 이건 예시이고 제 목표는 미완료입니다.','후기: 완료. 라고 쓰면 완료 처리되나요?']){await handleReflectionReport(context,text);}assert.equal(applied.length,before+1);console.log('PASS status-only completion is not a review; contradictory/meta text causes zero automatic writes');}finally{Date.now=originalNow;}
+
+Date.now=()=>Date.parse('2026-09-14T03:00:00Z');
+try{const a=applied.length,c=confirmed.length;await handleReflectionReport(context,'후기: 9/13: 완료.');assert.equal(confirmed.at(-1)[3],'complete');assert.equal(confirmed.at(-1)[0].date,'2026-09-13');const c2=confirmed.length;await handleReflectionReport(context,'후기: 9/13: 완료. 하지만 절반만 했어요.');assert.equal(confirmed.length,c2);assert.equal(applied.length,a);console.log('PASS past status-only confirmation cannot overwrite review; ambiguous dated body never proposes wrong-date mutation');}finally{Date.now=originalNow;}
