@@ -110,7 +110,7 @@ export class CommunityStore {
   async change(input: DayChange): Promise<ChangeResult> {
     date(input.date);
     if (input.action === "goal" && (!input.text?.trim() || [...input.text].length > 200))
-      throw new InputError("원씽은 1~200자로 적어 주세요.");
+      throw new InputError("ONE THING은 1~200자로 적어 주세요.");
     if (input.action === "reflection" && (!input.text?.trim() || [...input.text].length > 2000))
       throw new InputError("후기는 1~2000자로 적어 주세요.");
     const v = object(await this.call("change", input));
@@ -119,6 +119,7 @@ export class CommunityStore {
       changed: bool(v.changed),
       conflict: bool(v.conflict),
       firstGoal: bool(v.firstGoal),
+      firstRegistration: v.firstRegistration === true,
       firstReflection: bool(v.firstReflection),
       undoKey: string(v.undoKey),
     };

@@ -113,10 +113,10 @@ export async function confirmChange(
     context,
     communityConfirmationMessage(
       action === "goal"
-        ? `${dateLabel} 원씽으로 등록할까요?\n${text}`
+        ? `${dateLabel} ONE THING으로 등록할까요?\n${text}`
         : action === "reflection"
-          ? `${dateLabel} 원씽을 완료하셨나요?\n선택한 상태와 아래 글을 후기로 저장할게요.\n“${text}”`
-          : `${dateLabel} 원씽을 완료하셨나요?`,
+          ? `${dateLabel} ONE THING을 완료하셨나요?\n선택한 상태와 아래 글을 후기로 저장할게요.\n“${text}”`
+          : `${dateLabel} ONE THING을 완료하셨나요?`,
       choices,
     ),
   );
@@ -138,6 +138,16 @@ export async function applyChange(context: CommunityContext, change: DayChange):
   if (change.preserveOutcome) {
     await publishStatus(context, result.day, null);
     return;
+  }
+  try {
+    await emitMilestones(context, result);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "community.milestone.failed",
+        type: error instanceof Error ? error.name : "Unknown",
+      }),
+    );
   }
   const kind =
     change.action === "goal"
@@ -206,7 +216,6 @@ export async function applyChange(context: CommunityContext, change: DayChange):
       body: { text: encouragement },
     });
   }
-  await emitMilestones(context, result);
 }
 
 export async function undoChange(context: CommunityContext, key: string): Promise<void> {
