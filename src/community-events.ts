@@ -7,6 +7,7 @@ import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
 import { applyChange, confirmChange, publishStatus } from "./community-records";
+import { handleReflectionReport } from "./community-reflection";
 import {
   type CommunityContext,
   type CommunityEnv,
@@ -133,6 +134,7 @@ async function processMessage(
     );
     return;
   }
+  if (await handleReflectionReport(context, text)) return;
   if (await prepareRecordEdit(context, text)) return;
   if (await answerCommunityQuestion(context, text, addressed)) return;
   const day = await context.store.day({ ...context.scope, date: context.date });
