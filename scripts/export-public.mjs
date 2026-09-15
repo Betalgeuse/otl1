@@ -14,13 +14,20 @@ writeFileSync(marker, 'Curated public source snapshot; no private Git history.\n
 const write = (path, text) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); writeFileSync(join(destination,path),text); };
 const copy = (path) => { mkdirSync(dirname(join(destination,path)), { recursive:true }); cpSync(join(root,path),join(destination,path),{recursive:true}); };
 for (const path of ['src','.gitignore','.dev.vars.example','biome.json','tsconfig.json','package.json','docs/vendor/im-not-ai','migrations/001_initial.sql','migrations/005_community.sql','migrations/007_normalized_legacy.sql','migrations/008_default_reminders.sql','migrations/009_welcome_guides.sql','migrations/010_first_registration.sql','scripts/slack-manifest.mjs','scripts/test-unit.mjs','scripts/check.mjs']) copy(path);
-const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','default-reminders.mjs','reminder-enrollment.mjs','weekend-hidden.mjs','community-edit-language.mjs','natural-edits.mjs','current-garden.mjs','reflection-header.mjs','reflection-routing.mjs','slack-message-edit.mjs','community-guide.mjs','townhall-milestones.mjs','brand-copy.mjs','first-registration.sql','edit-storage.sql','community-language-check.mjs','community-language-variety.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
+const checks = ['check-intent.mjs','community-admin-access.mjs','community-clock.mjs','community-emoji.mjs','community-followup.mjs','community-questions.mjs','private-controls.mjs','garden-publication.mjs','slash-retirement.mjs','default-reminders.mjs','reminder-enrollment.mjs','weekend-hidden.mjs','community-edit-language.mjs','natural-edits.mjs','current-garden.mjs','reflection-header.mjs','reflection-routing.mjs','slack-message-edit.mjs','community-guide.mjs','townhall-milestones.mjs','brand-copy.mjs','first-registration.sql','edit-storage.sql','community-language-check.mjs','community-language-variety.mjs','community-record-decision.mjs','community-scheduler.mjs','community-social.mjs','community-storage.mjs','community-townhall.mjs','community-welcome.mjs','migration-maintenance.mjs','normalized-legacy.mjs','llm-cases.json'];
 for (const name of checks) copy(`qa/${name}`);
 const publicDocs = ['README.md','USER_GUIDE.md','OPERATIONS.md','ARCHITECTURE.md','DEVELOPMENT.md','PRODUCT_PRINCIPLES.md','ROADMAP.md','UPDATE_HISTORY.md'];
 for (const name of publicDocs) copy('docs/'+name);
 copy('README.md');
 write('docs/archive/README.md','# 보관 문서\n\n과거 공개 문서는 Git 이력에서 확인할 수 있습니다. 현재 사용법은 [문서 안내](../README.md)를 따릅니다.\n');
 write('docs/research/README.md','# 조사 자료\n\n공개 가능한 조사 자료를 별도로 관리합니다. 현재 결정은 [제품 원칙](../PRODUCT_PRINCIPLES.md), 앞으로의 계획은 [로드맵](../ROADMAP.md)을 따릅니다.\n');
+let designJournal=readFileSync(join(root,'docs/research/DESIGN_JOURNAL.md'),'utf8');
+for (const [link,label] of [
+  ['COMMUNITY_BENCHMARK.md','커뮤니티 벤치마크'],
+  ['../archive/PROACTIVE_SUPPORT_DESIGN.md','선제적 지원 조사'],
+  ['TRUST_REWARDS_REVENUE.md','지인 신뢰와 수익 조사'],
+]) designJournal=designJournal.replaceAll(`[${label}](${link})`,label);
+write('docs/research/DESIGN_JOURNAL.md',designJournal);
 for (const name of readdirSync(join(root,'qa')).filter(name=>/^(community-weekend[^/]*|weekends)\.mjs$/.test(name))) copy(`qa/${name}`);
 write('.gitignore',readFileSync(join(root,'.gitignore'),'utf8')+'\n.public-export\n');
 const config=JSON.parse(readFileSync(join(root,'wrangler.jsonc'),'utf8'));
