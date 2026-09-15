@@ -1,9 +1,11 @@
 import { adminCommand, captureFeedback } from "./community-admin";
 import { groupCard, settingsCard } from "./community-controls";
+import { decideCommunityRecord } from "./community-decision";
 import { prepareRecordEdit } from "./community-edits";
 import { enrollReminderMember } from "./community-enrollment";
 import { messageDate } from "./community-followup";
 import { deliverWelcomeGuide } from "./community-guide";
+import { incomingMessageBody } from "./community-intake";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
@@ -12,6 +14,7 @@ import { handleReflectionReport } from "./community-reflection";
 import {
   type CommunityContext,
   type CommunityEnv,
+  ephemeral,
   post,
   scopedValue,
   textReply,
@@ -71,7 +74,18 @@ export async function handleCommunityEvent(
   const thread = string(event.thread_ts ?? event.ts);
   const date = await messageDate(store, scope, string(env.COMMUNITY_ADMIN_ID), source, thread);
   const context = { env, store, scope, key, thread, source, date };
-  await store.putRecord({ ...scope, key, kind: "incoming", body: { date, thread } });
+  await store.putRecord({
+    ...scope,
+    key,
+    kind: "incoming",
+    body: incomingMessageBody({
+      date,
+      thread,
+      rawText,
+      normalizedText: text,
+      editTs: event.edit_ts ? string(event.edit_ts) : null,
+    }),
+  });
   if (!(await store.claimRecord({ ...scope, key }))) return true;
   try {
     if (event.edit_ts && !/후기|회고|수정|정정|변경/.test(text)) {
@@ -167,7 +181,10 @@ async function processMessage(
     await textReply(context, "잠시 후 다시 알려주세요. 기록은 바꾸지 않았어요.");
     return;
   }
-  const intent = await classifyCommunityIntent(context.env.AI, { goal: day.goal || null, text });
+  const intent = decideCommunityRecord(
+    await classifyCommunityIntent(context.env.AI, { goal: day.goal || null, text }),
+    text,
+  );
   const base = {
     ...context.scope,
     date: context.date,
@@ -178,7 +195,18 @@ async function processMessage(
     case "ignore":
       return;
     case "unclear":
-      await confirmChange(context, day, text, day.goal ? "complete" : "goal");
+      if (!intent.currentDateSafe) {
+        await ephemeral(context, {
+          text: "날짜가 있는 수행 기록은 한 날짜와 완료·부분 완료·미완료·휴식을 함께 알려주세요. 아직 기록을 바꾸지 않았어요.",
+        });
+        return;
+      }
+      await confirmChange(
+        context,
+        day,
+        text,
+        day.goal ? (intent.reflectionText ? "reflection" : "complete") : "goal",
+      );
       return;
     case "goal": {
       const goal = intent.goalText ?? text;
@@ -198,25 +226,20 @@ async function processMessage(
       return;
     case "completion":
     case "reflection": {
+      const reflectionText = intent.reflectionText;
       if (
         intent.needsConfirmation ||
         !day.goal ||
         intent.outcome === "unknown" ||
         context.date !== koreaDate(Date.now() / 1000)
       ) {
-        await confirmChange(
-          context,
-          day,
-          text,
-          intent.intent === "reflection" ? "reflection" : "complete",
-        );
+        await confirmChange(context, day, text, reflectionText ? "reflection" : "complete");
         return;
       }
       const outcome = intent.outcome;
-      const change: DayChange =
-        intent.intent === "reflection"
-          ? { ...base, action: "reflection", text, outcome }
-          : { ...base, action: outcome };
+      const change: DayChange = reflectionText
+        ? { ...base, action: "reflection", text: reflectionText, outcome }
+        : { ...base, action: outcome };
       await applyChange(context, change);
       return;
     }

@@ -5,9 +5,11 @@ Slack이 입력을 전달하고 Cloudflare Worker가 검증·분류·저장을 �
 ```mermaid
 flowchart LR
   Slack --> Signature[서명·워크스페이스·작성자 검사]
-  Signature --> Router[입력·수정·질문 라우팅]
+  Signature --> Intake[범위 확인·원문 입력 기록]
+  Intake --> Router[입력·수정·질문 라우팅]
   Router --> Parser[명시 형식 파서 / 필요한 경우 Qwen]
-  Parser --> Guard[날짜·소유자·revision 확인]
+  Parser --> Decision[상태·후기 본문 분리]
+  Decision --> Guard[날짜·소유자·revision·정보 손실 검사]
   Guard --> DB[(Neon)]
   DB --> Output[공개 결과 / 본인 전용 조작]
   Output --> Slack
@@ -27,7 +29,7 @@ flowchart LR
 | `community_events` | 변경 전 상태·revision·중복 방지·되돌리기 이력 |
 | `community_preferences`, `channel_schedules` | 개인 안내와 공통 일정 |
 | `community_milestones` | 첫 등록·첫 완료·첫 후기 이력 |
-| `community_records` | 확인 대기·발송·게시물 연결 등 워크플로 기록 |
+| `community_records` | 재처리 가능한 입력 원문, 확인 대기·발송·게시물 연결 등 워크플로 기록 |
 | `guide_versions`, `guide_deliveries` | 안내 본문 버전과 회원별 전달 |
 | `schema_migrations`, `otl_archive` | 적용 이력과 이관 전 데이터 보존 |
 
@@ -47,7 +49,9 @@ erDiagram
 
 ## 변경과 해석 경계
 
-명확한 후기 헤더는 결정적으로 파싱하고, 자유로운 표현에는 Qwen을 사용합니다. 모델은 작성자 권한·저장 날짜·보상·퇴장을 결정하지 않습니다. 추출한 제목·후기는 원문에 있어야 하며, 모호한 날짜나 상태는 확인 또는 질문으로 돌립니다.
+서명과 범위를 통과한 입력은 원문·정규화 본문·대상 날짜·Slack 위치를 먼저 워크플로 기록에 보존합니다. 명확한 후기 헤더는 결정적으로 파싱하고, 자유로운 표현에는 Qwen을 사용합니다. 모델은 작성자 권한·저장 날짜·보상·퇴장을 결정하지 않습니다.
+
+모델 해석은 곧바로 DB 동작이 되지 않습니다. 결정 계층이 `수행 상태`, `후기 원문`, `확인 필요 여부`, `현재 날짜에 적용해도 되는지`를 별도 값으로 만듭니다. 상태만 있는 짧은 문장은 상태만 바꿀 수 있지만, 설명·느낌·배움이 포함될 가능성이 있는 본문은 모델이 완료만으로 축소해도 확인 없이 버리지 않습니다. 명시한 과거 날짜는 오늘 기록 확인으로 바꾸지 않습니다.
 
 저장은 현재 revision을 확인하고 중복 요청 키를 사용합니다. Slack 글 편집은 원래 작성자·채널·스레드를 유지하되 편집 timestamp로 요청을 구분합니다. 상태만 있는 완료는 후기 제출로 만들지 않습니다.
 

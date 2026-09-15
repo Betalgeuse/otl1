@@ -3,6 +3,11 @@ import { classifyCommunityIntent, parseCommunityInterpretation, generateEncourag
 const input={goal:'논문 읽기',text:'다 했어요'};
 const valid={intent:'completion',outcome:'complete',goalText:null,hasReflection:false,needsConfirmation:false};
 assert.equal(parseCommunityInterpretation(valid,input).outcome,'complete');
+const reflectivePastContext={goal:'진로 탐색을 위한 다음 액션 정하기',text:'완료. 지난 주에는 시간을 내지 못했지만 오늘은 진로 탐색 시간을 확보해 미루지 않고 할 수 있었어요. 생각이 많을 때는 다음 행동을 정하는 것도 ONE THING이 될 수 있다는 걸 배웠어요.'};
+let reflectivePastCalls=0;const reflectivePast=await classifyCommunityIntent({run:async()=>{reflectivePastCalls++;return{response:JSON.stringify({...valid,hasReflection:true})};}},reflectivePastContext);
+assert.equal(reflectivePastCalls,1);assert.equal(reflectivePast.intent,'reflection');assert.equal(reflectivePast.outcome,'complete');assert.equal(reflectivePast.hasReflection,true);assert.equal(reflectivePast.needsConfirmation,true);
+let historicalOnlyCalls=0;assert.equal((await classifyCommunityIntent({run:async()=>{historicalOnlyCalls++;return{response:JSON.stringify(valid)};}},{goal:reflectivePastContext.goal,text:'지난 주 목표를 완료했어요.'})).intent,'unclear');assert.equal(historicalOnlyCalls,0);
+let explicitDateCalls=0;assert.equal((await classifyCommunityIntent({run:async()=>{explicitDateCalls++;return{response:JSON.stringify({...valid,hasReflection:true})};}},{goal:reflectivePastContext.goal,text:'완료. 9월 13일 목표를 끝냈어요.'})).intent,'unclear');assert.equal(explicitDateCalls,0);
 assert.equal(parseCommunityInterpretation(valid,{...input,goal:null}).intent,'unclear');
 const contradictory=parseCommunityInterpretation({...valid,hasReflection:true},input);
 assert.equal(contradictory.intent,'reflection');
@@ -18,4 +23,4 @@ assert.equal((await classifyCommunityIntent({run:async()=>{throw new Error('Must
 const encouragement=await generateEncouragement({run:async()=>({response:JSON.stringify({text:'<!channel> click https://bad.example'})})},{kind:'rest',text:'쉬기',userId:'synthetic'});
 assert.ok(!encouragement.includes('<!channel>'));
 assert.ok(!encouragement.includes('https://'));
-console.log('14 boundary assertions passed');
+console.log('23 boundary assertions passed');

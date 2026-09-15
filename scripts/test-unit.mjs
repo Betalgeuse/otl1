@@ -7,7 +7,7 @@ const suites = [
   'reminder-enrollment', 'weekend-hidden', 'community-edit-language', 'natural-edits',
   'current-garden', 'reflection-header', 'reflection-routing', 'slack-message-edit',
   'community-guide', 'townhall-milestones', 'brand-copy', 'community-language-check',
-  'community-language-variety', 'community-social', 'community-townhall',
+  'community-language-variety', 'community-record-decision', 'community-social', 'community-townhall',
   'community-welcome', 'migration-maintenance', 'weekends',
 ];
 for (const suite of suites) execFileSync('bun', [`qa/${suite}.mjs`], { stdio: 'inherit' });
