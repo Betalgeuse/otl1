@@ -9,7 +9,7 @@ bun install --frozen-lockfile
 bun run check
 ```
 
-`check`는 lint → TypeScript → 31개 합성 회귀 → Wrangler dry-run 순서로 실행하며 실패 시 중단합니다. 실제 배포·운영 DB·Slack 발송은 호출하지 않습니다. 테스트 목록은 `scripts/test-unit.mjs` 한 곳에서 관리하며 각 검사는 새 Bun 프로세스에서 실행합니다.
+`check`는 lint → TypeScript → 32개 합성 회귀 → Wrangler dry-run 순서로 실행하며 실패 시 중단합니다. 실제 배포·운영 DB·Slack 발송은 호출하지 않습니다. 테스트 목록은 `scripts/test-unit.mjs` 한 곳에서 관리하며 각 검사는 새 Bun 프로세스에서 실행합니다.
 
 ## 설정과 배포
 
@@ -40,9 +40,14 @@ psql -X -v ON_ERROR_STOP=1 -f migrations/009_welcome_guides.sql -f migrations/01
 psql -X -v ON_ERROR_STOP=1 -f migrations/011_member_introductions.sql -f migrations/012_introduction_public_details.sql -f migrations/013_multiline_introductions.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/014_bug_ledger.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/015_bug_deliveries.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/016_bug_delivery_scheduler.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/017_bug_expiry_job_guard.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/018_bug_integrity.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/019_bug_team_scope.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/020_bug_private_atomic.sql
 ```
 
-006·007은 반드시 한 트랜잭션으로 적용합니다. 별도 초대 정책인002~004를 일괄 실행하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
+번호 순서는 001부터 020까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger → 015 delivery → 016 retry scheduler → 017 원자적 24시간 만료·job guard → 018 packet·lease·비공개 경계 무결성 → 019 팀별 만료·delivery claim 격리 → 020 비공개 전환·outbox 원자 커밋과 기존 행 reconciliation 순서를 바꾸지 않습니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
 
 기존 DB는 **백업 → 별도 복원 → 원본 충돌 대조 → 쓰기 정리 → 이관 → 전후 비교 → 실제 사용자 확인** 순서로 다룹니다. 알 수 없는 충돌을 덮어쓰거나 검사를 제거하지 않습니다. 복구는 이관 뒤 생긴 새 기록도 보존해야 합니다. 옛 rollback 파일이 현재 모든 후속 migration에 맞는다고 가정하지 않습니다.
 
@@ -51,18 +56,19 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/015_bug_deliveries
 | 범위 | 실행과 주의점 |
 | --- | --- |
 | 합성 회귀 | `bun run test:unit`. 공개 코드의 기본 검증 |
-| PostgreSQL | 폐기 가능한 로컬 DB에 설치 후 `community-storage`, `community-scheduler`, `normalized-legacy`, `default-reminders`, `community-bug-storage`, `community-bug-delivery` 및 SQL 검사 실행 |
+| PostgreSQL | 폐기 가능한 로컬 DB에 설치 후 `community-storage`, `community-scheduler`, `normalized-legacy`, `default-reminders`, `community-bug-storage`, `community-bug-delivery`, `community-bug-expiry-job-guard`, `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql` 검사 실행 |
 | 실제 서비스 | 명시한 채널·회원·날짜만 검증. 전후 기록, 실제 게시, 실패 범위를 별도 보존 |
 
 DB 검사의 `COMMUNITY_PG_SOCKET`, `COMMUNITY_PG_PORT`, `COMMUNITY_PG_DATABASE`를 확인합니다. 기본값이 검사마다 다를 수 있으므로 DB 이름을 명시합니다. `*-live*`, backfill, fixture 복원, migration 스크립트를 일반 테스트에 섞지 않습니다.
 
 ## 버그 제보 기반 검증과 후속 연결
 
-`community-bugs`와 `community-bug-dialogue`는 31개 합성 회귀 allowlist에 포함됩니다. `community-bugs`는 mock Slack delivery의 failed → retry → sent, summary·receipt·admin handoff 중복 억제를 검증합니다. `qa/community-bug-storage.mjs`와 `qa/community-bug-delivery.mjs`는 새 폐기 가능한 PostgreSQL 인스턴스에서 각각 migration 014 ledger와 migration 015 delivery contract를 확인하므로 일반 `check`에 넣지 않습니다. `qa/maintainer-dry-run.mjs`는 Git 작업본과 임시 디렉터리가 필요하며, 확정된 fixture로 provider-neutral 무변경 handoff만 검사합니다.
+`community-bugs`, `community-bug-dialogue`, `community-bug-due-store`, `community-clock`은 32개 합성 회귀 allowlist에 포함됩니다. mock Slack delivery의 failed → retry → sent, 응답이 사라진 DB 커밋 복구, 전역 시계의 정확한 due·activity 예약과 빈 상태 한 시간 안전 검사, 일반 채널 스케줄 격리를 검증합니다. `qa/community-bug-storage.mjs`는 새 폐기 가능한 PostgreSQL 인스턴스에 migration 014–020을 적용하고 DB 무결성·팀 격리·비공개 원자 커밋 계약을 실행합니다. `qa/community-bug-delivery.mjs`와 `qa/community-bug-expiry-job-guard.mjs`는 각각 delivery와 원자적 만료·job guard 경계를 확인합니다. 이 PostgreSQL 검사들은 일반 `check`에 넣지 않습니다. `qa/maintainer-dry-run.mjs`는 Git 작업본과 임시 디렉터리가 필요하며, 확정된 fixture로 provider-neutral 무변경 handoff만 검사합니다.
 
 ```sh
 bun qa/community-bug-storage.mjs
 bun qa/community-bug-delivery.mjs
+bun qa/community-bug-expiry-job-guard.mjs
 bun qa/community-bug-slack-validator.mjs
 bun qa/maintainer-dry-run.mjs
 node scripts/maintainer-dry-run.mjs --input qa/fixtures/bug-packets/confirmed-valid.v1.json --output "local-proof-$(uuidgen)"
@@ -78,7 +84,7 @@ node scripts/maintainer-dry-run.mjs --input qa/fixtures/bug-packets/confirmed-va
 
 운영 이력이 있는 로컬 저장소는 공개 원격에 `--all`이나 `--mirror`로 push하지 않습니다. 공개 설정 예시·합성 테스트만 별도 작업본에 반영하고 staged 정보 검사와 `check`를 거쳐 push합니다. API 키·회원 원문·덤프·`.omx` 영수증은 제외합니다.
 
-`export-public.mjs`가 있는 운영 저장소에서는 공개용 스냅샷을 생성할 수 있습니다. 기존 공개 Git 이력이 있는 경로를 덮어쓰지 않도록 보호되어 있습니다. migration 014·015, 버그 ledger·delivery QA fixture·계약 SQL, `automation/`의 공개 스키마·dry-run 코드, runner를 포함하지만 운영 식별자, 실제 제보 원문, `.omx`, credential은 포함하지 않습니다. 공개용 문서 원본은 이 문서 묶음이며, 내보내기 스크립트에 별도 사용법을 복제하지 않습니다.
+`export-public.mjs`가 있는 운영 저장소에서는 공개용 스냅샷을 생성할 수 있습니다. 기존 공개 Git 이력이 있는 경로를 덮어쓰지 않도록 보호되어 있습니다. migration 014–020, 버그 ledger·delivery·만료·무결성 QA fixture와 계약 SQL, 전역 시계 코드와 `automation/`의 공개 스키마·dry-run runner를 포함하지만 운영 식별자, 실제 제보 원문, `.omx`, credential은 포함하지 않습니다. 공개용 문서 원본은 이 문서 묶음이며, 내보내기 스크립트에 별도 사용법을 복제하지 않습니다.
 
 ```sh
 node scripts/export-public.mjs /tmp/otl1-public-review

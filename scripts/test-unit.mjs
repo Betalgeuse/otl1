@@ -10,6 +10,7 @@ const suites = [
   'community-language-variety', 'community-record-decision', 'community-social', 'community-townhall',
   'community-welcome', 'community-introduction', 'community-introduction-channel',
   'migration-maintenance', 'weekends', 'community-bugs', 'community-bug-dialogue',
+  'community-bug-due-store',
 ];
 for (const suite of suites) execFileSync('bun', [`qa/${suite}.mjs`], { stdio: 'inherit' });
 console.log(`Passed ${suites.length} isolated synthetic suites.`);

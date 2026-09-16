@@ -46,3 +46,11 @@ bun qa/migration-maintenance.mjs
 ```
 
 Operational migration and recovery requirements are in `docs/DATABASE_NORMALIZATION.md`. The production migration runner requires maintenance503 and an explicit `--apply`; never invoke it as a normal test.
+
+## 버그 제보 만료와 작업 권한
+
+`bun qa/community-bug-expiry-job-guard.mjs`는 폐기 가능한 PostgreSQL에 migration 001·005–007·014–019를 의존 순서대로 적용합니다. 정확한 24시간 경계, 질문 다섯 번 제한, `FOR UPDATE SKIP LOCKED` 경쟁, 상태·이벤트·Slack outbox의 단일 트랜잭션, 재실행 중복 억제, 제보자 확인 전 job 0건을 확인합니다. Neon이나 Slack에는 연결하지 않습니다.
+
+## 버그 제보 DB 무결성과 팀 격리
+
+`bun qa/community-bug-storage.mjs`는 migration 014–020을 순서대로 적용한 폐기 가능한 PostgreSQL에서 `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql`을 실행합니다. packet·evidence digest 결합, job lease 소유권, obsolete delivery 취소, 팀별 만료·delivery claim 격리, 비공개 상태·관계형 원문 제거·receipt·관리자 handoff의 원자 커밋과 기존 중간 상태의 한 번뿐인 reconciliation을 확인합니다.

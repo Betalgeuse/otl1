@@ -18,7 +18,9 @@ flowchart LR
   BugLedger --> DB
   DB --> Output[공개 결과 / 본인 전용 조작]
   Output --> Slack
-  Clock[Durable Object] --> DB
+  Activity[Slack activity / health / Cron nudge] --> GlobalBugClock[팀별 전역 Durable Object alarm]
+  GlobalBugClock --> Delivery
+  Clock[채널별 Durable Object alarm] --> DB
   Clock --> Slack
 ```
 
@@ -69,7 +71,7 @@ erDiagram
 
 공개 잔디에는 결과만 표시하고 개인 조작은 ephemeral로 보냅니다. 잔디는 수정 대상 날짜와 별개로 오늘까지의 이력을 사용합니다. 새 게시 성공 후 관리 중인 옛 이미지·버튼만 제거해 댓글을 보존합니다.
 
-예약은 채널별 Durable Object alarm과 DB의 발송 조건·claim을 함께 사용합니다. 최초 축하도 DB 판정과 목적 채널별 발송 기록을 구분합니다. 부가적인 AI 응원 실패가 먼저 실행된 축하를 막지 않게 합니다.
+일반 커뮤니티 예약은 채널별 Durable Object alarm과 DB의 발송 조건·claim을 함께 사용합니다. 버그 delivery와 24시간 만료는 팀별 전역 Durable Object alarm이 자기 팀으로 범위를 고정해 정확한 due·activity 시각을 잡고, 빈 상태에서는 한 시간 안전 검사만 유지합니다. Cron은 이 alarm을 다시 거는 backup/nudge이며 delivery SQL을 실행하지 않습니다. 최초 축하도 DB 판정과 목적 채널별 발송 기록을 구분합니다. 부가적인 AI 응원 실패가 먼저 실행된 축하를 막지 않게 합니다.
 
 외부 Slack API와 DB 사이의 완전한 분산 원자성은 보장하지 않습니다. 실패·응답 불확실 상태에는 운영 대조가 필요합니다. DB 계정 최소 권한 분리, 대규모 부하, 자동 백업·복구 SLO는 후속 과제입니다.
 
@@ -77,9 +79,9 @@ erDiagram
 
 `버그 제보`는 양식 진입을 열고 `버그: ...`는 관찰한 실제 결과를 초안으로 만듭니다. 빠진 값이나 모순은 실제 결과, 기대 결과, 두 단계 이상의 재현, 위치, 시각, 빈도, 영향 순으로 한 번에 하나만 묻습니다. 근거가 없는 값은 만들지 않으며, 24시간 안의 질문은 다섯 번을 넘기지 않습니다. 한도 또는 시간이 끝난 초안은 확정 대신 운영자 인계 대상이 됩니다.
 
-원문과 답변은 암호화된 비공개 객체에 두고 ledger에는 opaque reference와 digest, 제한된 정규화 필드만 둡니다. `privacy` 또는 보안·개인정보 영향은 `private_incident`로 전이하며 공개 export를 막고 비공개 운영자 채널로만 인계합니다. 제보자 소유권, revision, idempotency, 확인 시각과 digest가 모두 맞을 때만 `bug_packet.v1` 확정 패킷을 저장합니다.
+원문과 답변은 revision·schema·키 버전을 추가 인증 데이터로 묶은 AES-GCM 비공개 객체에 두고, 정규화 PostgreSQL에는 opaque reference, 암호문 digest, wrapped data key, nonce와 제한된 비민감 필드만 둡니다. `privacy` 또는 보안·개인정보 영향은 `private_incident`로 전이하면서 관계형 필드의 원문을 지우고 공개 export를 막아 비공개 운영자 채널로만 인계합니다. 제보자 소유권, revision, idempotency, 확인 시각, canonical packet·evidence digest가 모두 맞을 때만 `bug_packet.v1` 확정 패킷을 저장합니다. 암호화 객체 저장소와 키 설정이 없으면 제보를 부분 저장하지 않고 실패합니다. 새 비공개 초안·답변은 상태 전환, 관계형 원문 제거, receipt·관리자 handoff를 같은 트랜잭션에 묶고, 과거 중간 상태는 팀 범위의 idempotent reconciliation으로 한 번만 복구합니다.
 
-`bug_jobs`는 제공자와 분리된 재현·수정·검토·배포 작업 outbox입니다. `bug_deliveries`는 Slack에 질문·요약·접수 영수증·비공개 관리자 인계를 보내기 전의 durable record입니다. delivery key, 제보자 소유권, packet revision, template과 renderer가 같은 경우에만 idempotent하게 다시 읽고, worker lease를 가진 발송만 완료할 수 있습니다. 실패는 다음 시도 시각과 오류 분류를 남겨 독립적으로 재시도하며 세 번째 실패 뒤에는 retry 없이 `failed` dead-letter로 남깁니다.
+`bug_jobs`는 제공자와 분리된 재현·수정·검토·배포 작업 outbox입니다. `bug_deliveries`는 Slack에 질문·요약·접수 영수증·비공개 관리자 인계를 보내기 전의 durable record입니다. delivery key, 제보자 소유권, packet revision, template과 renderer가 같은 경우에만 idempotent하게 다시 읽고, worker lease를 가진 발송만 완료할 수 있습니다. 실패는 다음 시도 시각과 오류 분류를 남겨 독립적으로 재시도하며 세 번째 실패 뒤에는 retry 없이 `failed` dead-letter로 남깁니다. 만료와 delivery claim 함수는 team ID를 필수로 받아 다른 워크스페이스의 due 행을 건드리지 않습니다.
 
 현재 구현에는 `codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app`을 표현하는 무변경 dry-run handoff가 있으나 어느 제공자도 호출하지 않습니다. GitHub Actions는 사용하지 않습니다. 이후 격리된 GenQuant 서비스가 검사를 실행하고 GitHub Check Run을 게시하는 연결은 구현·권한·실제 검증이 남아 있습니다. v0.0.54는 두 번째 브라우저 QA 전에는 pre-release입니다.
 
