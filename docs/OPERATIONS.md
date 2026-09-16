@@ -57,7 +57,7 @@
 
 ## 버그 제보 v0.0.54 구현 기준
 
-`dbfcad048bd93a9b94d743081efc657d90a11cbf`는 명시적으로 승인된 실서비스 Slack 검증을 위해 이미 존재하던 Worker에 올린 비정규 pre-release QA 배포입니다. exact clean SHA, maintenance로 보호한 migration 014–020, Worker 활성화와 health clock arming은 영수증으로 확인했지만, private `ops/main`·ruleset readback·canonical provenance가 없으므로 정식 배포나 출시로 취급하지 않습니다. 이 배포 자체로 실제 alarm delivery나 브라우저 Slack 시나리오가 통과한 것도 아닙니다. v0.0.54는 최종 live QA와 canonical release lineage가 모두 끝날 때까지 pre-release이고 현재 운영 출시 기준은 v0.0.53입니다.
+비정규 pre-release QA 배포 계보는 exact source, maintenance로 보호한 migration, Worker 활성화와 설정 보존을 영수증으로 남겼고, exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web 시나리오까지 통과했습니다. 다만 private `ops/main`·ruleset readback·canonical provenance와 정식 release authority가 없으므로 정식 배포나 출시로 취급하지 않습니다. 이것이 v0.0.54가 pre-release로 남는 유일한 이유이며 현재 운영 출시 기준은 v0.0.53입니다.
 
 출시 뒤 `버그 제보`와 `버그: ...` 입력은 제보자 소유 초안을 시작합니다. 누락되거나 모순된 내용은 한 번에 하나씩만 묻고, 관찰하지 않은 내용은 추가하지 않습니다. 24시간 안에 다섯 질문을 넘기거나 시간이 지나면 확정하지 않고 비공개 운영자 인계 대상으로 전환합니다.
 
@@ -71,7 +71,7 @@
 
 비공개 reconciliation, 24시간 만료, delivery claim 중 어느 단계든 한 번에 10건을 처리하면 남은 작업이 있을 수 있다고 보고 5분 안에 다시 실행합니다. 다음 실행에서 세 단계가 모두 10건 미만이어야 한 시간 안전 검사로 돌아갑니다.
 
-일반 배포와 DB 유지보수에서는 `wrangler.jsonc`의 Cron 선언을 그대로 둡니다. `DATABASE_MAINTENANCE=true`이면 전역 시계는 alarm을 다시 걸고 DB·Slack 작업을 건너뛰며, 유지보수를 해제한 뒤 `/health`를 호출해 응답의 `bugDeliveryClock.armed=true`와 다음 시각을 확인합니다. 배포 뒤에도 같은 health arming을 확인합니다. 운영자 진단은 health 응답, `community.bug.clock.failed`·`community.cron` 로그, scheduled invocation, `bug_deliveries.attempts`와 상태 순서로 진행하며 회원 식별자나 본문을 로그에 복사하지 않습니다.
+일반 배포와 DB 유지보수에서는 `wrangler.jsonc`의 Cron 선언을 그대로 둡니다. `DATABASE_MAINTENANCE=true`이면 전역 시계는 alarm을 다시 걸고 DB·Slack 작업을 건너뜁니다. `/health`는 Worker liveness, 필수 설정 여부와 정적 capability만 반환하는 엄격한 read-only 경로입니다. Durable Object stub 조회, alarm 설정, DB·R2·Slack 호출을 하지 않으므로 clock readiness 근거로 사용하지 않습니다. 유지보수 해제와 배포 뒤 clock readiness는 식별자를 제거한 Durable Object inspect/admin 영수증, 배포 영수증의 alarm 상태 또는 서명 검증을 통과한 Slack activity가 alarm을 건 기록으로 확인합니다. 운영자 진단은 이 readiness 근거, `community.bug.clock.failed`·`community.cron` 로그, scheduled invocation, `bug_deliveries.attempts`와 상태 순서로 진행하며 회원 식별자나 본문을 로그에 복사하지 않습니다.
 
 Cron 등록이 실제로 stale이라는 Cloudflare 설정·호출 증거가 있을 때만 복구 예외를 적용합니다. 정확히 한 개의 기존 schedule을 삭제하고 같은 표현식으로 한 개만 다시 만든 뒤, 마지막 변경부터 최소 15분을 기다립니다. 설정 readback만으로 복구 성공이라 하지 않으며 이후 실제 scheduled invocation과 그 invocation이 alarm을 재무장한 사실, due delivery의 `attempts` 또는 상태 진전을 함께 확인해야 합니다. 그 증거가 없으면 schedule을 반복해서 지우거나 만들지 않습니다.
 

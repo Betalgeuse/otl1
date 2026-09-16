@@ -1,6 +1,6 @@
 # 문서 안내
 
-ONE THING 문서는 **현재 동작**, **구현 중인 기반**, **앞으로의 계획**, **과거 근거**를 구분합니다. 현재 운영 기준은 **v0.0.53**입니다. v0.0.54의 버그 제보 기반은 코드·합성 QA·폐기 가능한 DB QA까지 구현된 상태이지만, 두 번째 브라우저 QA가 끝나기 전까지 pre-release이며 배포나 실제 Slack 운영 검증을 뜻하지 않습니다.
+ONE THING 문서는 **현재 동작**, **구현 중인 기반**, **앞으로의 계획**, **과거 근거**를 구분합니다. 현재 운영 기준은 **v0.0.53**입니다. v0.0.54의 버그 제보 기반은 exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web QA까지 통과했지만, 현재 checkout이 canonical private `ops/main`이 아니고 정식 release authority가 없어서 pre-release로 남습니다.
 
 | 알고 싶은 내용 | 읽을 문서 |
 | --- | --- |

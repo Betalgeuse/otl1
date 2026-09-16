@@ -170,17 +170,20 @@ Such a QA rollout must satisfy all of these conditions:
 - the previous Worker version is retained as the code rollback target;
 - database changes run in declared order while maintenance blocks Slack ingress,
   with their forward-only compatibility and final maintenance state recorded;
-- health, binding names, migration versions, scheduled-trigger preservation and
-  cleanup limits are recorded without secrets, member text or private objects;
+- read-only health, binding names, migration versions, scheduled-trigger
+  preservation, separate clock-readiness evidence and cleanup limits are
+  recorded without secrets, member text or private objects;
 - no Git push, merge, public mirror publication, release announcement, provider
   execution or canonical provenance claim is made.
 
-The rollout of `dbfcad048bd93a9b94d743081efc657d90a11cbf` is classified only
-as this noncanonical pre-release QA deployment. Its receipt proves the exact
-clean source, maintenance-guarded migrations 014–020, Worker activation and
-health arming. It does not supply an `ops/main` merge, ruleset readback,
-canonical receipt, browser Slack result or release authority. v0.0.54 therefore
-remains pre-release.
+The noncanonical pre-release lineage reached a passing Chrome Slack Web QA at
+exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`. Health proves only
+Worker liveness, required configuration and static capabilities; it does not
+arm or inspect the clock. Sanitized Durable Object inspect/admin evidence, a
+deployment receipt or signed activity proves clock readiness. The QA lineage
+still does not supply an `ops/main` merge, ruleset readback, canonical receipt
+or release authority. That missing canonical private authority is the sole
+reason v0.0.54 remains pre-release.
 
 Any canonical deployment or release still requires the private `ops/main`
 authority and ruleset evidence described above. The QA exception cannot be used

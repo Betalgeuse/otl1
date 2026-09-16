@@ -1,7 +1,7 @@
 export { CommunityClock } from "./community-clock";
 
 import { readBoardLink } from "./board-link";
-import { armBugDeliveryClock } from "./community-bug-clock-client";
+import { armBugDeliveryClock, BUG_CLOCK_CAPABILITIES } from "./community-bug-clock-client";
 import { handleCommunityEvent } from "./community-events";
 import { communityInteraction } from "./community-interactions";
 import type { CommunityEnv } from "./community-runtime";
@@ -47,8 +47,7 @@ export async function handleRequest(
   const env = runtime.env;
   try {
     if (request.method === "GET" && url.pathname === "/health") {
-      const clock = await armBugDeliveryClock(env, { reason: "health", observedAt: Date.now() });
-      return Response.json({ status: "ok", bugDeliveryClock: clock });
+      return Response.json({ status: "ok", capabilities: BUG_CLOCK_CAPABILITIES });
     }
     if (env.DATABASE_MAINTENANCE === "true" && url.pathname.startsWith("/slack/"))
       return new Response("잠시 데이터 정리 중입니다. 곧 다시 시도해 주세요.", {

@@ -18,7 +18,7 @@ flowchart LR
   BugLedger --> DB
   DB --> Output[공개 결과 / 본인 전용 조작]
   Output --> Slack
-  Activity[Slack activity / health / Cron nudge] --> GlobalBugClock[팀별 전역 Durable Object alarm]
+  Activity[Signed Slack activity / due deadline / Cron nudge] --> GlobalBugClock[팀별 전역 Durable Object alarm]
   GlobalBugClock --> Delivery
   Clock[채널별 Durable Object alarm] --> DB
   Clock --> Slack
@@ -83,7 +83,7 @@ erDiagram
 
 `bug_jobs`는 제공자와 분리된 재현·수정·검토·배포 작업 outbox입니다. `bug_deliveries`는 Slack에 질문·요약·접수 영수증·비공개 관리자 인계를 보내기 전의 durable record입니다. delivery key, 제보자 소유권, packet revision, template과 renderer가 같은 경우에만 idempotent하게 다시 읽고, worker lease를 가진 발송만 완료할 수 있습니다. 실패는 다음 시도 시각과 오류 분류를 남겨 독립적으로 재시도하며 세 번째 실패 뒤에는 retry 없이 `failed` dead-letter로 남깁니다. 만료와 delivery claim 함수는 team ID를 필수로 받아 다른 워크스페이스의 due 행을 건드리지 않습니다.
 
-현재 구현에는 `codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app`을 표현하는 무변경 dry-run handoff가 있으나 어느 제공자도 호출하지 않습니다. GitHub Actions는 사용하지 않습니다. 이후 격리된 GenQuant 서비스가 검사를 실행하고 GitHub Check Run을 게시하는 연결은 구현·권한·실제 검증이 남아 있습니다. v0.0.54는 두 번째 브라우저 QA 전에는 pre-release입니다.
+현재 구현에는 `codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app`을 표현하는 무변경 dry-run handoff가 있으나 어느 제공자도 호출하지 않습니다. GitHub Actions는 사용하지 않습니다. 이후 격리된 GenQuant 서비스가 검사를 실행하고 GitHub Check Run을 게시하는 연결은 구현·권한·실제 검증이 남아 있습니다. v0.0.54는 exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web QA를 통과했으며, canonical private `ops/main`과 정식 release authority가 없어서만 pre-release입니다.
 
 ## 확장 규칙
 

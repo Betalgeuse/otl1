@@ -202,7 +202,7 @@ const originalNow = Date.now;
 try {
   Date.now = () => now;
   const idleStorage = new FakeStorage();
-  assert.deepEqual(await clock(idleStorage).armBugDelivery({ reason: "health", observedAt: now }), {
+  assert.deepEqual(await clock(idleStorage).armBugDelivery({ reason: "cron", observedAt: now }), {
     role: "bug_delivery",
     armed: true,
     next: now + 3_600_000,
@@ -334,6 +334,10 @@ try {
 const { default: worker, handleRequest } = await import("../src/index.ts");
 const signedArms = [];
 const signedEffects = [];
+let healthBindingCalls = 0;
+let healthStorageCalls = 0;
+let healthBucketCalls = 0;
+let healthSlackCalls = 0;
 const secret = "synthetic-signing-secret";
 const signedAt = Math.floor(Date.now() / 1_000);
 const runtime = {
@@ -347,8 +351,7 @@ const runtime = {
         return {
           async armBugDelivery(input) {
             signedArms.push(input);
-            const delay = input.reason === "health" ? 3_600_000 : 300_000;
-            return { role: "bug_delivery", armed: true, next: input.observedAt + delay };
+            return { role: "bug_delivery", armed: true, next: input.observedAt + 300_000 };
           },
         };
       },
@@ -361,17 +364,60 @@ const context = {
     signedEffects.push(promise);
   },
 };
-const health = await handleRequest(new Request("https://test/health"), runtime, context);
-assert.deepEqual((await health.json()).bugDeliveryClock, {
-  role: "bug_delivery",
-  armed: true,
-  next: signedArms[0].observedAt + 3_600_000,
+const healthRuntime = {
+  ...runtime,
+  store: new Proxy(
+    {},
+    {
+      get() {
+        healthStorageCalls += 1;
+        throw new Error("health must not access Neon storage");
+      },
+    },
+  ),
+  env: {
+    ...runtime.env,
+    BUG_PRIVATE_OBJECTS: new Proxy(
+      {},
+      {
+        get() {
+          healthBucketCalls += 1;
+          throw new Error("health must not access R2 storage");
+        },
+      },
+    ),
+    COMMUNITY_CLOCK: {
+      getByName() {
+        healthBindingCalls += 1;
+        throw new Error("health must not resolve a Durable Object stub");
+      },
+    },
+  },
+};
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async () => {
+  healthSlackCalls += 1;
+  throw new Error("health must not call Slack");
+};
+const health = await handleRequest(new Request("https://test/health"), healthRuntime, context);
+assert.deepEqual(await health.json(), {
+  status: "ok",
+  capabilities: {
+    bugDeliveryClock: {
+      role: "bug_delivery",
+      activityArming: true,
+      dueDeadlineArming: true,
+      cronBackup: true,
+    },
+  },
 });
+assert.equal(healthBindingCalls, 0, "health must not call a Durable Object binding");
+assert.equal(signedEffects.length, 0, "health must not schedule background effects");
 signedArms.length = 0;
 const deployedHealth = await worker.fetch(
   new Request("https://test/health"),
   {
-    ...runtime.env,
+    ...healthRuntime.env,
     SLACK_BOT_TOKEN: "test",
     DATABASE_URL: "postgresql://test",
     BOARD_SIGNING_SECRET: "test",
@@ -382,7 +428,20 @@ const deployedHealth = await worker.fetch(
 );
 const deployedHealthBody = await deployedHealth.json();
 assert.equal(deployedHealthBody.configured, true);
-assert.equal(deployedHealthBody.bugDeliveryClock.role, "bug_delivery");
+assert.deepEqual(deployedHealthBody.capabilities, {
+  bugDeliveryClock: {
+    role: "bug_delivery",
+    activityArming: true,
+    dueDeadlineArming: true,
+    cronBackup: true,
+  },
+});
+assert.equal(healthBindingCalls, 0, "deployed health must remain side-effect free");
+assert.equal(signedEffects.length, 0, "deployed health must not schedule background effects");
+assert.equal(healthStorageCalls, 0, "health must not access Neon storage");
+assert.equal(healthBucketCalls, 0, "health must not access R2 storage");
+assert.equal(healthSlackCalls, 0, "health must not call Slack");
+globalThis.fetch = originalFetch;
 signedArms.length = 0;
 
 function signedRequest(path, body) {

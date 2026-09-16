@@ -31,9 +31,9 @@ bun run check
 
 정식 출시·canonical 배포는 private `ops/main`의 merge queue 결과만 사용합니다. 비공개 운영 저장소의 canonical preflight가 현재 full SHA, 정확한 remote, clean `main`, ruleset API readback과 GenQuant 영수증을 모두 확인해야 하며, 실패한 checkout에서 정식 배포·release·public mirror 게시를 진행하지 않습니다.
 
-이미 존재하는 Worker에서 최종 Slack 동작을 확인해야 할 때는 명시적으로 승인된 **pre-release QA 배포**만 예외로 허용합니다. 승인된 시나리오, clean full SHA, 이전·새 Worker version, migration 목록, maintenance 차단과 해제, health·binding·Cron 보존, rollback 대상과 정리 범위를 한 영수증에 묶습니다. 이 예외는 승인된 기존 Worker version upload·deploy 범위만 허용하며 Git push, merge, release 게시, public mirror 게시, provider 실행 또는 canonical 판정을 허용하지 않습니다. migration은 forward-only이므로 코드 rollback도 적용된 schema와 호환돼야 합니다.
+이미 존재하는 Worker에서 최종 Slack 동작을 확인해야 할 때는 명시적으로 승인된 **pre-release QA 배포**만 예외로 허용합니다. 승인된 시나리오, clean full SHA, 이전·새 Worker version, migration 목록, maintenance 차단과 해제, read-only health·binding·Cron 보존, 별도 clock readiness 근거, rollback 대상과 정리 범위를 한 영수증에 묶습니다. `/health`는 liveness와 정적 capability만 증명하며 clock readiness는 식별자를 제거한 Durable Object inspect/admin·배포 영수증 또는 서명된 activity로 증명합니다. 이 예외는 승인된 기존 Worker version upload·deploy 범위만 허용하며 Git push, merge, release 게시, public mirror 게시, provider 실행 또는 canonical 판정을 허용하지 않습니다. migration은 forward-only이므로 코드 rollback도 적용된 schema와 호환돼야 합니다.
 
-`dbfcad048bd93a9b94d743081efc657d90a11cbf`는 이 예외로 기존 Worker에 배포된 비정규 pre-release QA 소스입니다. 현재 checker는 계속 `canonical: false`이고, v0.0.54도 실제 alarm·Slack 브라우저 QA와 private `ops/main` release lineage가 모두 끝날 때까지 pre-release입니다.
+exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`은 이 예외에서 Chrome Slack Web QA를 통과했습니다. 현재 checker는 계속 `canonical: false`이고 private `ops/main` release authority가 없으므로, v0.0.54는 그 이유 하나로 pre-release입니다.
 
 ## DB 설치와 이관
 

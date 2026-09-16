@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const pgBin = process.env.PG_BIN ?? "/opt/homebrew/opt/postgresql@17/bin";
-const temp = await mkdtemp("/tmp/otl1-bug-private-backfill-");
+const temp = await mkdtemp("/tmp/community-private-backfill-qa-");
 const data = join(temp, "pgdata");
 const socket = join(temp, "socket");
 const port = String(62000 + Math.floor(Math.random() * 2000));

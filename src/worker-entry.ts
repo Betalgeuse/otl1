@@ -1,4 +1,4 @@
-import { armBugDeliveryClock } from "./community-bug-clock-client";
+import { BUG_CLOCK_CAPABILITIES } from "./community-bug-clock-client";
 import { communityCron } from "./community-cron";
 import type { Context, Env, Runtime } from "./index";
 import { NeonInvitations } from "./invitations/store";
@@ -23,11 +23,7 @@ export function createWorkerHandler(handler: RequestHandler): ExportedHandler<Cl
         ].every(Boolean) &&
         (env.INVITATIONS_ENABLED !== "true" || Boolean(env.INVITE_SIGNING_SECRET));
       if (new URL(request.url).pathname === "/health") {
-        const clock = await armBugDeliveryClock(env, {
-          reason: "health",
-          observedAt: Date.now(),
-        });
-        return Response.json({ status: "ok", configured, bugDeliveryClock: clock });
+        return Response.json({ status: "ok", configured, capabilities: BUG_CLOCK_CAPABILITIES });
       }
       if (!configured) return new Response("Setup required", { status: 503 });
       try {

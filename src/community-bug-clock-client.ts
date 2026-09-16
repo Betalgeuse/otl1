@@ -1,8 +1,16 @@
 export const BUG_DELIVERY_CLOCK_ROLE = "bug_delivery" as const;
 export const COMMUNITY_SCHEDULE_CLOCK_ROLE = "community_schedule" as const;
+export const BUG_CLOCK_CAPABILITIES = {
+  bugDeliveryClock: {
+    role: BUG_DELIVERY_CLOCK_ROLE,
+    activityArming: true,
+    dueDeadlineArming: true,
+    cronBackup: true,
+  },
+} as const;
 
 export type BugDeliveryArm =
-  | { readonly reason: "health" | "cron"; readonly observedAt: number }
+  | { readonly reason: "cron"; readonly observedAt: number }
   | { readonly reason: "activity"; readonly observedAt: number }
   | { readonly reason: "due"; readonly observedAt: number; readonly nextDue: number };
 
