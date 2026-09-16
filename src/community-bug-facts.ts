@@ -7,6 +7,16 @@ import type {
 import { isBugFrequency, isBugImpact } from "./community-bug-schema";
 import type { BugDraftRead, BugPacketFields } from "./community-bug-types";
 
+const PRIVATE_TEXT = "[비공개]";
+const SENSITIVE_PATTERNS = [
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/giu,
+  /\bxox(?:a|b|p|r|s)-[A-Za-z0-9-]{10,}\b/giu,
+  /\bAKIA[A-Z0-9]{16}\b/gu,
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu,
+  /(?<!\d)(?:\+?82[- .]?)?0?1[016789][- .]?\d{3,4}[- .]?\d{4}(?!\d)/gu,
+  /(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|token|secret|password|passwd|비밀번호|암호|토큰)(?:\s*[:=]\s*|\s+)[^\s,;]+/giu,
+] as const;
+
 export type BugCandidate = {
   readonly field: BugField;
   readonly messageId: string;
@@ -19,6 +29,49 @@ export type ParsedBugReport = {
   readonly messages: BugDialogueInput["messages"];
   readonly candidates: readonly BugCandidate[];
 };
+
+export function containsSensitiveBugText(value: string): boolean {
+  return SENSITIVE_PATTERNS.some((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(value);
+  });
+}
+
+export function redactBugDbText(value: string): string {
+  let redacted = value;
+  for (const pattern of SENSITIVE_PATTERNS) {
+    pattern.lastIndex = 0;
+    redacted = redacted.replace(pattern, PRIVATE_TEXT);
+  }
+  return redacted;
+}
+
+export function bugFieldsForDatabase(
+  fields: BugPacketFields,
+  privateIncident: boolean,
+): BugPacketFields {
+  if (privateIncident)
+    return {
+      actual: "비공개 버그 제보",
+      expected: null,
+      steps: [],
+      location: null,
+      occurredAt: null,
+      frequency: fields.frequency,
+      impact: "security_privacy",
+    };
+  return {
+    actual: fields.actual === null ? null : redactBugDbText(fields.actual),
+    expected: fields.expected === null ? null : redactBugDbText(fields.expected),
+    steps: fields.steps.map((step) =>
+      typeof step === "string" ? redactBugDbText(step) : PRIVATE_TEXT,
+    ),
+    location: fields.location === null ? null : redactBugDbText(fields.location),
+    occurredAt: fields.occurredAt,
+    frequency: fields.frequency,
+    impact: fields.impact,
+  };
+}
 
 export function bugCandidate(field: BugField, id: string, text: string): BugCandidate {
   return { field, messageId: id, start: 0, end: text.length, quote: text, value: text };

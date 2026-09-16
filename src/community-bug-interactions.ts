@@ -69,14 +69,19 @@ export async function handleBugAction(
   const questionId = string(value.questionId);
   if (!answer || !questionId) throw new InputError("버그 제보 답변을 확인할 수 없어요.");
   waitUntil(
-    continueBugReport(context, answer, questionId).catch(async (error: unknown) => {
-      await ephemeral(context, {
-        text:
-          error instanceof InputError
-            ? error.message
-            : "버그 제보 답변을 저장하지 못했어요. 같은 스레드에서 다시 알려주세요.",
-      });
-    }),
+    (async () => {
+      try {
+        const handled = await continueBugReport(context, answer, questionId);
+        if (!handled) throw new InputError("이 질문과 연결된 버그 제보를 찾지 못했어요.");
+      } catch (error: unknown) {
+        await ephemeral(context, {
+          text:
+            error instanceof InputError
+              ? error.message
+              : "버그 제보 답변을 저장하지 못했어요. 같은 스레드에서 다시 알려주세요.",
+        });
+      }
+    })(),
   );
   return new Response(null, { status: 200 });
 }

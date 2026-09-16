@@ -15,6 +15,7 @@ import {
   type BugQuestion,
   type BugSafetyFlag,
   bugSafetyFlags,
+  canonicalBugEvidence,
   confirmedBugPacket,
   type DraftBugPacket,
   isBugField,
@@ -227,6 +228,7 @@ export async function advanceBugDialogue(input: BugDialogueInput): Promise<BugDi
     return {
       status: "confirmed",
       safetyFlags,
+      evidence: canonicalBugEvidence(evidence),
       packet: await confirmedBugPacket({
         bugId: input.bugId,
         revision: input.currentRevision,

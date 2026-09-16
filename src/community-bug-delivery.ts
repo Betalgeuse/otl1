@@ -1,3 +1,4 @@
+import { armBugDeliveryClock } from "./community-bug-clock-client";
 import {
   bugDeliveryProviderSubcode,
   bugDeliveryRetryDelay,
@@ -9,6 +10,7 @@ import {
   CommunityBugDeliveryStore,
   type EnqueueBugDelivery,
 } from "./community-bug-delivery-store";
+import { reconcileAcceptedBugDelivery } from "./community-bug-reconciliation";
 import {
   BUG_ENUM_QUESTIONS,
   BUG_FREE_QUESTIONS,
@@ -26,6 +28,7 @@ import { NeonStore } from "./store";
 
 export const BUG_DELIVERY_WORKER_ID = "slack-bug-delivery" as const;
 const QUESTION_RENDERER = "bug-question.v1" as const;
+export type BugDeliveryDueObserver = (nextDue: number) => Promise<void>;
 
 type QuestionDelivery = {
   readonly bugId: string;
@@ -73,7 +76,7 @@ export async function deliverBugMessage(
   message: Json,
 ): Promise<void> {
   const deliveries = stores(context);
-  await deliveries.enqueue(input);
+  const enqueued = await deliveries.enqueue(input);
   const leaseToken = crypto.randomUUID();
   const claimed = await deliveries.claim({
     teamId: input.teamId,
@@ -83,7 +86,11 @@ export async function deliverBugMessage(
     workerId: BUG_DELIVERY_WORKER_ID,
     leaseToken,
   });
-  if (!claimed) return;
+  if (!claimed) {
+    const nextDue = Date.parse(enqueued.retryAfter ?? enqueued.notBefore);
+    await armBugDeliveryClock(context.env, { reason: "due", observedAt: Date.now(), nextDue });
+    return;
+  }
   await sendClaimedBugDelivery(context, claimed, input.reporterId, leaseToken, message);
 }
 
@@ -93,9 +100,24 @@ export async function sendClaimedBugDelivery(
   reporterId: string,
   leaseToken: string,
   message: Json,
+  observeDue?: BugDeliveryDueObserver,
 ): Promise<"sent" | "failed"> {
   const deliveries = stores(context);
   try {
+    const reconciledTs = await reconcileAcceptedBugDelivery(context, claimed, message);
+    if (reconciledTs) {
+      await deliveries.finish({
+        teamId: claimed.teamId,
+        bugId: claimed.bugId,
+        reporterId,
+        deliveryId: claimed.deliveryId,
+        workerId: BUG_DELIVERY_WORKER_ID,
+        leaseToken,
+        status: "sent",
+        messageTs: reconciledTs,
+      });
+      return "sent";
+    }
     const messageTs = await send(context, claimed.destination, message);
     await deliveries.finish({
       teamId: claimed.teamId,
@@ -111,6 +133,8 @@ export async function sendClaimedBugDelivery(
   } catch (error) {
     if (!(error instanceof Error)) throw error;
     const code = classifyBugDeliveryError(error);
+    const observedAt = Date.now();
+    const nextDue = claimed.attempts < 3 ? observedAt + bugDeliveryRetryDelay(error) : null;
     await deliveries.finish({
       teamId: claimed.teamId,
       bugId: claimed.bugId,
@@ -120,10 +144,12 @@ export async function sendClaimedBugDelivery(
       leaseToken,
       status: "failed",
       errorCode: code,
-      ...(claimed.attempts < 3
-        ? { retryAfter: new Date(Date.now() + bugDeliveryRetryDelay(error)).toISOString() }
-        : {}),
+      ...(nextDue === null ? {} : { retryAfter: new Date(nextDue).toISOString() }),
     });
+    if (nextDue !== null) {
+      if (observeDue) await observeDue(nextDue);
+      else await armBugDeliveryClock(context.env, { reason: "due", observedAt, nextDue });
+    }
     console.error(
       JSON.stringify({
         event: "community.bug.delivery.failed",
@@ -142,7 +168,10 @@ export async function failClaimedBugDelivery(
   claimed: BugDelivery,
   reporterId: string,
   leaseToken: string,
+  observeDue?: BugDeliveryDueObserver,
 ): Promise<"failed"> {
+  const observedAt = Date.now();
+  const nextDue = claimed.attempts < 3 ? observedAt + 60_000 : null;
   await stores(context).finish({
     teamId: claimed.teamId,
     bugId: claimed.bugId,
@@ -152,8 +181,12 @@ export async function failClaimedBugDelivery(
     leaseToken,
     status: "failed",
     errorCode: "invalid_payload",
-    ...(claimed.attempts < 3 ? { retryAfter: new Date(Date.now() + 60_000).toISOString() } : {}),
+    ...(nextDue === null ? {} : { retryAfter: new Date(nextDue).toISOString() }),
   });
+  if (nextDue !== null) {
+    if (observeDue) await observeDue(nextDue);
+    else await armBugDeliveryClock(context.env, { reason: "due", observedAt, nextDue });
+  }
   return "failed";
 }
 

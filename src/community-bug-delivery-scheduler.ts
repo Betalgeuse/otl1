@@ -1,5 +1,6 @@
 import {
   BUG_DELIVERY_WORKER_ID,
+  type BugDeliveryDueObserver,
   bugQuestionForField,
   failClaimedBugDelivery,
   sendClaimedBugDelivery,
@@ -14,6 +15,36 @@ import type { Json } from "./input";
 import { NeonStore } from "./store";
 
 const BATCH_LIMIT = 10 as const;
+class BugMaintenancePhaseError extends Error {
+  constructor() {
+    super("Bug maintenance phase failed");
+    this.name = "BugMaintenancePhaseError";
+  }
+}
+
+type PhaseResult<T> = { readonly value: T; readonly failed: boolean };
+
+async function isolatedPhase<T>(
+  phase: "reconcile_private" | "expire" | "claim",
+  scheduledTime: number,
+  fallback: T,
+  work: () => Promise<T>,
+): Promise<PhaseResult<T>> {
+  try {
+    return { value: await work(), failed: false };
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "community.bug.delivery.phase.failed",
+        phase,
+        scheduledTime,
+        code: "boundary_failure",
+        failure: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+    return { value: fallback, failed: true };
+  }
+}
 
 function contextFor(
   env: CommunityEnv,
@@ -65,12 +96,21 @@ function render(
         : null;
     }
     case "receipt":
-      return { text: `접수됨 ${delivery.bugId}` };
+      return {
+        text:
+          delivery.templateId === "receipt.exhausted.v1"
+            ? `추가 확인 시간이 지나 운영자에게 전달했어요. ${delivery.bugId}`
+            : delivery.templateId === "receipt.private.v1"
+              ? `비공개 접수 ${delivery.bugId}`
+              : `접수됨 ${delivery.bugId}`,
+      };
     case "admin_handoff":
       return {
         text:
           delivery.destination === "admin_channel"
-            ? `비공개 버그 인계 ${delivery.bugId}`
+            ? delivery.templateId === "admin_handoff.exhausted.v1"
+              ? `추가 확인 종료 버그 인계 ${delivery.bugId}`
+              : `비공개 버그 인계 ${delivery.bugId}`
             : `비공개 접수 ${delivery.bugId}`,
       };
   }
@@ -79,6 +119,7 @@ function render(
 export async function runDueBugDeliveries(
   env: CommunityEnv,
   scheduledTime: number,
+  observeDue?: BugDeliveryDueObserver,
 ): Promise<number> {
   console.log(
     JSON.stringify({
@@ -91,12 +132,24 @@ export async function runDueBugDeliveries(
   );
   const db = new NeonStore(env.DATABASE_URL);
   const leaseToken = crypto.randomUUID();
-  const due = await new CommunityBugDueDeliveryStore(db).claim({
-    workerId: BUG_DELIVERY_WORKER_ID,
-    leaseToken,
-    limit: BATCH_LIMIT,
-    now: new Date(scheduledTime).toISOString(),
-  });
+  const dueStore = new CommunityBugDueDeliveryStore(db);
+  const now = new Date(scheduledTime).toISOString();
+  const reconcile = await isolatedPhase("reconcile_private", scheduledTime, 0, () =>
+    dueStore.reconcilePrivate({ teamId: env.SLACK_TEAM_ID, limit: BATCH_LIMIT, now }),
+  );
+  const expiry = await isolatedPhase("expire", scheduledTime, 0, () =>
+    dueStore.expire({ teamId: env.SLACK_TEAM_ID, limit: BATCH_LIMIT, now }),
+  );
+  const claim = await isolatedPhase("claim", scheduledTime, [], () =>
+    dueStore.claim({
+      teamId: env.SLACK_TEAM_ID,
+      workerId: BUG_DELIVERY_WORKER_ID,
+      leaseToken,
+      limit: BATCH_LIMIT,
+      now,
+    }),
+  );
+  const due = claim.value;
   const communityStore = new CommunityStore(db);
   let sent = 0;
   let failed = 0;
@@ -112,7 +165,7 @@ export async function runDueBugDeliveries(
     );
     const message = render(item, context);
     if (message === null) {
-      await failClaimedBugDelivery(context, item.delivery, item.reporterId, leaseToken);
+      await failClaimedBugDelivery(context, item.delivery, item.reporterId, leaseToken, observeDue);
       failed += 1;
       continue;
     }
@@ -122,6 +175,7 @@ export async function runDueBugDeliveries(
       item.reporterId,
       leaseToken,
       message,
+      observeDue,
     );
     if (result === "sent") sent += 1;
     else failed += 1;
@@ -135,5 +189,6 @@ export async function runDueBugDeliveries(
       failed,
     }),
   );
+  if (reconcile.failed || expiry.failed || claim.failed) throw new BugMaintenancePhaseError();
   return due.length;
 }

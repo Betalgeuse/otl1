@@ -28,6 +28,20 @@ async function digest(bytes: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(hashed), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export function bugPrivateAdditionalData(
+  bugId: string,
+  revision: number,
+  schemaVersion: "bug_intake.v1" | "bug_packet.v1",
+  kekVersion: string,
+): ArrayBuffer {
+  const encoded = new TextEncoder().encode(
+    JSON.stringify({ bugId, revision, schemaVersion, kekVersion }),
+  );
+  const result = new ArrayBuffer(encoded.byteLength);
+  new Uint8Array(result).set(encoded);
+  return result;
+}
+
 export function randomBugIdentity(prefix: "BUG" | "B"): string {
   return `${prefix}-${crypto
     .randomUUID()
@@ -45,6 +59,7 @@ export async function writeBugPrivateObject(
   bugId: string,
   revision: number,
   raw: object,
+  schemaVersion: "bug_intake.v1" | "bug_packet.v1" = "bug_intake.v1",
 ): Promise<EncryptedObjectRef> {
   const bucket = context.env.BUG_PRIVATE_OBJECTS;
   const keyVersion = context.env.BUG_PRIVATE_KEK_VERSION;
@@ -61,16 +76,18 @@ export async function writeBugPrivateObject(
   const dek = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt"]);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const envelopeNonce = crypto.getRandomValues(new Uint8Array(12));
+  const additionalData = bugPrivateAdditionalData(bugId, revision, schemaVersion, keyVersion);
   const body = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce },
+    { name: "AES-GCM", iv: nonce, additionalData },
     dek,
     new TextEncoder().encode(JSON.stringify(raw)),
   );
   const wrapped = await crypto.subtle.wrapKey("raw", dek, kek, {
     name: "AES-GCM",
     iv: envelopeNonce,
+    additionalData,
   });
-  const opaqueRef = `bugs/${bugId}/revision-${revision}.enc`;
+  const opaqueRef = `bugs/${bugId}/revision-${revision}-${crypto.randomUUID()}.enc`;
   await bucket.put(opaqueRef, body);
   return {
     opaqueRef,

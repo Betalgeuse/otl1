@@ -56,6 +56,54 @@ export async function deliverBugReceipt(
   );
 }
 
+export async function deliverPrivateBugOutbox(
+  context: CommunityContext,
+  input: { readonly bugId: string; readonly reporterId: string; readonly packetRevision: number },
+): Promise<void> {
+  await Promise.all([
+    deliverBugMessage(
+      context,
+      {
+        teamId: context.scope.teamId,
+        bugId: input.bugId,
+        reporterId: input.reporterId,
+        deliveryKey: bugDeliveryKey(
+          input.bugId,
+          input.packetRevision,
+          "receipt",
+          "reporter_ephemeral",
+        ),
+        packetRevision: input.packetRevision,
+        deliveryKind: "receipt",
+        destination: "reporter_ephemeral",
+        templateId: "receipt.private.v1",
+        rendererVersion: RENDERER_VERSION,
+      },
+      { text: `비공개 접수 ${input.bugId}` },
+    ),
+    deliverBugMessage(
+      context,
+      {
+        teamId: context.scope.teamId,
+        bugId: input.bugId,
+        reporterId: input.reporterId,
+        deliveryKey: bugDeliveryKey(
+          input.bugId,
+          input.packetRevision,
+          "admin_handoff",
+          "admin_channel",
+        ),
+        packetRevision: input.packetRevision,
+        deliveryKind: "admin_handoff",
+        destination: "admin_channel",
+        templateId: "admin_handoff.private.v1",
+        rendererVersion: RENDERER_VERSION,
+      },
+      { text: `비공개 버그 인계 ${input.bugId}` },
+    ),
+  ]);
+}
+
 export async function deliverBugHandoff(
   context: CommunityContext,
   input: { readonly bugId: string; readonly reporterId: string; readonly packetRevision: number },

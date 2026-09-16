@@ -1,15 +1,22 @@
 import { restoreUnseenBugQuestion } from "./community-bug-answer-guard";
+import { armBugDeliveryClock } from "./community-bug-clock-client";
 import { bugQuestionTemplate, deliverBugQuestion } from "./community-bug-delivery";
 import {
-  deliverBugHandoff,
   deliverBugReceipt,
   deliverBugSummary,
+  deliverPrivateBugOutbox,
 } from "./community-bug-delivery-messages";
 import { replayBugDelivery } from "./community-bug-delivery-replay";
 import { advanceBugDialogue } from "./community-bug-dialogue";
-import { appendBugAnswer, parsedBugDraft, storedBugFields } from "./community-bug-facts";
+import {
+  appendBugAnswer,
+  bugFieldsForDatabase,
+  containsSensitiveBugText,
+  parsedBugDraft,
+  storedBugFields,
+} from "./community-bug-facts";
 import { digestBugText, writeBugPrivateObject } from "./community-bug-private";
-import { isBugField } from "./community-bug-schema";
+import { canonicalJson, isBugField } from "./community-bug-schema";
 import { bugDialogueInput, exhaustBugReport } from "./community-bug-session-state";
 import { CommunityBugStore } from "./community-bug-store";
 import { type CommunityContext, ephemeral } from "./community-runtime";
@@ -21,7 +28,7 @@ export async function continueBugReport(
   answer: string,
   expectedQuestionId?: string,
 ): Promise<boolean> {
-  if (context.thread === context.source) return false;
+  if (context.thread === context.source && expectedQuestionId === undefined) return false;
   const store = new CommunityBugStore(new NeonStore(context.env.DATABASE_URL));
   const active = await store.findActiveDraft({
     teamId: context.scope.teamId,
@@ -64,6 +71,10 @@ export async function continueBugReport(
   );
   const result = await advanceBugDialogue(bugDialogueInput(active, parsed));
   if (result.status === "confirmed") throw new InputError("이미 확인된 제보예요.");
+  const privateIncident =
+    (result.packet.impact.status === "known" &&
+      result.packet.impact.value === "security_privacy") ||
+    containsSensitiveBugText(answer);
   const encrypted = await writeBugPrivateObject(context, active.bugId, active.packetRevision + 1, {
     questionId: question.questionId,
     answer,
@@ -77,26 +88,21 @@ export async function continueBugReport(
     answerOpaqueRef: encrypted.opaqueRef,
     expectedPacketRevision: active.packetRevision,
     idempotencyKey: `answer:${context.key}`,
-    sanitizedFields: storedBugFields(result.packet),
+    privacy: privateIncident,
+    sanitizedFields: bugFieldsForDatabase(storedBugFields(result.packet), privateIncident),
     completeness: { status: result.status },
   });
-  if (
-    result.packet.impact.status === "known" &&
-    result.packet.impact.value === "security_privacy"
-  ) {
-    await store.transition({
-      bugId: active.bugId,
-      toState: "private_incident",
-      actors: ["deterministic_worker"],
-      guard: { privacyOrSecurity: true },
-      evidence: { intakeDigest: encrypted.objectDigest },
-      expectedRevision: active.revision,
-      idempotencyKey: `private:${context.key}`,
-    });
-    await deliverBugHandoff(context, {
+  if (privateIncident) {
+    await deliverPrivateBugOutbox(context, {
       bugId: active.bugId,
       reporterId: active.reporterId,
       packetRevision,
+    });
+    const observedAt = Date.now();
+    await armBugDeliveryClock(context.env, {
+      reason: "due",
+      observedAt,
+      nextDue: observedAt + 1_000,
     });
     return true;
   }
@@ -118,6 +124,15 @@ export async function continueBugReport(
       },
       expectedRevision: active.revision,
       idempotencyKey: `question:${context.key}`,
+    });
+    const observedAt = Date.now();
+    const startedAt = active.needsInfoStartedAt
+      ? Date.parse(active.needsInfoStartedAt)
+      : observedAt;
+    await armBugDeliveryClock(context.env, {
+      reason: "due",
+      observedAt,
+      nextDue: startedAt + 86_400_000,
     });
     await deliverBugQuestion(context, {
       bugId: active.bugId,
@@ -172,19 +187,27 @@ export async function confirmBugReport(
     throw new InputError("최신 버그 초안을 다시 확인해 주세요.");
   const result = await advanceBugDialogue({
     ...bugDialogueInput(draft, parsedBugDraft(draft)),
-    expectedRevision: draft.packetRevision,
-    currentRevision: draft.packetRevision,
+    expectedRevision: draft.packetRevision + 1,
+    currentRevision: draft.packetRevision + 1,
     reporterConfirmedAt: new Date().toISOString(),
   });
   if (result.status !== "confirmed") throw new InputError("최신 버그 초안을 다시 확인해 주세요.");
-  const encrypted = await writeBugPrivateObject(context, bugId, draft.packetRevision + 1, {
-    confirmedAt: result.packet.confirmation.confirmedAt,
-    packetDigest: result.packet.packetDigest,
-  });
+  const encrypted = await writeBugPrivateObject(
+    context,
+    bugId,
+    draft.packetRevision + 1,
+    {
+      confirmedAt: result.packet.confirmation.confirmedAt,
+      packetDigest: result.packet.packetDigest,
+    },
+    "bug_packet.v1",
+  );
   const confirmed = await store.confirmPacket({
     packet: result.packet,
     storage: {
       ...encrypted,
+      canonicalEvidence: canonicalJson(result.evidence),
+      evidenceObjectDigest: encrypted.objectDigest,
       teamId: context.scope.teamId,
       reporterId: context.scope.userId,
       expectedPacketRevision: draft.packetRevision,

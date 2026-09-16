@@ -1,8 +1,16 @@
+import { armBugDeliveryClock } from "./community-bug-clock-client";
 import { bugQuestionTemplate, deliverBugQuestion } from "./community-bug-delivery";
-import { deliverBugHandoff, deliverBugSummary } from "./community-bug-delivery-messages";
+import { deliverBugSummary, deliverPrivateBugOutbox } from "./community-bug-delivery-messages";
 import { replayBugDelivery } from "./community-bug-delivery-replay";
 import { advanceBugDialogue } from "./community-bug-dialogue";
-import { bugCandidate, type ParsedBugReport, storedBugFields } from "./community-bug-facts";
+import {
+  bugCandidate,
+  bugFieldsForDatabase,
+  containsSensitiveBugText,
+  type ParsedBugReport,
+  redactBugDbText,
+  storedBugFields,
+} from "./community-bug-facts";
 import { randomBugIdentity, writeBugPrivateObject } from "./community-bug-private";
 import { confirmBugReport, continueBugReport } from "./community-bug-session";
 import {
@@ -15,7 +23,7 @@ import { CommunityBugStore } from "./community-bug-store";
 import type { BugDraft } from "./community-bug-types";
 import { type CommunityContext, post } from "./community-runtime";
 import { InputError } from "./input";
-import { NeonStore } from "./store";
+import { NeonStore, StoreError } from "./store";
 
 export {
   confirmBugReport,
@@ -45,54 +53,64 @@ async function startBugReport(
     now: new Date().toISOString(),
   });
   if (dialogue.status === "confirmed") throw new InputError("이미 확인된 제보예요.");
-  const encrypted = await writeBugPrivateObject(context, bugId, 1, parsed);
+  const privateIncident =
+    (dialogue.packet.impact.status === "known" &&
+      dialogue.packet.impact.value === "security_privacy") ||
+    parsed.messages.some((message) => containsSensitiveBugText(message.text));
+  const databaseFields = bugFieldsForDatabase(storedBugFields(dialogue.packet), privateIncident);
   const store = new CommunityBugStore(new NeonStore(context.env.DATABASE_URL));
+  const encrypted = await writeBugPrivateObject(context, bugId, 1, parsed);
+  const createInput = {
+    ...encrypted,
+    bugId,
+    teamId: context.scope.teamId,
+    publicAlias: randomBugIdentity("B"),
+    reporterId: context.scope.userId,
+    source: "slack" as const,
+    sourceOpaqueRef: source.opaqueRef,
+    sourceChannelId: context.scope.channelId,
+    sourceThread: context.thread,
+    idempotencyKey: `slack:${context.scope.teamId}:${context.scope.channelId}:${context.source}`,
+    sanitizedFields: {
+      title: privateIncident
+        ? "비공개 버그 제보"
+        : dialogue.packet.actual.status === "known"
+          ? redactBugDbText(dialogue.packet.actual.value).slice(0, 160)
+          : "Slack 버그 제보",
+      ...databaseFields,
+      privacy: privateIncident,
+    },
+  };
   let draft: BugDraft;
   try {
-    draft = await store.createDraft({
-      ...encrypted,
-      bugId,
-      teamId: context.scope.teamId,
-      publicAlias: randomBugIdentity("B"),
-      reporterId: context.scope.userId,
-      source: "slack",
-      sourceOpaqueRef: source.opaqueRef,
-      sourceChannelId: context.scope.channelId,
-      sourceThread: context.thread,
-      idempotencyKey: `slack:${context.scope.teamId}:${context.scope.channelId}:${context.source}`,
-      sanitizedFields: {
-        title:
-          dialogue.packet.actual.status === "known"
-            ? dialogue.packet.actual.value.slice(0, 160)
-            : "Slack 버그 제보",
-        ...storedBugFields(dialogue.packet),
-        privacy:
-          dialogue.packet.impact.status === "known" &&
-          dialogue.packet.impact.value === "security_privacy",
-      },
-    });
+    draft = await store.createDraft(createInput);
   } catch (error) {
-    await context.env.BUG_PRIVATE_OBJECTS?.delete(encrypted.opaqueRef);
-    throw error;
+    try {
+      draft = await store.createDraft(createInput);
+    } catch (reconciliationError) {
+      if (
+        error instanceof StoreError &&
+        reconciliationError instanceof StoreError &&
+        error.code === "access" &&
+        reconciliationError.code === "access"
+      ) {
+        await context.env.BUG_PRIVATE_OBJECTS?.delete(encrypted.opaqueRef);
+      }
+      throw error;
+    }
   }
   if (draft.bugId !== bugId) await context.env.BUG_PRIVATE_OBJECTS?.delete(encrypted.opaqueRef);
-  if (
-    dialogue.packet.impact.status === "known" &&
-    dialogue.packet.impact.value === "security_privacy"
-  ) {
-    await store.transition({
-      bugId: draft.bugId,
-      toState: "private_incident",
-      actors: ["deterministic_worker"],
-      guard: { privacyOrSecurity: true },
-      evidence: { intakeDigest: encrypted.objectDigest },
-      expectedRevision: draft.revision,
-      idempotencyKey: `private:${context.key}`,
-    });
-    await deliverBugHandoff(context, {
+  if (privateIncident) {
+    await deliverPrivateBugOutbox(context, {
       bugId: draft.bugId,
       reporterId: context.scope.userId,
       packetRevision: draft.packetRevision,
+    });
+    const observedAt = Date.now();
+    await armBugDeliveryClock(context.env, {
+      reason: "due",
+      observedAt,
+      nextDue: observedAt + 1_000,
     });
     return draft;
   }
@@ -124,6 +142,12 @@ async function startBugReport(
     },
     expectedRevision: draft.revision,
     idempotencyKey: `question:${context.key}`,
+  });
+  const observedAt = Date.now();
+  await armBugDeliveryClock(context.env, {
+    reason: "due",
+    observedAt,
+    nextDue: observedAt + 86_400_000,
   });
   await deliverBugQuestion(context, {
     bugId: draft.bugId,

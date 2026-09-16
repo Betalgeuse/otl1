@@ -26,24 +26,7 @@ const OPTION_LABELS = {
 } as const;
 
 function optionLabel(value: string): string {
-  switch (value) {
-    case "always":
-      return OPTION_LABELS.always;
-    case "sometimes":
-      return OPTION_LABELS.sometimes;
-    case "once":
-      return OPTION_LABELS.once;
-    case "inconvenience":
-      return OPTION_LABELS.inconvenience;
-    case "blocked":
-      return OPTION_LABELS.blocked;
-    case "wrong_data":
-      return OPTION_LABELS.wrong_data;
-    case "security_privacy":
-      return OPTION_LABELS.security_privacy;
-    default:
-      return value;
-  }
+  return Object.entries(OPTION_LABELS).find(([key]) => key === value)?.[1] ?? value;
 }
 
 export function bugQuestionPayload(
@@ -53,7 +36,15 @@ export function bugQuestionPayload(
   packetRevision: number,
   question: BugQuestion,
 ) {
-  if (question.kind === "free_text") return { text: escapeSlackText(question.text) };
+  const identity = {
+    type: "context",
+    elements: [{ type: "plain_text", text: `버그 키: ${bugId}` }],
+  };
+  if (question.kind === "free_text")
+    return {
+      text: escapeSlackText(question.text),
+      blocks: [{ type: "section", text: { type: "plain_text", text: question.text } }, identity],
+    };
   return {
     text: escapeSlackText(question.text),
     blocks: [
@@ -75,6 +66,7 @@ export function bugQuestionPayload(
           }),
         })),
       },
+      identity,
     ],
   };
 }

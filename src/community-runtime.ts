@@ -1,4 +1,4 @@
-import type { ClockBinding } from "./community-clock";
+import type { ClockBinding } from "./community-bug-clock-client";
 import { callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
 import type { CommunityScope } from "./community-types";

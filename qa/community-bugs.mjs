@@ -9,18 +9,25 @@ const {
   isBugReportMessage,
   openBugReportModal,
   parseBugReportModal,
+  replayBugDelivery,
+  submitBugReportModal,
 } = await import("../src/community-bugs.ts");
 const { communityInteraction } = await import("../src/community-interactions.ts");
 const { runDueBugDeliveries } = await import("../src/community-bug-delivery-scheduler.ts");
 const { communityCron } = await import("../src/community-cron.ts");
 const { bugQuestionForField } = await import("../src/community-bug-delivery.ts");
 const { bugQuestionPayload } = await import("../src/community-bug-slack.ts");
+const { bugPrivateAdditionalData, writeBugPrivateObject } = await import(
+  "../src/community-bug-private.ts"
+);
+const { redactBugDbText } = await import("../src/community-bug-facts.ts");
 const { handleRequest } = await import("../src/index.ts");
 const { sign } = await import("../src/signing.ts");
 
 const calls = [];
 const objects = new Map();
 const bugClaims = new Map();
+const answerClaims = new Map();
 const bugRows = new Map();
 const recordClaims = new Set();
 const transitions = new Map();
@@ -32,9 +39,49 @@ let forcedSlackError = null;
 let forcedSlackPath = "chat.postMessage";
 let forcedSlackStatus = 200;
 let forcedRetryAfter = null;
+let loseDraftResponseOnce = false;
+let loseAnswerResponseOnce = false;
+let rejectDraftAccess = false;
+let failPrivateReconciliation = false;
+let bugSchedulerFilter = null;
+let acceptedSlackResponseLossOnce = false;
+const acceptedSlackMessages = [];
 const originalFetch = globalThis.fetch;
 const keyBytes = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
 const key = btoa(String.fromCharCode(...keyBytes));
+
+function decodeBase64(value) {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+}
+
+async function decryptBugPrivateObject(objectMap, envelope, bugId, revision, schemaVersion) {
+  const additionalData = bugPrivateAdditionalData(
+    bugId,
+    revision,
+    schemaVersion,
+    envelope.kekVersion,
+  );
+  const kek = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, [
+    "unwrapKey",
+  ]);
+  const [envelopeNonce, wrapped] = envelope.envelopeDek.split(".");
+  const dek = await crypto.subtle.unwrapKey(
+    "raw",
+    decodeBase64(wrapped),
+    kek,
+    { name: "AES-GCM", iv: decodeBase64(envelopeNonce), additionalData },
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"],
+  );
+  const body = objectMap.get(envelope.opaqueRef);
+  const cleartext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: decodeBase64(envelope.nonce), additionalData },
+    dek,
+    body,
+  );
+  return JSON.parse(new TextDecoder().decode(cleartext));
+}
 const env = {
   COMMUNITY_ENABLED: "true",
   SLACK_TEAM_ID: "TQA",
@@ -125,15 +172,19 @@ globalThis.fetch = async (url, options) => {
         return Response.json({ rows: [[JSON.stringify(available)]] });
       }
       if (operation === "finish_record") return Response.json({ rows: [["true"]] });
+      if (operation === "due") return Response.json({ rows: [["[]"]] });
       throw new Error(`unexpected community operation: ${operation}`);
     }
     if (query.includes("bug_create_draft")) {
       const input = JSON.parse(body.params[0]);
+      const privateAtomic =
+        query.includes("bug_create_draft_atomic") && input.sanitizedFields.privacy === true;
+      if (rejectDraftAccess) return Response.json({ code: "42501" }, { status: 403 });
       const existing = bugClaims.get(input.idempotencyKey);
       const draft = existing ?? {
         bug_id: input.bugId,
-        state: "new",
-        revision: 0,
+        state: privateAtomic ? "private_incident" : "new",
+        revision: privateAtomic ? 1 : 0,
         packet_revision: 1,
         public_alias: input.publicAlias,
       };
@@ -143,11 +194,13 @@ globalThis.fetch = async (url, options) => {
         bugRows.set(input.bugId, {
           bugId: input.bugId,
           teamId: input.teamId,
-          state: "new",
-          revision: 0,
+          state: privateAtomic ? "private_incident" : "new",
+          revision: privateAtomic ? 1 : 0,
           packetRevision: 1,
           reporterId: input.reporterId,
-          sanitizedFields: input.sanitizedFields,
+          sanitizedFields: privateAtomic
+            ? { privacy: true, objectDigest: input.objectDigest }
+            : input.sanitizedFields,
           source: {
             kind: input.source,
             opaqueRef: input.sourceOpaqueRef,
@@ -169,10 +222,142 @@ globalThis.fetch = async (url, options) => {
           },
           questions: [],
         });
+        if (privateAtomic)
+          for (const [deliveryKind, destination, templateId] of [
+            ["receipt", "reporter_ephemeral", "receipt.private.v1"],
+            ["admin_handoff", "admin_channel", "admin_handoff.private.v1"],
+          ]) {
+            const deliveryKey = `${input.bugId}:1:${deliveryKind}:${destination}`;
+            deliveries.set(deliveryKey, {
+              deliveryId: ++deliverySequence,
+              deliveryKey,
+              deliveryKind,
+              teamId: input.teamId,
+              bugId: input.bugId,
+              packetRevision: 1,
+              questionId: null,
+              destination,
+              templateId,
+              fieldName: null,
+              rendererVersion: deliveryKind === "receipt" ? "bug-receipt.v1" : "bug-handoff.v1",
+              status: "pending",
+              attempts: 0,
+              notBefore: new Date().toISOString(),
+              retryAfter: null,
+              lastErrorCode: null,
+              messageTs: null,
+              workerId: null,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            });
+          }
+      }
+      if (loseDraftResponseOnce) {
+        loseDraftResponseOnce = false;
+        throw new TypeError("simulated committed response loss");
       }
       return Response.json({
         rows: [[JSON.stringify(draft)]],
       });
+    }
+    if (query.includes("bug_reconcile_private_incidents")) {
+      const input = JSON.parse(body.params[0]);
+      assert.equal(input.teamId, "TQA");
+      if (failPrivateReconciliation) throw new TypeError("simulated private reconciliation outage");
+      let reconciled = 0;
+      for (const row of bugRows.values()) {
+        if (
+          reconciled >= input.limit ||
+          row.teamId !== input.teamId ||
+          !["new", "needs_info"].includes(row.state) ||
+          (row.sanitizedFields.privacy !== true &&
+            row.sanitizedFields.impact !== "security_privacy")
+        )
+          continue;
+        row.state = "private_incident";
+        row.revision += 1;
+        row.sanitizedFields = { privacy: true, objectDigest: row.currentRevision.objectDigest };
+        for (const [deliveryKind, destination, templateId] of [
+          ["receipt", "reporter_ephemeral", "receipt.private.v1"],
+          ["admin_handoff", "admin_channel", "admin_handoff.private.v1"],
+        ]) {
+          const deliveryKey = `${row.bugId}:${row.packetRevision}:${deliveryKind}:${destination}`;
+          if (deliveries.has(deliveryKey)) continue;
+          deliveries.set(deliveryKey, {
+            deliveryId: ++deliverySequence,
+            deliveryKey,
+            deliveryKind,
+            teamId: row.teamId,
+            bugId: row.bugId,
+            packetRevision: row.packetRevision,
+            questionId: null,
+            destination,
+            templateId,
+            fieldName: null,
+            rendererVersion: deliveryKind === "receipt" ? "bug-receipt.v1" : "bug-handoff.v1",
+            status: "pending",
+            attempts: 0,
+            notBefore: input.now,
+            retryAfter: null,
+            lastErrorCode: null,
+            messageTs: null,
+            workerId: null,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          });
+        }
+        reconciled += 1;
+      }
+      return Response.json({ rows: [[JSON.stringify(reconciled)]] });
+    }
+    if (query.includes("bug_expire_due_intakes")) {
+      const input = JSON.parse(body.params[0]);
+      let expired = 0;
+      for (const row of bugRows.values()) {
+        if (
+          expired >= input.limit ||
+          (bugSchedulerFilter !== null && row.bugId !== bugSchedulerFilter) ||
+          row.state !== "needs_info" ||
+          (row.questions.length < 5 &&
+            (!row.needsInfoStartedAt ||
+              Date.parse(row.needsInfoStartedAt) + 86_400_000 > Date.parse(input.now)))
+        )
+          continue;
+        row.state = "needs_info_exhausted";
+        row.revision += 1;
+        statusSequence.push("needs_info_exhausted");
+        for (const [deliveryKind, destination, templateId] of [
+          ["receipt", "reporter_ephemeral", "receipt.exhausted.v1"],
+          ["admin_handoff", "admin_channel", "admin_handoff.exhausted.v1"],
+        ]) {
+          const deliveryKey = `${row.bugId}:${row.packetRevision}:${deliveryKind}:${destination}`;
+          if (deliveries.has(deliveryKey)) continue;
+          deliveries.set(deliveryKey, {
+            deliveryId: ++deliverySequence,
+            deliveryKey,
+            deliveryKind,
+            teamId: row.teamId,
+            bugId: row.bugId,
+            packetRevision: row.packetRevision,
+            questionId: null,
+            destination,
+            templateId,
+            fieldName: null,
+            rendererVersion: deliveryKind === "receipt" ? "bug-receipt.v1" : "bug-handoff.v1",
+            status: "pending",
+            attempts: 0,
+            notBefore: input.now,
+            retryAfter: null,
+            lastErrorCode: null,
+            messageTs: null,
+            workerId: null,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          });
+        }
+        expired += 1;
+      }
+      return Response.json({ rows: [[JSON.stringify(expired)]] });
     }
     if (query.includes("bug_find_active_draft")) {
       const input = JSON.parse(body.params[0]);
@@ -193,6 +378,11 @@ globalThis.fetch = async (url, options) => {
     if (query.includes("bug_answer_revision")) {
       const input = JSON.parse(body.params[0]);
       const row = bugRows.get(input.bugId);
+      const existingRevision = answerClaims.get(input.idempotencyKey);
+      if (existingRevision !== undefined)
+        return Response.json({
+          rows: [[JSON.stringify({ packet_revision: existingRevision })]],
+        });
       row.packetRevision += 1;
       row.sanitizedFields = input.sanitizedFields;
       row.currentRevision = {
@@ -213,6 +403,44 @@ globalThis.fetch = async (url, options) => {
       question.answerOpaqueRef = input.answerOpaqueRef;
       question.answerPacketRevision = row.packetRevision;
       question.completeness = input.completeness;
+      if (query.includes("bug_answer_revision_atomic") && input.privacy === true) {
+        row.state = "private_incident";
+        row.revision += 1;
+        row.sanitizedFields = { privacy: true, objectDigest: input.objectDigest };
+        for (const [deliveryKind, destination, templateId] of [
+          ["receipt", "reporter_ephemeral", "receipt.private.v1"],
+          ["admin_handoff", "admin_channel", "admin_handoff.private.v1"],
+        ]) {
+          const deliveryKey = `${row.bugId}:${row.packetRevision}:${deliveryKind}:${destination}`;
+          deliveries.set(deliveryKey, {
+            deliveryId: ++deliverySequence,
+            deliveryKey,
+            deliveryKind,
+            teamId: row.teamId,
+            bugId: row.bugId,
+            packetRevision: row.packetRevision,
+            questionId: null,
+            destination,
+            templateId,
+            fieldName: null,
+            rendererVersion: deliveryKind === "receipt" ? "bug-receipt.v1" : "bug-handoff.v1",
+            status: "pending",
+            attempts: 0,
+            notBefore: new Date().toISOString(),
+            retryAfter: null,
+            lastErrorCode: null,
+            messageTs: null,
+            workerId: null,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          });
+        }
+      }
+      answerClaims.set(input.idempotencyKey, row.packetRevision);
+      if (loseAnswerResponseOnce) {
+        loseAnswerResponseOnce = false;
+        throw new TypeError("simulated committed answer response loss");
+      }
       return Response.json({ rows: [[JSON.stringify({ packet_revision: row.packetRevision })]] });
     }
     if (query.includes("bug_confirm_packet")) {
@@ -281,9 +509,12 @@ globalThis.fetch = async (url, options) => {
       const claimed = [...deliveries.values()]
         .filter(
           (delivery) =>
-            delivery.status === "failed" &&
+            (bugSchedulerFilter === null || delivery.bugId === bugSchedulerFilter) &&
             delivery.attempts < 3 &&
-            Date.parse(delivery.retryAfter) <= Date.parse(input.now),
+            ((delivery.status === "pending" &&
+              Date.parse(delivery.notBefore) <= Date.parse(input.now)) ||
+              (delivery.status === "failed" &&
+                Date.parse(delivery.retryAfter) <= Date.parse(input.now))),
         )
         .slice(0, input.limit)
         .map((delivery) => {
@@ -382,6 +613,15 @@ globalThis.fetch = async (url, options) => {
         headers: forcedRetryAfter === null ? {} : { "Retry-After": forcedRetryAfter },
       },
     );
+  if (target.includes("slack.com/api/conversations.replies"))
+    return Response.json({ ok: true, messages: acceptedSlackMessages });
+  if (target.includes("slack.com/api/conversations.history"))
+    return Response.json({ ok: true, messages: acceptedSlackMessages });
+  if (acceptedSlackResponseLossOnce && target.includes("slack.com/api/chat.postMessage")) {
+    acceptedSlackResponseLossOnce = false;
+    acceptedSlackMessages.push({ ...body, ts: "20.000099", bot_id: "BQA" });
+    throw new TypeError("simulated accepted Slack response loss");
+  }
   return Response.json({ ok: true, ts: "20.000001", message_ts: "20.000001", view: { id: "V1" } });
 };
 
@@ -458,6 +698,52 @@ try {
     calls.slice(duplicateStart).filter((call) => call.target.includes("slack.com/api/")).length,
     0,
     "duplicate event must not repeat the clarification",
+  );
+
+  const ambiguousContext = {
+    ...context,
+    source: "10.100002",
+    thread: "10.100001",
+    key: "incoming:10.100002",
+  };
+  loseDraftResponseOnce = true;
+  await handleBugReportMessage(ambiguousContext, "버그: 응답이 사라졌어요");
+  const ambiguousDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:10.100001",
+  );
+  assert.notEqual(ambiguousDraft, undefined);
+  assert.equal(
+    objects.has(ambiguousDraft.currentRevision.latestOpaqueRef),
+    true,
+    "commit plus lost response must preserve the referenced ciphertext",
+  );
+  assert.equal(
+    [...objects.keys()].filter((objectKey) => objectKey.startsWith(`bugs/${ambiguousDraft.bugId}/`))
+      .length,
+    1,
+    "ambiguous replay must leave one referenced ciphertext and no duplicate object",
+  );
+  assert.equal(
+    [...bugRows.values()].filter((row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:10.100001")
+      .length,
+    1,
+    "ambiguous replay must keep one ledger row",
+  );
+
+  const objectsBeforeRejectedDraft = objects.size;
+  rejectDraftAccess = true;
+  await assert.rejects(
+    handleBugReportMessage(
+      { ...context, source: "10.200002", thread: "10.200001", key: "incoming:10.200002" },
+      "버그: 저장 권한이 없어요",
+    ),
+    /Database access/,
+  );
+  rejectDraftAccess = false;
+  assert.equal(
+    objects.size,
+    objectsBeforeRejectedDraft,
+    "definite rejection must delete ciphertext",
   );
 
   calls.length = 0;
@@ -664,7 +950,11 @@ try {
   assert.equal(await handleBugReportMessage(securityContext, "버그: 개인정보가 노출됐어요"), true);
   const securitySlack = calls.filter((call) => call.target.includes("slack.com/api/"));
   assert.deepEqual(
-    securitySlack.map((call) => [call.target.split("/").at(-1), call.body.channel, call.body.user]),
+    securitySlack.map((call) => [
+      call.target.split("/").at(-1),
+      call.body.channel,
+      call.body.user,
+    ]),
     [
       ["chat.postEphemeral", "CPUBLIC", "UMEMBER"],
       ["chat.postMessage", "CADMIN", undefined],
@@ -682,9 +972,563 @@ try {
       .filter((item) => item.bugId === securityDraft.bugId)
       .map((item) => [item.deliveryKind, item.destination, item.status]),
     [
-      ["admin_handoff", "reporter_ephemeral", "sent"],
+      ["receipt", "reporter_ephemeral", "sent"],
       ["admin_handoff", "admin_channel", "sent"],
     ],
+  );
+  const partialPrivate = {
+    ...securityDraft,
+    bugId: "BUG-PARTIALPRIVATE020",
+    state: "new",
+    revision: 0,
+    sanitizedFields: { privacy: true, actual: "비공개 버그 제보", impact: "security_privacy" },
+    source: { ...securityDraft.source, opaqueRef: "slack:TQA:CPUBLIC:12.050001", thread: "12.050001" },
+    questions: [],
+  };
+  bugRows.set(partialPrivate.bugId, partialPrivate);
+  calls.length = 0;
+  assert.equal(
+    await replayBugDelivery({
+      ...context,
+      source: "12.050002",
+      thread: "12.050001",
+      key: "incoming:12.050002",
+    }),
+    true,
+  );
+  assert.equal(
+    calls.some(
+      (call) =>
+        call.target.endsWith("chat.postMessage") &&
+        call.body.channel === "CPUBLIC",
+    ),
+    false,
+    "privacy-marked partial replay must never render a normal summary or question",
+  );
+  assert.deepEqual(
+    calls
+      .filter((call) => call.target.includes("slack.com/api/"))
+      .map((call) => [call.target.split("/").at(-1), call.body.channel]),
+    [
+      ["chat.postEphemeral", "CPUBLIC"],
+      ["chat.postMessage", "CADMIN"],
+    ],
+    "privacy-marked partial replay must use only private receipt and handoff",
+  );
+
+  calls.length = 0;
+  const privateCanary = "CANARY_PRIVATE_9f83";
+  const privateContext = {
+    ...context,
+    source: "12.100002",
+    thread: "12.100001",
+    key: "incoming:12.100002",
+  };
+  loseDraftResponseOnce = true;
+  await handleBugReportMessage(
+    privateContext,
+    `버그: token=${privateCanary} user@example.com 010-1234-5678`,
+  );
+  const privateSqlPayloads = calls
+    .filter((call) => call.target.endsWith("/sql"))
+    .map((call) => call.body.params?.join(" ") ?? "")
+    .join("\n");
+  assert.equal(
+    privateSqlPayloads.includes(privateCanary),
+    false,
+    "private canary must never enter report, revision, delivery, or transition payloads",
+  );
+  assert.equal(
+    JSON.stringify([...bugRows.values(), ...deliveries.values()]).includes(privateCanary),
+    false,
+    "private canary must not remain in relational in-memory projections",
+  );
+  const privateDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.100001",
+  );
+  assert.equal(
+    [...bugRows.values()].filter(
+      (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.100001",
+    ).length,
+    1,
+    "private draft commit-response loss must reconcile to one report",
+  );
+  assert.deepEqual(
+    [...deliveries.values()]
+      .filter((delivery) => delivery.bugId === privateDraft.bugId)
+      .map((delivery) => [delivery.deliveryKind, delivery.destination, delivery.status]),
+    [
+      ["receipt", "reporter_ephemeral", "sent"],
+      ["admin_handoff", "admin_channel", "sent"],
+    ],
+    "private draft replay must dispatch its atomic outbox without duplication",
+  );
+  assert.equal(
+    calls.some((call) => call.body.query?.includes("bug_enqueue_job")),
+    false,
+    "private draft must not enqueue an agent job",
+  );
+  const privateCreate = calls.find((call) => call.body.query?.includes("bug_create_draft"));
+  const privateCreateInput = JSON.parse(privateCreate.body.params[0]);
+  const privateRaw = await decryptBugPrivateObject(
+    objects,
+    privateCreateInput,
+    privateCreateInput.bugId,
+    1,
+    "bug_intake.v1",
+  );
+  assert.equal(
+    JSON.stringify(privateRaw).includes(privateCanary),
+    true,
+    "encrypted private storage must retain the reporter's original evidence",
+  );
+  for (const sample of [
+    "password=hunter2",
+    "api_key=sk-secret",
+    "name@example.com",
+    "010-1234-5678",
+    "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----",
+  ])
+    assert.equal(
+      redactBugDbText(sample).includes("secret") ||
+        redactBugDbText(sample).includes("hunter2") ||
+        redactBugDbText(sample).includes("example.com") ||
+        redactBugDbText(sample).includes("1234-5678"),
+      false,
+      `DB boundary must redact concrete secret or PII class: ${sample.slice(0, 16)}`,
+    );
+  assert.equal(
+    calls.some(
+      (call) =>
+        call.target.endsWith("chat.postMessage") &&
+        call.body.channel === "CPUBLIC" &&
+        call.body.text?.includes("확인할 버그 초안"),
+    ),
+    false,
+    "private intake must never render the normal summary",
+  );
+
+  const privateAnswerCanary = "CANARY_PRIVATE_ANSWER_APP";
+  const privateAnswerContext = {
+    ...context,
+    source: "12.150001",
+    thread: "12.150001",
+    key: "incoming:12.150001",
+  };
+  await submitBugReportModal(privateAnswerContext, {
+    actual: { value: { value: "영향 선택 전까지는 일반 제보예요" } },
+    expected: { value: { value: "민감한 영향은 비공개로 바뀌어야 해요" } },
+    steps: { value: { value: "제보를 연다\n영향을 선택한다" } },
+    location: { value: { value: "버그 제보 스레드" } },
+    occurredAt: { value: { value: "2026-09-17T10:00:00+09:00" } },
+    frequency: { value: { selected_option: { value: "once" } } },
+    impact: { value: { selected_option: null } },
+  });
+  const privateAnswerDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.150001",
+  );
+  const privateAnswerQuestion = privateAnswerDraft.questions.find((question) => !question.answered);
+  assert.equal(privateAnswerQuestion.fieldName, "impact");
+  calls.length = 0;
+  loseAnswerResponseOnce = true;
+  await assert.rejects(
+    continueBugReport(
+      {
+        ...privateAnswerContext,
+        source: "12.150002",
+        key: "incoming:12.150002",
+      },
+      `개인정보 노출 token=${privateAnswerCanary}`,
+      privateAnswerQuestion.questionId,
+    ),
+    /committed answer response loss/,
+  );
+  assert.deepEqual(
+    [
+      privateAnswerDraft.state,
+      privateAnswerDraft.packetRevision,
+      privateAnswerDraft.sanitizedFields.privacy,
+    ],
+    ["private_incident", 2, true],
+    "private answer state and outbox must commit before the lost response",
+  );
+  const privateAnswerSql = calls
+    .filter((call) => call.target.endsWith("/sql"))
+    .map((call) => call.body.params?.join(" ") ?? "")
+    .join("\n");
+  assert.equal(privateAnswerSql.includes(privateAnswerCanary), false);
+  assert.equal(
+    calls.some((call) => call.body.query?.includes("bug_enqueue_job")),
+    false,
+    "private answer must not enqueue an agent job",
+  );
+  const privateAnswerDeliveries = [...deliveries.values()].filter(
+    (delivery) =>
+      delivery.bugId === privateAnswerDraft.bugId &&
+      ["receipt", "admin_handoff"].includes(delivery.deliveryKind),
+  );
+  assert.deepEqual(
+    privateAnswerDeliveries.map((delivery) => [
+      delivery.deliveryKind,
+      delivery.destination,
+      delivery.status,
+    ]),
+    [
+      ["receipt", "reporter_ephemeral", "pending"],
+      ["admin_handoff", "admin_channel", "pending"],
+    ],
+  );
+  bugSchedulerFilter = privateAnswerDraft.bugId;
+  calls.length = 0;
+  assert.equal(await runDueBugDeliveries(env, Date.now() + 1_000), 2);
+  bugSchedulerFilter = null;
+  assert.deepEqual(
+    privateAnswerDeliveries.map((delivery) => delivery.status),
+    ["sent", "sent"],
+    "DO recovery must dispatch both private deliveries after answer response loss",
+  );
+  assert.equal(
+    calls.filter((call) => call.target.includes("slack.com/api/")).length,
+    2,
+    "private recovery must send the reporter receipt and admin handoff",
+  );
+
+  const privateAnswerImmediateContext = {
+    ...context,
+    source: "12.160001",
+    thread: "12.160001",
+    key: "incoming:12.160001",
+  };
+  await submitBugReportModal(privateAnswerImmediateContext, {
+    actual: { value: { value: "일반 제보에서 민감한 영향을 선택해요" } },
+    expected: { value: { value: "즉시 비공개 접수되어야 해요" } },
+    steps: { value: { value: "제보를 연다\n영향을 선택한다" } },
+    location: { value: { value: "버그 제보 스레드" } },
+    occurredAt: { value: { value: "2026-09-17T10:01:00+09:00" } },
+    frequency: { value: { selected_option: { value: "once" } } },
+    impact: { value: { selected_option: null } },
+  });
+  const privateAnswerImmediateDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.160001",
+  );
+  const privateAnswerImmediateQuestion = privateAnswerImmediateDraft.questions.find(
+    (question) => !question.answered,
+  );
+  calls.length = 0;
+  assert.equal(
+    await continueBugReport(
+      {
+        ...privateAnswerImmediateContext,
+        source: "12.160002",
+        key: "incoming:12.160002",
+      },
+      "개인정보가 노출됐어요",
+      privateAnswerImmediateQuestion.questionId,
+    ),
+    true,
+  );
+  const privateAnswerImmediateInput = JSON.parse(
+    calls.find((call) => call.body.query?.includes("bug_answer_revision_atomic")).body.params[0],
+  );
+  assert.equal(privateAnswerImmediateInput.privacy, true);
+  assert.deepEqual(
+    calls
+      .filter((call) => call.target.includes("slack.com/api/"))
+      .map((call) => [call.target.split("/").at(-1), call.body.channel]),
+    [
+      ["chat.postEphemeral", "CPUBLIC"],
+      ["chat.postMessage", "CADMIN"],
+    ],
+    "successful private answer must dispatch both atomic deliveries in the same request",
+  );
+
+  const rootTs = "12.200001";
+  const bugClockArms = [];
+  const bugClockEnv = {
+    ...env,
+    COMMUNITY_CLOCK: {
+      getByName(name) {
+        assert.equal(name, "bug-delivery:TQA");
+        return {
+          async armBugDelivery(input) {
+            bugClockArms.push(input);
+            return { role: "bug_delivery", armed: true, next: input.nextDue ?? input.observedAt };
+          },
+        };
+      },
+    },
+  };
+  const rootContext = {
+    ...context,
+    env: bugClockEnv,
+    source: rootTs,
+    thread: rootTs,
+    key: `incoming:${rootTs}`,
+  };
+  calls.length = 0;
+  await submitBugReportModal(rootContext, {
+    actual: { value: { value: "루트 메시지 버튼이 무시돼요" } },
+    expected: { value: { value: "선택한 빈도가 저장돼야 해요" } },
+    steps: { value: { value: "제보를 연다\n빈도를 누른다" } },
+    location: { value: { value: "버그 제보 스레드" } },
+    occurredAt: { value: { value: "2026-09-17T09:00:00+09:00" } },
+    frequency: { value: { selected_option: null } },
+    impact: { value: { selected_option: null } },
+  });
+  const rootDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === `slack:TQA:CPUBLIC:${rootTs}`,
+  );
+  const rootQuestion = rootDraft.questions.find((question) => !question.answered);
+  assert.equal(rootQuestion.fieldName, "frequency");
+  const expiryArm = bugClockArms.find((input) => input.reason === "due");
+  assert.equal(
+    expiryArm.nextDue - expiryArm.observedAt,
+    86_400_000,
+    "a needs-info commit must arm its exact 24-hour expiry",
+  );
+  assert.equal(
+    await continueBugReport(rootContext, "항상"),
+    false,
+    "passive natural-language root messages must remain outside clarification routing",
+  );
+  const rootQuestionCall = calls.find(
+    (call) =>
+      call.target.endsWith("chat.postMessage") &&
+      call.body.thread_ts === rootTs &&
+      call.body.blocks?.[1]?.elements?.[0]?.action_id?.startsWith(
+        "community_bug_answer:frequency:",
+      ),
+  );
+  const rootAction = rootQuestionCall.body.blocks[1].elements[0];
+  const rootActionTs = String(Math.floor(Date.now() / 1000));
+  const rootActionPayload = JSON.stringify({
+    type: "block_actions",
+    team: { id: "TQA" },
+    user: { id: "UMEMBER" },
+    container: { channel_id: "CPUBLIC", message_ts: rootTs },
+    message: { ts: rootTs },
+    actions: [{ ...rootAction, action_ts: `${rootActionTs}.000001` }],
+  });
+  const rootActionBody = new URLSearchParams({ payload: rootActionPayload }).toString();
+  const rootActionSignature = await sign(`v0:${rootActionTs}:${rootActionBody}`, "signing-secret");
+  const rootEffects = [];
+  const rootActionResponse = await handleRequest(
+    new Request("https://worker.test/slack/interactions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-slack-request-timestamp": rootActionTs,
+        "x-slack-signature": `v0=${rootActionSignature}`,
+      },
+      body: rootActionBody,
+    }),
+    {
+      env: { ...env, SLACK_SIGNING_SECRET: "signing-secret" },
+      store: {},
+      invitations: {},
+    },
+    {
+      waitUntil(effect) {
+        rootEffects.push(effect);
+      },
+    },
+  );
+  assert.equal(rootActionResponse.status, 200);
+  await Promise.all(rootEffects);
+  assert.equal(
+    rootQuestion.answered,
+    true,
+    "signed enum action from a root-sourced report must answer its exact question",
+  );
+
+  const sameRevisionObjects = new Map();
+  let releasePuts;
+  const putBarrier = new Promise((resolve) => {
+    releasePuts = resolve;
+  });
+  let waitingPuts = 0;
+  const barrierContext = {
+    ...context,
+    env: {
+      ...env,
+      BUG_PRIVATE_OBJECTS: {
+        async put(objectKey, body) {
+          waitingPuts += 1;
+          if (waitingPuts === 2) releasePuts();
+          await putBarrier;
+          sameRevisionObjects.set(objectKey, new Uint8Array(body));
+        },
+        async delete(objectKey) {
+          sameRevisionObjects.delete(objectKey);
+        },
+      },
+    },
+  };
+  const [winnerEnvelope, loserEnvelope] = await Promise.all([
+    writeBugPrivateObject(barrierContext, "BUG-CONCURRENCY00000001", 7, { value: "winner" }),
+    writeBugPrivateObject(barrierContext, "BUG-CONCURRENCY00000001", 7, { value: "loser" }),
+  ]);
+  assert.notEqual(
+    winnerEnvelope.opaqueRef,
+    loserEnvelope.opaqueRef,
+    "same-revision writers must use immutable unique object refs",
+  );
+  await barrierContext.env.BUG_PRIVATE_OBJECTS.delete(loserEnvelope.opaqueRef);
+  assert.equal(
+    sameRevisionObjects.has(winnerEnvelope.opaqueRef),
+    true,
+    "loser cleanup must not delete the committed winner",
+  );
+  assert.deepEqual(
+    await decryptBugPrivateObject(
+      sameRevisionObjects,
+      winnerEnvelope,
+      "BUG-CONCURRENCY00000001",
+      7,
+      "bug_intake.v1",
+    ),
+    { value: "winner" },
+    "the committed envelope must decrypt the uniquely referenced winner",
+  );
+  for (const [aadBugId, aadRevision, aadSchema, aadEnvelope] of [
+    ["BUG-CONCURRENCY00000002", 7, "bug_intake.v1", winnerEnvelope],
+    ["BUG-CONCURRENCY00000001", 8, "bug_intake.v1", winnerEnvelope],
+    ["BUG-CONCURRENCY00000001", 7, "bug_packet.v1", winnerEnvelope],
+    ["BUG-CONCURRENCY00000001", 7, "bug_intake.v1", { ...winnerEnvelope, kekVersion: "qa-v2" }],
+  ])
+    await assert.rejects(
+      decryptBugPrivateObject(sameRevisionObjects, aadEnvelope, aadBugId, aadRevision, aadSchema),
+      "AAD must reject bug, revision, schema, or KEK metadata substitution",
+    );
+
+  calls.length = 0;
+  acceptedSlackMessages.length = 0;
+  acceptedSlackResponseLossOnce = true;
+  const acceptedContext = {
+    ...context,
+    env: bugClockEnv,
+    source: "12.300002",
+    thread: "12.300001",
+    key: "incoming:12.300002",
+  };
+  await handleBugReportMessage(acceptedContext, "버그: Slack 응답이 유실돼요");
+  const acceptedDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.300001",
+  );
+  const acceptedDelivery = [...deliveries.values()].find(
+    (item) => item.bugId === acceptedDraft.bugId && item.deliveryKind === "question",
+  );
+  assert.equal(acceptedDelivery.status, "failed");
+  assert.equal(
+    bugClockArms.some(
+      (input) =>
+        input.reason === "due" && input.nextDue === Date.parse(acceptedDelivery.retryAfter),
+    ),
+    true,
+    "a failed delivery commit must arm its exact retry deadline",
+  );
+  calls.length = 0;
+  await handleBugReportMessage(acceptedContext, "버그: Slack 응답이 유실돼요");
+  assert.equal(
+    calls.some((call) => call.target.endsWith("conversations.replies")),
+    true,
+    "persistent thread retry must reconcile the exact thread before posting",
+  );
+  assert.equal(
+    calls.filter((call) => call.target.endsWith("chat.postMessage")).length,
+    0,
+    "an already accepted exact payload must be finished without a duplicate post",
+  );
+  assert.deepEqual([acceptedDelivery.status, acceptedDelivery.messageTs], ["sent", "20.000099"]);
+
+  calls.length = 0;
+  acceptedSlackMessages.length = 0;
+  acceptedSlackResponseLossOnce = true;
+  const mismatchContext = {
+    ...context,
+    source: "12.400002",
+    thread: "12.400001",
+    key: "incoming:12.400002",
+  };
+  await handleBugReportMessage(mismatchContext, "버그: 다른 메시지는 재사용하면 안 돼요");
+  acceptedSlackMessages[0] = {
+    ...acceptedSlackMessages[0],
+    text: "다른 봇 메시지",
+  };
+  calls.length = 0;
+  await handleBugReportMessage(mismatchContext, "버그: 다른 메시지는 재사용하면 안 돼요");
+  assert.equal(
+    calls.filter((call) => call.target.endsWith("chat.postMessage")).length,
+    1,
+    "non-matching history must not be reconciled as this delivery",
+  );
+
+  calls.length = 0;
+  acceptedSlackMessages.length = 0;
+  acceptedSlackResponseLossOnce = true;
+  const unavailableHistoryContext = {
+    ...context,
+    env: bugClockEnv,
+    source: "12.450002",
+    thread: "12.450001",
+    key: "incoming:12.450002",
+  };
+  await handleBugReportMessage(unavailableHistoryContext, "버그: history 권한이 잠시 없어요");
+  const unavailableHistoryDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.450001",
+  );
+  const unavailableHistoryDelivery = [...deliveries.values()].find(
+    (item) => item.bugId === unavailableHistoryDraft.bugId,
+  );
+  forcedSlackPath = "conversations.replies";
+  forcedSlackError = "missing_scope";
+  calls.length = 0;
+  await handleBugReportMessage(unavailableHistoryContext, "버그: history 권한이 잠시 없어요");
+  assert.equal(
+    calls.filter((call) => call.target.endsWith("chat.postMessage")).length,
+    0,
+    "persistent retry must fail closed when exact-history reconciliation is unavailable",
+  );
+  assert.deepEqual(
+    [unavailableHistoryDelivery.status, unavailableHistoryDelivery.attempts],
+    ["failed", 2],
+  );
+  forcedSlackError = null;
+  forcedSlackPath = "chat.postMessage";
+
+  calls.length = 0;
+  acceptedSlackMessages.length = 0;
+  acceptedSlackResponseLossOnce = true;
+  const acceptedAdminContext = {
+    ...context,
+    source: "12.500002",
+    thread: "12.500001",
+    key: "incoming:12.500002",
+  };
+  await handleBugReportMessage(acceptedAdminContext, "버그: token=admin-secret");
+  const acceptedAdminDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.500001",
+  );
+  const acceptedAdminDeliveries = [...deliveries.values()].filter(
+    (item) => item.bugId === acceptedAdminDraft.bugId,
+  );
+  calls.length = 0;
+  await handleBugReportMessage(acceptedAdminContext, "버그: token=admin-secret");
+  acceptedSlackResponseLossOnce = false;
+  assert.equal(
+    [...deliveries.values()].filter((item) => item.bugId === acceptedAdminDraft.bugId).length,
+    acceptedAdminDeliveries.length,
+    "atomic private replay must not duplicate its durable outbox",
+  );
+  assert.equal(
+    calls.filter((call) => call.target.endsWith("chat.postMessage")).length,
+    0,
+    "private replay must reconcile the durable outbox without a duplicate Slack post",
+  );
+  assert.equal(
+    calls.some((call) => call.target.endsWith("conversations.history")),
+    true,
+    "private admin handoff replay must reconcile the durable delivery",
   );
 
   const unavailable = { ...context, env: { ...env, BUG_PRIVATE_OBJECTS: undefined } };
@@ -870,10 +1714,7 @@ try {
     await Promise.all(answerPending);
     assert.equal(question.answered, true, `${field} button must route to the pending question`);
   }
-  for (const actionId of [
-    "community_bug_answer",
-    "community_bug_answer:impact:not_allowlisted",
-  ])
+  for (const actionId of ["community_bug_answer", "community_bug_answer:impact:not_allowlisted"])
     await assert.rejects(
       () =>
         communityInteraction(
@@ -938,6 +1779,8 @@ try {
     ],
   };
   const confirmPending = [];
+  const expectedConfirmedPacketRevision = completeDraft.packetRevision + 1;
+  const confirmCallStart = calls.length;
   forcedSlackPath = "chat.postEphemeral";
   forcedSlackError = "rate_limited";
   const confirmResponse = await communityInteraction(confirmPayload, env, (effect) =>
@@ -947,6 +1790,26 @@ try {
   await Promise.all(confirmPending);
   assert.equal(completeDraft.state, "triaged", JSON.stringify(calls.slice(-6)));
   assert.equal(completeDraft.currentRevision.confirmedPacket.schemaVersion, "bug_packet.v1");
+  const confirmCall = calls
+    .slice(confirmCallStart)
+    .find((call) => call.body.query?.includes("bug_confirm_packet"));
+  const confirmInput = JSON.parse(confirmCall.body.params[0]);
+  assert.equal(confirmInput.packet.revision, expectedConfirmedPacketRevision);
+  assert.equal(
+    confirmInput.storage.evidenceObjectDigest,
+    confirmInput.storage.objectDigest,
+    "confirmation must bind semantic evidence to separate ciphertext lineage",
+  );
+  const canonicalEvidenceDigest = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(confirmInput.storage.canonicalEvidence),
+      ),
+    ),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+  assert.equal(canonicalEvidenceDigest, confirmInput.packet.evidenceDigest);
   const receiptDelivery = [...deliveries.values()].find(
     (item) => item.bugId === completeDraft.bugId && item.deliveryKind === "receipt",
   );
@@ -966,9 +1829,12 @@ try {
     summaryDelivery,
     receiptDelivery,
     ...[...deliveries.values()].filter(
-      (item) => item.bugId === securityDraft.bugId && item.deliveryKind === "admin_handoff",
+      (item) => item.bugId === securityDraft.bugId,
     ),
   ];
+  for (const delivery of deliveries.values())
+    if (!schedulerKinds.includes(delivery) && delivery.status === "pending")
+      Object.assign(delivery, { status: "sent", messageTs: "private-qa-isolation" });
   for (const delivery of schedulerKinds)
     Object.assign(delivery, {
       status: "failed",
@@ -1004,14 +1870,94 @@ try {
     },
   ]);
   assert.deepEqual(
-    schedulerKinds.map((delivery) => [delivery.deliveryKind, delivery.destination, delivery.status]),
+    schedulerKinds.map((delivery) => [
+      delivery.deliveryKind,
+      delivery.destination,
+      delivery.status,
+    ]),
     [
       ["summary", "reporter_thread", "sent"],
       ["receipt", "reporter_ephemeral", "sent"],
-      ["admin_handoff", "reporter_ephemeral", "sent"],
+      ["receipt", "reporter_ephemeral", "sent"],
       ["admin_handoff", "admin_channel", "sent"],
     ],
   );
+
+  const silentContext = {
+    ...context,
+    source: "32.000002",
+    thread: "32.000001",
+    key: "incoming:32.000002",
+  };
+  await handleBugReportMessage(silentContext, "버그: 아무 답도 하지 않았어요");
+  const silentDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:32.000001",
+  );
+  const boundary = Date.parse("2026-09-17T12:00:00Z");
+  silentDraft.needsInfoStartedAt = "2026-09-16T12:00:00Z";
+  bugSchedulerFilter = silentDraft.bugId;
+  calls.length = 0;
+  failPrivateReconciliation = true;
+  const phaseLogs = [];
+  const phaseConsoleError = console.error;
+  console.error = (line) => phaseLogs.push(JSON.parse(line));
+  try {
+    await assert.rejects(
+      () => runDueBugDeliveries(env, boundary - 1),
+      /Bug maintenance phase failed/,
+    );
+  } finally {
+    console.error = phaseConsoleError;
+    failPrivateReconciliation = false;
+  }
+  const maintenanceCalls = calls.filter((call) => call.body.query).map((call) => call.body);
+  assert.deepEqual(
+    maintenanceCalls
+      .slice(0, 3)
+      .map(
+        (body) =>
+          body.query.match(
+            /bug_(reconcile_private_incidents|expire_due_intakes|claim_due_deliveries)/,
+          )?.[1],
+      ),
+    ["reconcile_private_incidents", "expire_due_intakes", "claim_due_deliveries"],
+  );
+  for (const body of maintenanceCalls.slice(0, 3))
+    assert.equal(JSON.parse(body.params[0]).teamId, "TQA");
+  assert.deepEqual(phaseLogs, [
+    {
+      event: "community.bug.delivery.phase.failed",
+      phase: "reconcile_private",
+      scheduledTime: boundary - 1,
+      code: "boundary_failure",
+      failure: "TypeError",
+    },
+  ]);
+  assert.equal(silentDraft.state, "needs_info", "expiry must reject one millisecond early");
+  assert.equal(await runDueBugDeliveries(env, boundary), 2);
+  assert.equal(silentDraft.state, "needs_info_exhausted");
+  const silentDeliveries = [...deliveries.values()].filter(
+    (delivery) =>
+      delivery.bugId === silentDraft.bugId &&
+      ["receipt", "admin_handoff"].includes(delivery.deliveryKind),
+  );
+  assert.deepEqual(
+    silentDeliveries.map((delivery) => [
+      delivery.deliveryKind,
+      delivery.destination,
+      delivery.status,
+    ]),
+    [
+      ["receipt", "reporter_ephemeral", "sent"],
+      ["admin_handoff", "admin_channel", "sent"],
+    ],
+  );
+  assert.equal(
+    calls.some((call) => call.body.text === `추가 확인 종료 버그 인계 ${silentDraft.bugId}`),
+    true,
+  );
+  assert.equal(await runDueBugDeliveries(env, boundary), 0, "expiry replay must enqueue nothing");
+  bugSchedulerFilter = null;
   assert.equal(
     calls.some((call) => call.body.query?.includes("bug_enqueue_job")),
     false,
@@ -1200,8 +2146,23 @@ try {
   } finally {
     console.log = originalConsoleLog;
   }
-  assert.equal(calls.length, callsBeforeMaintenance, "maintenance cron must not access DB or Slack");
+  assert.equal(
+    calls.length,
+    callsBeforeMaintenance,
+    "maintenance cron must not access DB or Slack",
+  );
   assert.deepEqual(maintenanceLogs, []);
+
+  calls.length = 0;
+  await communityCron(env, scheduledTime);
+  assert.equal(
+    calls.some(
+      (call) =>
+        call.body.query?.includes("community_execute") && call.body.params?.[0] === "get_record",
+    ),
+    true,
+    "Cron backup must keep the normal community schedule independent from bug delivery",
+  );
 
   calls.length = 0;
   releaseFeedbackEnabled = true;

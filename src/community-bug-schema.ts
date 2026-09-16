@@ -112,6 +112,7 @@ export type BugDialogueResult =
   | {
       readonly status: "confirmed";
       readonly packet: ConfirmedBugPacket;
+      readonly evidence: readonly BugEvidence[];
       readonly safetyFlags: readonly BugSafetyFlag[];
     };
 
@@ -197,6 +198,15 @@ export function canonicalJson(value: unknown): string {
   return scalar;
 }
 
+export function canonicalBugEvidence(input: readonly BugEvidence[]): readonly BugEvidence[] {
+  return [...new Map(input.map((item) => [JSON.stringify(item), item])).values()].toSorted(
+    (left, right) =>
+      `${left.field}\u0000${left.messageId}\u0000${left.start}\u0000${left.end}\u0000${left.quote}`.localeCompare(
+        `${right.field}\u0000${right.messageId}\u0000${right.start}\u0000${right.end}\u0000${right.quote}`,
+      ),
+  );
+}
+
 async function sha256(value: string): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -217,13 +227,7 @@ export async function confirmedBugPacket(input: {
   ) {
     throw new TypeError("Confirmed bug packet identity is invalid");
   }
-  const evidence = [
-    ...new Map(input.evidence.map((item) => [JSON.stringify(item), item])).values(),
-  ].toSorted((left, right) =>
-    `${left.field}\u0000${left.messageId}\u0000${left.start}\u0000${left.end}\u0000${left.quote}`.localeCompare(
-      `${right.field}\u0000${right.messageId}\u0000${right.start}\u0000${right.end}\u0000${right.quote}`,
-    ),
-  );
+  const evidence = canonicalBugEvidence(input.evidence);
   const evidenceDigest = await sha256(canonicalJson(evidence));
   const unsigned = {
     schemaVersion: BUG_PACKET_VERSION,
