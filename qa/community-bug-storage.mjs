@@ -166,6 +166,12 @@ try {
   assert.equal(privateAtomicResult.privateDraftAtomic, true);
   assert.equal(privateAtomicResult.privateAnswerAtomic, true);
   assert.equal(privateAtomicResult.legacyReconcileOnce, true);
+  await psql(["-f", "migrations/021_bug_private_backfill.sql"]);
+  const freshBackfill = await psql([
+    "-Atc",
+    "SELECT otl.bug_backfill_private_incidents_021()",
+  ]);
+  assert.equal(freshBackfill.stdout.trim(), "0");
 
   const evidence = [
     {
@@ -233,6 +239,7 @@ try {
     integrity_contract: integrityResult,
     team_scope_contract: teamScopeResult,
     private_atomic_contract: privateAtomicResult,
+    fresh_private_backfill_zero: true,
     canonical_store_admission: true,
     database: "disposable-local-postgresql",
     cleanup: "complete",
