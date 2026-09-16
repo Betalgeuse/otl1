@@ -1,4 +1,18 @@
 import { DurableObject } from "cloudflare:workers";
+import {
+  BUG_DELIVERY_CLOCK_ROLE,
+  type BugDeliveryArm,
+  type BugDeliveryArmResult,
+  type ClockBinding,
+  type ClockInspection,
+  COMMUNITY_SCHEDULE_CLOCK_ROLE,
+  type GardenRequest,
+} from "./community-bug-clock-client";
+import {
+  nextBugClockAlarm,
+  readBugClockState,
+  runBugDeliveryClockAlarm,
+} from "./community-clock-bug";
 import { publishGardenNow } from "./community-garden";
 import type { CommunityEnv } from "./community-runtime";
 import { runCommunitySchedule } from "./community-scheduler";
@@ -6,29 +20,7 @@ import { CommunityStore } from "./community-store";
 import { InputError, object, string } from "./input";
 import { NeonStore } from "./store";
 
-type LastRun = {
-  readonly at: number;
-  readonly common?: number;
-  readonly personal?: number;
-  readonly failure?: string;
-};
-type ClockInspection = { readonly next: number | null; readonly lastRun: LastRun | null };
-export type GardenRequest = {
-  readonly userId: string;
-  readonly channelId: string;
-  readonly date: string;
-  readonly source: string;
-  readonly thread: string;
-  readonly key: string;
-  readonly undoKey: string | null;
-};
-export interface ClockBinding {
-  getByName(name: string): {
-    refresh(channelId: string): Promise<{ readonly next: number | null }>;
-    inspect(): Promise<ClockInspection>;
-    publishGarden(input: GardenRequest): Promise<string>;
-  };
-}
+export { armBugDeliveryClock, bugDeliveryClockName } from "./community-bug-clock-client";
 
 export function nextAlarmTime(times: readonly string[], now: number): number | null {
   if (!Number.isFinite(now)) throw new InputError("Invalid clock time");
@@ -76,6 +68,16 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
           input.userId !== this.env.COMMUNITY_ADMIN_ID)
       )
         throw new InputError("Garden scope unavailable");
+      const [role, channelId] = await Promise.all([
+        this.ctx.storage.get<string>("role"),
+        this.ctx.storage.get<string>("channel"),
+      ]);
+      if (role && role !== COMMUNITY_SCHEDULE_CLOCK_ROLE)
+        throw new InputError("Clock role cannot publish a garden");
+      if (channelId && channelId !== input.channelId)
+        throw new InputError("Clock channel cannot change");
+      await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
+      await this.ctx.storage.put("channel", input.channelId);
       return publishGardenNow(
         {
           env: this.env,
@@ -100,6 +102,50 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
     return this.serialize(() => this.refreshSchedule(channelId));
   }
 
+  armBugDelivery(input: BugDeliveryArm): Promise<BugDeliveryArmResult> {
+    return this.serialize(async () => {
+      if (
+        !Number.isFinite(input.observedAt) ||
+        (input.reason === "due" && !Number.isFinite(input.nextDue))
+      )
+        throw new InputError("Invalid clock time");
+      const [role, channelId] = await Promise.all([
+        this.ctx.storage.get<string>("role"),
+        this.ctx.storage.get<string>("channel"),
+      ]);
+      if (role && role !== BUG_DELIVERY_CLOCK_ROLE)
+        throw new InputError("Clock role cannot change");
+      if (channelId) throw new InputError("Clock channel scope cannot become global");
+      await this.ctx.storage.put("role", BUG_DELIVERY_CLOCK_ROLE);
+      const state = await readBugClockState(this.ctx.storage, input.observedAt);
+      await this.ctx.storage.put("bugSafetyDue", state.safetyDue);
+      if (input.reason === "activity") {
+        const activityDue = input.observedAt + 5 * 60 * 1_000;
+        await this.ctx.storage.put(
+          "bugActivityDue",
+          Math.min(state.activityDue ?? activityDue, activityDue),
+        );
+      }
+      if (input.reason === "due")
+        await this.ctx.storage.put(
+          "bugNextDue",
+          Math.min(state.nextDue ?? input.nextDue, input.nextDue),
+        );
+      const desired = nextBugClockAlarm(
+        await readBugClockState(this.ctx.storage, input.observedAt),
+      );
+      const alarmAt = Math.max(input.observedAt + 1_000, desired);
+      const previous = await this.ctx.storage.getAlarm();
+      if (previous === null || previous <= input.observedAt || alarmAt < previous)
+        await this.ctx.storage.setAlarm(alarmAt);
+      return {
+        role: BUG_DELIVERY_CLOCK_ROLE,
+        armed: true,
+        next: await this.ctx.storage.getAlarm(),
+      };
+    });
+  }
+
   private async refreshSchedule(channelId: string): Promise<{ readonly next: number | null }> {
     if (this.env.DATABASE_MAINTENANCE === "true") throw new InputError("Database maintenance");
     if (
@@ -107,9 +153,15 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
       !channelId
     )
       throw new InputError("Channel is outside clock scope");
-    const previousChannel = await this.ctx.storage.get<string>("channel");
+    const [role, previousChannel] = await Promise.all([
+      this.ctx.storage.get<string>("role"),
+      this.ctx.storage.get<string>("channel"),
+    ]);
+    if (role && role !== COMMUNITY_SCHEDULE_CLOCK_ROLE)
+      throw new InputError("Clock role cannot change");
     if (previousChannel && previousChannel !== channelId)
       throw new InputError("Clock channel cannot change");
+    await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
     await this.ctx.storage.put("channel", channelId);
     if (this.env.COMMUNITY_ENABLED !== "true" || !this.env.COMMUNITY_ADMIN_ID) {
       await this.ctx.storage.deleteAlarm();
@@ -152,18 +204,28 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
   async inspect(): Promise<ClockInspection> {
     return {
       next: await this.ctx.storage.getAlarm(),
-      lastRun: (await this.ctx.storage.get<LastRun>("lastRun")) ?? null,
+      role: (await this.ctx.storage.get<string>("role")) ?? null,
+      lastRun: (await this.ctx.storage.get<Readonly<Record<string, unknown>>>("lastRun")) ?? null,
     };
   }
 
   alarm(): Promise<void> {
     return this.serialize(async () => {
+      const role = await this.ctx.storage.get<string>("role");
+      const channelId = await this.ctx.storage.get<string>("channel");
+      if (role === BUG_DELIVERY_CLOCK_ROLE) {
+        if (channelId) throw new InputError("Global clock has a channel collision");
+        await runBugDeliveryClockAlarm(this.env, this.ctx.storage, Date.now());
+        return;
+      }
+      if (role && role !== COMMUNITY_SCHEDULE_CLOCK_ROLE)
+        throw new InputError("Unsupported clock role");
       if (this.env.DATABASE_MAINTENANCE === "true") {
         await this.ctx.storage.setAlarm(Date.now() + 60_000);
         return;
       }
-      const channelId = await this.ctx.storage.get<string>("channel");
       if (!channelId) return;
+      if (!role) await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
       try {
         const now = new Date();
         if (
