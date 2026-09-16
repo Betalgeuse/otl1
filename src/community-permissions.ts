@@ -48,6 +48,7 @@ const memberActions = new Set([
   "community_reflection",
   "community_introduction",
   "community_introduction_submit",
+  "community_introduction_directory",
 ]);
 
 export function authorizeCommunityAction(

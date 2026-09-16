@@ -9,12 +9,12 @@ bun install --frozen-lockfile
 bun run check
 ```
 
-`check`는 lint → TypeScript → 26개 합성 회귀 → Wrangler dry-run 순서로 실행하며 실패 시 중단합니다. 실제 배포·운영 DB·Slack 발송은 호출하지 않습니다. 테스트 목록은 `scripts/test-unit.mjs` 한 곳에서 관리하며 각 검사는 새 Bun 프로세스에서 실행합니다.
+`check`는 lint → TypeScript → 29개 합성 회귀 → Wrangler dry-run 순서로 실행하며 실패 시 중단합니다. 실제 배포·운영 DB·Slack 발송은 호출하지 않습니다. 테스트 목록은 `scripts/test-unit.mjs` 한 곳에서 관리하며 각 검사는 새 Bun 프로세스에서 실행합니다.
 
 ## 설정과 배포
 
 1. `.dev.vars.example`을 `.dev.vars`로 복사하고 로컬 값을 채웁니다. 완성된 파일은 Git에 넣지 않습니다.
-2. `wrangler.jsonc`에 본인 계정의 Worker·관리자·공개 채널·townhall·welcome 채널을 지정합니다. 관리자 채널은 비공개로 유지합니다.
+2. `wrangler.jsonc`에 본인 계정의 Worker·관리자·공개 채널·townhall·welcome·자기소개 채널을 지정합니다. 관리자 채널은 비공개로 유지합니다.
 3. `COMMUNITY_GUIDE_SOURCE_TS`에는 지정 관리자가 welcome 채널에 작성한 원본 안내글의 timestamp를 넣습니다.
 4. 서명 키, 봇 토큰, DB URL, 보드 서명 키를 Wrangler secret으로 등록합니다. 값은 명령문·문서·공개 이력에 남기지 않습니다.
 5. 앱 manifest를 생성해 Slack에 적용하고 필요한 채널에 봇을 연결합니다. 슬래시 `/one`은 사용하지 않습니다.
@@ -37,6 +37,7 @@ psql -X -v ON_ERROR_STOP=1 -f migrations/001_initial.sql -f migrations/005_commu
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/006_normalized_foundation.sql -f migrations/007_normalized_legacy.sql
 psql -X -v ON_ERROR_STOP=1 -f migrations/008_default_reminders.sql
 psql -X -v ON_ERROR_STOP=1 -f migrations/009_welcome_guides.sql -f migrations/010_first_registration.sql
+psql -X -v ON_ERROR_STOP=1 -f migrations/011_member_introductions.sql -f migrations/012_introduction_public_details.sql
 ```
 
 006·007은 반드시 한 트랜잭션으로 적용합니다. 별도 초대 정책인002~004를 일괄 실행하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
