@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://otl1.local/schemas/bug-packet.v1.json",
+  "title": "OTL1 confirmed bug packet v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "bugId", "status", "revision", "fields", "confirmation", "source", "evidenceDigest", "packetDigest"],
+  "properties": {
+    "schemaVersion": { "const": "bug_packet.v1" },
+    "bugId": { "type": "string", "pattern": "^BUG-[A-Z0-9]{8,32}$" },
+    "status": { "const": "confirmed" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actual", "expected", "steps", "location", "occurredAt", "frequency", "impact"],
+      "properties": {
+        "actual": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "expected": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "steps": { "type": "array", "minItems": 2, "maxItems": 50, "items": { "type": "string", "minLength": 1, "maxLength": 2000 } },
+        "location": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "occurredAt": { "type": "string", "format": "date-time", "pattern": "(?:Z|[+-]09:00)$" },
+        "frequency": { "enum": ["always", "sometimes", "once"] },
+        "impact": { "enum": ["inconvenience", "blocked", "wrong_data", "security_privacy"] }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reporterConfirmed", "confirmedAt"],
+      "properties": {
+        "reporterConfirmed": { "const": true },
+        "confirmedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "opaqueRef"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "opaqueRef": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    },
+    "evidenceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "packetDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

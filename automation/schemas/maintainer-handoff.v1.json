@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://otl1.local/schemas/maintainer-handoff.v1.json",
+  "title": "OTL1 provider-neutral maintainer handoff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "dryRun", "mutations", "packet", "base", "execution", "prompt"],
+  "properties": {
+    "schemaVersion": { "const": "maintainer_handoff.v1" },
+    "dryRun": { "const": true },
+    "mutations": { "type": "array", "maxItems": 0 },
+    "packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "bugId", "revision", "packetDigest", "evidenceDigest"],
+      "properties": {
+        "schemaVersion": { "const": "bug_packet.v1" },
+        "bugId": { "type": "string" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "packetDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "evidenceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "dirty", "statusDigest"],
+      "properties": {
+        "sha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+        "dirty": { "type": "boolean" },
+        "statusDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "worktree", "providers"],
+      "properties": {
+        "mode": { "const": "reproduce_plan_only" },
+        "worktree": { "const": "simulation" },
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["codex_cloud_github", "genquant_codex_switch", "slack_codex_app"] }
+        }
+      }
+    },
+    "prompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "digest", "format"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "format": { "const": "text/markdown" }
+      }
+    }
+  }
+}
