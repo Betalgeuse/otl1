@@ -57,3 +57,13 @@ export type CommunityRecord = CommunityScope & {
 };
 export type RecordKey = CommunityScope & { readonly key: string };
 export type ReminderJob = RecordKey & { readonly date: string; readonly kind: "goal" | "review" };
+export type MemberIntroduction = {
+  readonly teamId: string;
+  readonly userId: string;
+  readonly intro: string;
+  readonly linkedin: string | null;
+  readonly details: string | null;
+  readonly channelId: string | null;
+  readonly messageTs: string | null;
+  readonly revision: number;
+};

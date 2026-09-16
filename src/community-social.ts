@@ -43,13 +43,19 @@ export async function callSlack(
   if (!/^[a-z]+\.[a-zA-Z]+$/.test(method)) throw new CommunitySlackError("invalid_method");
   let response: Response;
   try {
-    const lookup = method === "users.info" || method === "emoji.list";
+    const lookup = ["users.info", "emoji.list", "conversations.members"].includes(method);
     const url = new URL(`https://slack.com/api/${method}`);
     if (method === "users.info") {
       const user = object(payload).user;
       if (typeof user !== "string") throw new CommunitySlackError("invalid_user");
       url.searchParams.set("user", user);
     }
+    if (method === "conversations.members")
+      for (const [key, value] of Object.entries(object(payload))) {
+        if (typeof value !== "string" && typeof value !== "number")
+          throw new CommunitySlackError("invalid_query");
+        url.searchParams.set(key, String(value));
+      }
     response = await fetch(url.toString(), {
       method: lookup ? "GET" : "POST",
       headers: {

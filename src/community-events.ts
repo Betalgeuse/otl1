@@ -6,6 +6,7 @@ import { enrollReminderMember } from "./community-enrollment";
 import { messageDate } from "./community-followup";
 import { deliverWelcomeGuide } from "./community-guide";
 import { incomingMessageBody } from "./community-intake";
+import { handleIntroductionChannelMessage } from "./community-introduction-channel";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
@@ -38,6 +39,7 @@ export async function handleCommunityEvent(
     return false;
   const event = messageEvent(object(data.event));
   if (await deliverWelcomeGuide(event, env)) return true;
+  if (await handleIntroductionChannelMessage(event, env)) return true;
   await enrollReminderMember(event, env);
   if (await welcomeTownhallMember(event, env)) return true;
   if (

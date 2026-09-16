@@ -4,6 +4,7 @@ import { openSettings, openShoutout, readSettings, stopSettings } from "./commun
 import { enablePublicSchedule } from "./community-cutover";
 import { confirmedRecordEdit } from "./community-edits";
 import { introductionModal, parseIntroduction, submitIntroduction } from "./community-introduction";
+import { showIntroductionDirectory } from "./community-introduction-channel";
 import { escapeSlackText } from "./community-messages";
 import { openCommunityPalette, submitCommunityPalette } from "./community-palette";
 import { authorizeCommunityAction } from "./community-permissions";
@@ -64,7 +65,10 @@ export async function communityInteraction(
       const parsed = parseIntroduction(object(view.state).values);
       if ("errors" in parsed)
         return Response.json({ response_action: "errors", errors: parsed.errors });
-      waitUntil(submitIntroduction(context, string(view.id), parsed));
+      const revision = Number(metadata?.revision);
+      if (!Number.isSafeInteger(revision) || revision < 0)
+        throw new InputError("자기소개 버전을 확인할 수 없어요.");
+      waitUntil(submitIntroduction(context, string(view.id), parsed, revision));
       return Response.json({ response_action: "clear" });
     }
     if (id === "community_palette_submit") return submitCommunityPalette(context, view, waitUntil);
@@ -122,7 +126,11 @@ export async function communityInteraction(
   const value = object(JSON.parse(string(selected)));
   const ownerId = string(value.ownerId);
   const key = string(value.key);
-  if (id !== "community_shoutout" && ownerId !== scope.userId)
+  const resolvedOwnerId = ownerId === "actor" ? scope.userId : ownerId;
+  if (
+    !["community_shoutout", "community_introduction_directory"].includes(id) &&
+    resolvedOwnerId !== scope.userId
+  )
     throw new InputError("본인 기록만 변경할 수 있어요.");
   if (value.thread !== undefined || value.source !== undefined) {
     const thread = string(value.thread);
@@ -145,6 +153,19 @@ export async function communityInteraction(
   }
   if (id === "community_introduction") {
     await introductionModal(context, string(data.trigger_id));
+    return new Response(null, { status: 200 });
+  }
+  if (id === "community_introduction_directory") {
+    waitUntil(
+      showIntroductionDirectory(context).catch((error: unknown) =>
+        console.error(
+          JSON.stringify({
+            event: "community.introduction_directory.failed",
+            type: error instanceof Error ? error.name : "Unknown",
+          }),
+        ),
+      ),
+    );
     return new Response(null, { status: 200 });
   }
   waitUntil(

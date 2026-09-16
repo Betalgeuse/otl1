@@ -6,6 +6,7 @@ import type {
   DayChange,
   DayScope,
   GroupSchedule,
+  MemberIntroduction,
   Outcome,
   PreferencePatch,
   RecordKey,
@@ -72,10 +73,33 @@ function record(value: Json): CommunityRecord | null {
   return { ...scope(v), key: string(v.key), kind: string(v.kind), status: string(v.status), body };
 }
 
+function introduction(value: unknown): MemberIntroduction | null {
+  if (value === null) return null;
+  const v = object(value);
+  if (typeof v.revision !== "number" || !Number.isSafeInteger(v.revision))
+    throw new InputError("Invalid introduction revision");
+  return {
+    teamId: string(v.teamId),
+    userId: string(v.userId),
+    intro: string(v.intro),
+    linkedin: v.linkedin === null ? null : string(v.linkedin),
+    details: v.details === null ? null : string(v.details),
+    channelId: v.channelId === null ? null : string(v.channelId),
+    messageTs: v.messageTs === null ? null : string(v.messageTs),
+    revision: v.revision,
+  };
+}
+
 export class CommunityStore {
   constructor(private readonly db: Pick<NeonStore, "queryJson">) {}
   private call(operation: string, payload: Json): Promise<Json> {
     return this.db.queryJson("SELECT otl.community_execute($1,$2::jsonb)", [
+      operation,
+      JSON.stringify(payload),
+    ]);
+  }
+  private introductionCall(operation: string, payload: Json): Promise<Json> {
+    return this.db.queryJson("SELECT otl.introduction_execute($1,$2::jsonb)", [
       operation,
       JSON.stringify(payload),
     ]);
@@ -106,6 +130,39 @@ export class CommunityStore {
       if (!result) throw new InputError("Record missing");
       return result;
     });
+  }
+  async introduction(teamId: string, userId: string): Promise<MemberIntroduction | null> {
+    return introduction(await this.introductionCall("get", { teamId, userId }));
+  }
+  async introductions(teamId: string): Promise<readonly MemberIntroduction[]> {
+    return list(await this.introductionCall("list", { teamId })).map((value) => {
+      const result = introduction(value);
+      if (!result) throw new InputError("Introduction missing");
+      return result;
+    });
+  }
+  async prepareIntroduction(input: {
+    readonly teamId: string;
+    readonly userId: string;
+    readonly intro: string;
+    readonly linkedin: string | null;
+    readonly details: string | null;
+    readonly expectedRevision: number;
+    readonly token: string;
+  }): Promise<MemberIntroduction | null> {
+    return introduction(await this.introductionCall("prepare", input));
+  }
+  async finishIntroduction(input: {
+    readonly teamId: string;
+    readonly userId: string;
+    readonly token: string;
+    readonly channelId: string;
+    readonly messageTs: string;
+  }): Promise<MemberIntroduction | null> {
+    return introduction(await this.introductionCall("finish", input));
+  }
+  async abortIntroduction(teamId: string, userId: string, token: string): Promise<boolean> {
+    return bool(await this.introductionCall("abort", { teamId, userId, token }));
   }
   async change(input: DayChange): Promise<ChangeResult> {
     date(input.date);

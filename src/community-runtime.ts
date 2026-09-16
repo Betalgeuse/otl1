@@ -45,12 +45,17 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
   const channelId = data.container
     ? string(object(data.container).channel_id)
     : string(object(JSON.parse(string(object(data.view).private_metadata))).channelId);
+  const introductionAction = [
+    "community_introduction",
+    "community_introduction_submit",
+    "community_introduction_directory",
+  ].includes(actionId);
   if (
     teamId !== env.SLACK_TEAM_ID ||
     (![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) &&
       !(
-        ["community_introduction", "community_introduction_submit"].includes(actionId) &&
-        channelId === env.COMMUNITY_RELEASE_CHANNEL_ID
+        introductionAction &&
+        [env.COMMUNITY_RELEASE_CHANNEL_ID, env.COMMUNITY_INTRO_CHANNEL_ID].includes(channelId)
       )) ||
     (channelId === env.COMMUNITY_CHANNEL_ID && userId !== env.COMMUNITY_ADMIN_ID) ||
     !/^[UW][A-Z0-9]+$/.test(userId)
