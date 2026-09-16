@@ -39,7 +39,7 @@ async function history(
     context.env.SLACK_BOT_TOKEN,
     destination === "reporter_thread" ? "conversations.replies" : "conversations.history",
     destination === "reporter_thread"
-      ? { channel, ts: context.thread, limit: 100 }
+      ? { channel, ts: context.thread, limit: 15 }
       : { channel, limit: 50 },
   );
   const messages = result.messages;

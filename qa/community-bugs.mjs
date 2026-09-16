@@ -46,6 +46,8 @@ let failPrivateReconciliation = false;
 let bugSchedulerFilter = null;
 let acceptedSlackResponseLossOnce = false;
 const acceptedSlackMessages = [];
+let acceptedEphemeralResponseLossOnce = false;
+const acceptedEphemeralMessages = [];
 const originalFetch = globalThis.fetch;
 const keyBytes = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
 const key = btoa(String.fromCharCode(...keyBytes));
@@ -139,9 +141,19 @@ function postgresDeliveryRow(delivery) {
 }
 
 globalThis.fetch = async (url, options) => {
-  const target = String(url);
-  const body = JSON.parse(options.body);
-  calls.push({ target, body });
+  const requestUrl = new URL(String(url));
+  const target = `${requestUrl.origin}${requestUrl.pathname}`;
+  const body =
+    options.body === undefined
+      ? Object.fromEntries(requestUrl.searchParams.entries())
+      : JSON.parse(options.body);
+  calls.push({
+    target,
+    url: requestUrl.toString(),
+    method: options.method,
+    rawBody: options.body,
+    body,
+  });
   if (target.endsWith("/sql")) {
     const query = body.query;
     if (query.includes("community_execute")) {
@@ -622,6 +634,11 @@ globalThis.fetch = async (url, options) => {
     acceptedSlackMessages.push({ ...body, ts: "20.000099", bot_id: "BQA" });
     throw new TypeError("simulated accepted Slack response loss");
   }
+  if (acceptedEphemeralResponseLossOnce && target.includes("slack.com/api/chat.postEphemeral")) {
+    acceptedEphemeralResponseLossOnce = false;
+    acceptedEphemeralMessages.push({ ...body, message_ts: "20.000199" });
+    throw new TypeError("simulated accepted ephemeral response loss");
+  }
   return Response.json({ ok: true, ts: "20.000001", message_ts: "20.000001", view: { id: "V1" } });
 };
 
@@ -950,11 +967,7 @@ try {
   assert.equal(await handleBugReportMessage(securityContext, "버그: 개인정보가 노출됐어요"), true);
   const securitySlack = calls.filter((call) => call.target.includes("slack.com/api/"));
   assert.deepEqual(
-    securitySlack.map((call) => [
-      call.target.split("/").at(-1),
-      call.body.channel,
-      call.body.user,
-    ]),
+    securitySlack.map((call) => [call.target.split("/").at(-1), call.body.channel, call.body.user]),
     [
       ["chat.postEphemeral", "CPUBLIC", "UMEMBER"],
       ["chat.postMessage", "CADMIN", undefined],
@@ -982,7 +995,11 @@ try {
     state: "new",
     revision: 0,
     sanitizedFields: { privacy: true, actual: "비공개 버그 제보", impact: "security_privacy" },
-    source: { ...securityDraft.source, opaqueRef: "slack:TQA:CPUBLIC:12.050001", thread: "12.050001" },
+    source: {
+      ...securityDraft.source,
+      opaqueRef: "slack:TQA:CPUBLIC:12.050001",
+      thread: "12.050001",
+    },
     questions: [],
   };
   bugRows.set(partialPrivate.bugId, partialPrivate);
@@ -998,9 +1015,7 @@ try {
   );
   assert.equal(
     calls.some(
-      (call) =>
-        call.target.endsWith("chat.postMessage") &&
-        call.body.channel === "CPUBLIC",
+      (call) => call.target.endsWith("chat.postMessage") && call.body.channel === "CPUBLIC",
     ),
     false,
     "privacy-marked partial replay must never render a normal summary or question",
@@ -1047,9 +1062,8 @@ try {
     (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.100001",
   );
   assert.equal(
-    [...bugRows.values()].filter(
-      (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.100001",
-    ).length,
+    [...bugRows.values()].filter((row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.100001")
+      .length,
     1,
     "private draft commit-response loss must reconcile to one report",
   );
@@ -1429,6 +1443,26 @@ try {
   );
   calls.length = 0;
   await handleBugReportMessage(acceptedContext, "버그: Slack 응답이 유실돼요");
+  const acceptedRepliesCall = calls.find((call) =>
+    call.target.endsWith("conversations.replies"),
+  );
+  assert.deepEqual(
+    {
+      method: acceptedRepliesCall.method,
+      rawBody: acceptedRepliesCall.rawBody,
+      query: acceptedRepliesCall.body,
+    },
+    {
+      method: "GET",
+      rawBody: undefined,
+      query: {
+        channel: "CPUBLIC",
+        ts: "12.300001",
+        limit: "15",
+      },
+    },
+    "conversations.replies must use scalar query GET with no request body",
+  );
   assert.equal(
     calls.some((call) => call.target.endsWith("conversations.replies")),
     true,
@@ -1481,7 +1515,7 @@ try {
     (item) => item.bugId === unavailableHistoryDraft.bugId,
   );
   forcedSlackPath = "conversations.replies";
-  forcedSlackError = "missing_scope";
+  forcedSlackError = "invalid_arguments";
   calls.length = 0;
   await handleBugReportMessage(unavailableHistoryContext, "버그: history 권한이 잠시 없어요");
   assert.equal(
@@ -1490,8 +1524,20 @@ try {
     "persistent retry must fail closed when exact-history reconciliation is unavailable",
   );
   assert.deepEqual(
-    [unavailableHistoryDelivery.status, unavailableHistoryDelivery.attempts],
-    ["failed", 2],
+    [
+      unavailableHistoryDelivery.status,
+      unavailableHistoryDelivery.attempts,
+      unavailableHistoryDelivery.lastErrorCode,
+    ],
+    ["failed", 2, "invalid_payload"],
+  );
+  const invalidRepliesCall = calls.find((call) =>
+    call.target.endsWith("conversations.replies"),
+  );
+  assert.deepEqual(
+    [invalidRepliesCall.method, invalidRepliesCall.rawBody, invalidRepliesCall.body.limit],
+    ["GET", undefined, "15"],
+    "invalid_arguments must come from a wire-correct read and fail closed before posting",
   );
   forcedSlackError = null;
   forcedSlackPath = "chat.postMessage";
@@ -1529,6 +1575,165 @@ try {
     calls.some((call) => call.target.endsWith("conversations.history")),
     true,
     "private admin handoff replay must reconcile the durable delivery",
+  );
+  const acceptedHistoryCall = calls.find((call) =>
+    call.target.endsWith("conversations.history"),
+  );
+  assert.deepEqual(
+    [acceptedHistoryCall.method, typeof acceptedHistoryCall.rawBody],
+    ["POST", "string"],
+    "conversations.history must retain its live-proven JSON POST transport",
+  );
+
+  calls.length = 0;
+  acceptedEphemeralMessages.length = 0;
+  acceptedEphemeralResponseLossOnce = true;
+  const ephemeralResidualCanary = "CANARY_EPHEMERAL_RESIDUAL";
+  const ephemeralResidualContext = {
+    ...context,
+    env: bugClockEnv,
+    source: "12.550002",
+    thread: "12.550001",
+    key: "incoming:12.550002",
+  };
+  const ephemeralResidualLogs = [];
+  const ephemeralResidualConsoleError = console.error;
+  console.error = (line) => ephemeralResidualLogs.push(String(line));
+  try {
+    await handleBugReportMessage(
+      ephemeralResidualContext,
+      `버그: token=${ephemeralResidualCanary}`,
+    );
+  } finally {
+    console.error = ephemeralResidualConsoleError;
+  }
+  const ephemeralResidualDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.550001",
+  );
+  const ephemeralResidualDeliveries = [...deliveries.values()].filter(
+    (delivery) => delivery.bugId === ephemeralResidualDraft.bugId,
+  );
+  const ephemeralResidualDelivery = ephemeralResidualDeliveries.find(
+    (delivery) => delivery.destination === "reporter_ephemeral",
+  );
+  assert.deepEqual(
+    [
+      ephemeralResidualDelivery.status,
+      ephemeralResidualDelivery.attempts,
+      acceptedEphemeralMessages.length,
+    ],
+    ["failed", 1, 1],
+    "Slack acceptance with a lost response must remain a retryable ephemeral delivery",
+  );
+  assert.equal(
+    ephemeralResidualDelivery.deliveryKey,
+    `${ephemeralResidualDraft.bugId}:1:receipt:reporter_ephemeral`,
+  );
+  assert.equal(ephemeralResidualDeliveries.length, 2, "private outbox key set must stay stable");
+  assert.equal(
+    JSON.stringify([...bugRows.values(), ...deliveries.values(), ...calls]).includes(
+      ephemeralResidualCanary,
+    ),
+    false,
+    "ephemeral ambiguity must not leak plaintext into relational rows, delivery, or logs",
+  );
+  assert.equal(ephemeralResidualLogs.join("\n").includes(ephemeralResidualCanary), false);
+  assert.equal(
+    calls.some((call) => call.body.query?.includes("bug_enqueue_job")),
+    false,
+    "ephemeral ambiguity must not enqueue an agent job",
+  );
+  bugSchedulerFilter = ephemeralResidualDraft.bugId;
+  calls.length = 0;
+  assert.equal(
+    (await runDueBugDeliveries(env, Date.parse(ephemeralResidualDelivery.retryAfter))).deliveries
+      .claimed,
+    1,
+  );
+  bugSchedulerFilter = null;
+  const duplicateEphemeralPosts = calls.filter((call) =>
+    call.target.endsWith("chat.postEphemeral"),
+  );
+  assert.equal(duplicateEphemeralPosts.length, 1);
+  assert.deepEqual(
+    {
+      channel: duplicateEphemeralPosts[0].body.channel,
+      user: duplicateEphemeralPosts[0].body.user,
+      text: duplicateEphemeralPosts[0].body.text,
+    },
+    {
+      channel: acceptedEphemeralMessages[0].channel,
+      user: acceptedEphemeralMessages[0].user,
+      text: acceptedEphemeralMessages[0].text,
+    },
+    "the next eligible ephemeral attempt may duplicate the already accepted payload",
+  );
+  assert.deepEqual(
+    [ephemeralResidualDelivery.status, ephemeralResidualDelivery.attempts],
+    ["sent", 2],
+  );
+  assert.equal(
+    calls.some((call) => call.target.includes("conversations.")),
+    false,
+    "ephemeral delivery must not pretend Slack history can reconcile it",
+  );
+
+  calls.length = 0;
+  forcedSlackPath = "chat.postEphemeral";
+  forcedSlackError = "rate_limited";
+  const ephemeralBoundCanary = "CANARY_EPHEMERAL_MAX3";
+  const ephemeralBoundContext = {
+    ...context,
+    source: "12.560002",
+    thread: "12.560001",
+    key: "incoming:12.560002",
+  };
+  await handleBugReportMessage(ephemeralBoundContext, `버그: token=${ephemeralBoundCanary}`);
+  const ephemeralBoundDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:12.560001",
+  );
+  const ephemeralBoundDeliveries = [...deliveries.values()].filter(
+    (delivery) => delivery.bugId === ephemeralBoundDraft.bugId,
+  );
+  const ephemeralBoundDelivery = ephemeralBoundDeliveries.find(
+    (delivery) => delivery.destination === "reporter_ephemeral",
+  );
+  let ephemeralAttempts = calls.filter((call) => call.target.endsWith("chat.postEphemeral")).length;
+  bugSchedulerFilter = ephemeralBoundDraft.bugId;
+  for (let attempt = 2; attempt <= 3; attempt += 1) {
+    calls.length = 0;
+    assert.equal(
+      (await runDueBugDeliveries(env, Date.parse(ephemeralBoundDelivery.retryAfter))).deliveries
+        .claimed,
+      1,
+    );
+    ephemeralAttempts += calls.filter((call) => call.target.endsWith("chat.postEphemeral")).length;
+  }
+  calls.length = 0;
+  assert.equal((await runDueBugDeliveries(env, Date.now() + 3_600_000)).deliveries.claimed, 0);
+  bugSchedulerFilter = null;
+  forcedSlackError = null;
+  forcedSlackPath = "chat.postMessage";
+  assert.deepEqual(
+    [
+      ephemeralBoundDelivery.status,
+      ephemeralBoundDelivery.attempts,
+      ephemeralBoundDelivery.retryAfter,
+      ephemeralAttempts,
+      ephemeralBoundDeliveries.length,
+    ],
+    ["failed", 3, null, 3, 2],
+    "ephemeral at-least-once residual must stop at three attempts without duplicating outbox rows",
+  );
+  assert.equal(
+    JSON.stringify([...bugRows.values(), ...deliveries.values(), ...calls]).includes(
+      ephemeralBoundCanary,
+    ),
+    false,
+  );
+  assert.equal(
+    calls.some((call) => call.body.query?.includes("bug_enqueue_job")),
+    false,
   );
 
   const unavailable = { ...context, env: { ...env, BUG_PRIVATE_OBJECTS: undefined } };
@@ -1828,9 +2033,7 @@ try {
   const schedulerKinds = [
     summaryDelivery,
     receiptDelivery,
-    ...[...deliveries.values()].filter(
-      (item) => item.bugId === securityDraft.bugId,
-    ),
+    ...[...deliveries.values()].filter((item) => item.bugId === securityDraft.bugId),
   ];
   for (const delivery of deliveries.values())
     if (!schedulerKinds.includes(delivery) && delivery.status === "pending")
