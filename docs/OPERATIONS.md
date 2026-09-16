@@ -57,13 +57,19 @@
 
 ## 버그 제보 v0.0.54 구현 기준
 
-이 항목은 구현 기준이며 아직 배포·실제 Slack QA·운영 SLO가 없습니다. v0.0.54는 두 번째 브라우저 QA가 끝나기 전까지 pre-release입니다. 출시 뒤 `버그 제보`와 `버그: ...` 입력은 제보자 소유 초안을 시작합니다. 누락되거나 모순된 내용은 한 번에 하나씩만 묻고, 관찰하지 않은 내용은 추가하지 않습니다. 24시간 안에 다섯 질문을 넘기거나 시간이 지나면 확정하지 않고 비공개 운영자 인계 대상으로 전환합니다.
+`dbfcad048bd93a9b94d743081efc657d90a11cbf`는 명시적으로 승인된 실서비스 Slack 검증을 위해 이미 존재하던 Worker에 올린 비정규 pre-release QA 배포입니다. exact clean SHA, maintenance로 보호한 migration 014–020, Worker 활성화와 health clock arming은 영수증으로 확인했지만, private `ops/main`·ruleset readback·canonical provenance가 없으므로 정식 배포나 출시로 취급하지 않습니다. 이 배포 자체로 실제 alarm delivery나 브라우저 Slack 시나리오가 통과한 것도 아닙니다. v0.0.54는 최종 live QA와 canonical release lineage가 모두 끝날 때까지 pre-release이고 현재 운영 출시 기준은 v0.0.53입니다.
+
+출시 뒤 `버그 제보`와 `버그: ...` 입력은 제보자 소유 초안을 시작합니다. 누락되거나 모순된 내용은 한 번에 하나씩만 묻고, 관찰하지 않은 내용은 추가하지 않습니다. 24시간 안에 다섯 질문을 넘기거나 시간이 지나면 확정하지 않고 비공개 운영자 인계 대상으로 전환합니다.
 
 제보자는 초안을 확인해 `맞아요`를 눌러야 합니다. 이 확인 전에는 관리자나 자동화가 확정 패킷을 만들 수 없습니다. 보안·개인정보 징후는 공개 답글을 계속 받지 않고 `private_incident`로 분리합니다. 새 초안·답변의 비공개 전환, 관계형 원문 제거, receipt·관리자 handoff 생성은 한 DB 트랜잭션으로 커밋하며 기존 중간 상태는 팀 범위 reconciliation이 한 번만 보정합니다. 운영자는 실제 식별자, 원문, 비밀, 첨부물 또는 private object 경로를 공개 채널·공개 export·Check Run 본문에 넣지 않습니다.
 
 정규화 ledger와 `bug_jobs` outbox는 후속 재현·수정·검토·배포 작업을 기록할 수 있지만, 현재는 제공자 실행을 승인하지 않습니다. 별도의 delivery outbox는 질문·요약·접수 영수증·비공개 관리자 인계를 Slack 효과보다 먼저 기록합니다. lease를 가진 worker만 발송을 마칠 수 있고, 실패는 오류와 다음 시각을 남겨 재시도하며 세 번째 실패는 retry 없이 dead-letter `failed`로 보관합니다. 공개 채널에는 비공개 인계 원문·객체 경로를 쓰지 않습니다.
 
-버그 delivery는 팀마다 하나인 전역 `CommunityClock` 인스턴스가 활동과 정확한 재시도·24시간 만료 시각에 실행됩니다. 활동이나 실패가 계속되는 상한 모양은 5분 간격, 하루 288번 alarm이고, 대기 작업이 없으면 한 시간 안전 검사만 남도록 설계했습니다. 이 수치는 호출 모양의 상한일 뿐 실제 Neon 사용량이나 무료 범위를 증명하지 않습니다. 운영 비용은 실제 alarm invocation과 DB query 지표로 따로 측정합니다. 각 실행은 다음 alarm을 먼저 저장한 뒤 만료와 전달 재시도만 제한된 배치로 처리합니다. `*/5` Cron은 사라진 alarm을 다시 거는 backup/nudge이며 delivery SQL을 실행하지 않습니다. 전역 Durable Object alarm이 주 실행 경로입니다. GitHub Actions는 사용하지 않습니다.
+`reporter_thread`와 `admin_channel`처럼 다시 읽을 수 있는 영구 메시지는 Slack이 수락한 뒤 응답이나 DB 완료 기록을 잃어도 제한된 history에서 동일 payload를 대조해 중복 게시를 막습니다. `reporter_ephemeral`은 Slack history로 다시 읽을 수 없으므로 **at-least-once**입니다. Slack 수락 뒤 응답 또는 DB finish를 잃으면 비공개 receipt가 재시도 때 중복될 수 있습니다. 이 제한은 당사자에게만 보이는 receipt를 누락시키지 않기 위한 명시적으로 수용한 tradeoff이며, exactly-once로 표현하지 않습니다.
+
+버그 delivery는 팀마다 하나인 전역 `CommunityClock` 인스턴스가 활동과 정확한 재시도·24시간 만료 시각에 실행됩니다. private reconciliation, 만료, delivery claim 중 하나라도 한 번에 10건의 전체 batch를 채우면 `possiblyMore`로 기록하고 5분 뒤 다시 실행하며, 모든 단계가 batch보다 적어질 때까지 한 시간 idle 검사로 늦추지 않습니다. 활동·실패·미처리 backlog가 계속되는 상한 모양은 5분 간격, 하루 288번 alarm이고, 완전히 비면 한 시간 안전 검사만 남도록 설계했습니다. 이 수치는 호출 모양의 상한일 뿐 실제 Neon 사용량이나 무료 범위를 증명하지 않습니다. 운영 비용은 실제 alarm invocation과 DB query 지표로 따로 측정합니다. 각 실행은 다음 alarm을 먼저 저장한 뒤 만료와 전달 재시도만 제한된 배치로 처리합니다. `*/5` Cron은 사라진 alarm을 다시 거는 backup/nudge이며 delivery SQL을 실행하지 않습니다. 전역 Durable Object alarm이 주 실행 경로입니다. GitHub Actions는 사용하지 않습니다.
+
+비공개 reconciliation, 24시간 만료, delivery claim 중 어느 단계든 한 번에 10건을 처리하면 남은 작업이 있을 수 있다고 보고 5분 안에 다시 실행합니다. 다음 실행에서 세 단계가 모두 10건 미만이어야 한 시간 안전 검사로 돌아갑니다.
 
 일반 배포와 DB 유지보수에서는 `wrangler.jsonc`의 Cron 선언을 그대로 둡니다. `DATABASE_MAINTENANCE=true`이면 전역 시계는 alarm을 다시 걸고 DB·Slack 작업을 건너뛰며, 유지보수를 해제한 뒤 `/health`를 호출해 응답의 `bugDeliveryClock.armed=true`와 다음 시각을 확인합니다. 배포 뒤에도 같은 health arming을 확인합니다. 운영자 진단은 health 응답, `community.bug.clock.failed`·`community.cron` 로그, scheduled invocation, `bug_deliveries.attempts`와 상태 순서로 진행하며 회원 식별자나 본문을 로그에 복사하지 않습니다.
 
@@ -72,6 +78,8 @@ Cron 등록이 실제로 stale이라는 Cloudflare 설정·호출 증거가 있�
 Slack delivery 실패 로그의 `providerSubcode`는 `invalid_blocks`, `invalid_arguments`, `invalid_form_data`, `msg_too_long`, `http_429`, `provider_5xx`, `other` 중 하나만 남깁니다. 원문 응답, 메타데이터 메시지, 사용자 입력은 로그나 delivery ledger에 저장하지 않습니다.
 
 `codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app` 이름을 담은 dry-run도 무변경 계획 영수증만 만듭니다. GitHub Actions는 사용하지 않습니다. 실제 운영 체크는 격리된 GenQuant 서비스에서 실행하고 GitHub Check Run으로 게시하도록 별도 승인·연결·실제 검증을 거쳐야 합니다.
+
+pre-release QA 배포는 기존 Worker의 승인된 검증 시나리오에만 쓰며 exact clean SHA와 rollback 대상을 기록합니다. Git push·merge·release·provider 권한은 포함하지 않습니다. 정식 배포는 private `ops/main`과 활성 ruleset readback이 준비된 뒤 별도 실행합니다.
 
 ## 장애와 알려진 경계
 

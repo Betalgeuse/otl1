@@ -135,9 +135,11 @@ deployment evidence.
 
 ## Deploy and public mirror provenance
 
-The deploy workflow must deploy the merge queue result on canonical private
-`main`, never an arbitrary PR head. Every production deployment receipt stores
-these exact fields:
+Canonical release deployment must use the merge queue result on canonical
+private `main`, never an arbitrary PR head. It requires the verified `ops`
+remote, a clean `main`, active ruleset API readback, current-head review and the
+four receipt-bound GenQuant checks above. Every canonical deployment receipt
+stores these exact fields:
 
 - `canonical_sha`: merged commit from `Betalgeuse/otl1-ops` canonical `main`.
 - `public_mirror_sha`: sanitized mirror commit, when a public release mirror is
@@ -153,8 +155,41 @@ SHA, while export produces the sanitized public mirror from that same release
 input. A release is not complete until the ruleset API readback and the
 deploy/public provenance receipt are both available.
 
+### Existing-Worker pre-release QA exception
+
+Canonical release authority is separate from an explicitly authorized,
+reversible pre-release QA rollout to the already-existing Worker. This exception
+exists only to observe a narrowly named live Slack behavior before release. It
+does not make a noncanonical checkout canonical or release-ready.
+
+Such a QA rollout must satisfy all of these conditions:
+
+- explicit authorization names the live Slack scenario and existing Worker;
+- source is an exact full SHA in a clean checkout, and the receipt binds that SHA
+  to the uploaded Worker version and deployment;
+- the previous Worker version is retained as the code rollback target;
+- database changes run in declared order while maintenance blocks Slack ingress,
+  with their forward-only compatibility and final maintenance state recorded;
+- health, binding names, migration versions, scheduled-trigger preservation and
+  cleanup limits are recorded without secrets, member text or private objects;
+- no Git push, merge, public mirror publication, release announcement, provider
+  execution or canonical provenance claim is made.
+
+The rollout of `dbfcad048bd93a9b94d743081efc657d90a11cbf` is classified only
+as this noncanonical pre-release QA deployment. Its receipt proves the exact
+clean source, maintenance-guarded migrations 014–020, Worker activation and
+health arming. It does not supply an `ops/main` merge, ruleset readback,
+canonical receipt, browser Slack result or release authority. v0.0.54 therefore
+remains pre-release.
+
+Any canonical deployment or release still requires the private `ops/main`
+authority and ruleset evidence described above. The QA exception cannot be used
+to bypass, backfill or retroactively assert that lineage.
+
 ## Deferred external actions
 
 Creating `Betalgeuse/otl1-ops`, configuring GitHub Apps, applying branch rules,
-publishing a mirror, and deploying are separate authorized operations. T0 only
-documents their contract and provides the read-only local inspection command.
+publishing a mirror, and performing a canonical deployment are separate
+authorized operations. T0 only documents their contract and provides the
+read-only local inspection command. The completed pre-release QA rollout above
+does not complete any of those deferred actions.
