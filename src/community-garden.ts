@@ -72,6 +72,15 @@ export async function publishGardenNow(
       { label: "현재 상태 보기", actionId: "community_status", value: value(forDate) },
       { label: "색상 변경", actionId: "community_palette", value: value(forDate) },
       { label: "알림 설정", actionId: "community_settings", value: value(forDate) },
+      ...(context.env.COMMUNITY_INTRO_CHANNEL_ID
+        ? [
+            {
+              label: "자기소개",
+              actionId: "community_introduction",
+              value: value("self-introduction"),
+            },
+          ]
+        : []),
     ]),
   );
   return sent;

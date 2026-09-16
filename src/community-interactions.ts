@@ -3,6 +3,7 @@ import { armCommunityClock } from "./community-clock";
 import { openSettings, openShoutout, readSettings, stopSettings } from "./community-controls";
 import { enablePublicSchedule } from "./community-cutover";
 import { confirmedRecordEdit } from "./community-edits";
+import { introductionModal, parseIntroduction, submitIntroduction } from "./community-introduction";
 import { escapeSlackText } from "./community-messages";
 import { openCommunityPalette, submitCommunityPalette } from "./community-palette";
 import { authorizeCommunityAction } from "./community-permissions";
@@ -32,7 +33,7 @@ export async function communityInteraction(
   const view = data.view ? object(data.view) : null;
   const id = string(action?.action_id ?? view?.callback_id ?? "");
   if (!id.startsWith("community_")) return null;
-  const scope = actionIdentity(data, env);
+  const scope = actionIdentity(data, env, id);
   authorizeCommunityAction(id, scope, env);
   if (
     (data.type === "view_submission") !== id.endsWith("_submit") ||
@@ -59,6 +60,13 @@ export async function communityInteraction(
     key: `interaction:${action?.action_ts ?? view?.id}`,
   };
   if (view) {
+    if (id === "community_introduction_submit") {
+      const parsed = parseIntroduction(object(view.state).values);
+      if ("errors" in parsed)
+        return Response.json({ response_action: "errors", errors: parsed.errors });
+      waitUntil(submitIntroduction(context, string(view.id), parsed));
+      return Response.json({ response_action: "clear" });
+    }
     if (id === "community_palette_submit") return submitCommunityPalette(context, view, waitUntil);
     if (id === "community_settings_submit" || id === "community_group_submit") {
       const prefs = readSettings(view, id === "community_group_submit");
@@ -133,6 +141,10 @@ export async function communityInteraction(
   }
   if (id === "community_shoutout") {
     await openShoutout(context, string(data.trigger_id), ownerId === scope.userId ? null : ownerId);
+    return new Response(null, { status: 200 });
+  }
+  if (id === "community_introduction") {
+    await introductionModal(context, string(data.trigger_id));
     return new Response(null, { status: 200 });
   }
   waitUntil(

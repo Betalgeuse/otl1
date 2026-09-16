@@ -9,6 +9,7 @@
 | daily-scrum | ONE THING과 후기의 공개 기록 |
 | townhall | 환영, 첫 등록·첫 완료·첫 후기의 봇 축하, 관리자가 게시한 업데이트 |
 | welcome-start-here | 신규 회원 멘션과 최신 안내글 전문 |
+| all-self-introduction | 모달로 받은 회원 자기소개와 선택적 LinkedIn을 공개 게시 |
 | 비공개 admin | 관리자 조회·설정·게시 미리보기 및 QA |
 | shareinfo·Chapter | 정보와 관심사별 대화. 봇의 자동 사람 연결은 아직 계획 |
 | 기존 Silo 채널 | 자동 배정·경쟁 없이 보관 상태. 실제 폐쇄는 별도 운영 결정 |

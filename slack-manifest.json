@@ -20,6 +20,7 @@
         "channels:read",
         "groups:history",
         "chat:write",
+        "chat:write.public",
         "reactions:write",
         "emoji:read"
       ]
