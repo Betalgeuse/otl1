@@ -30,9 +30,19 @@ export function socialReactions(
 }
 
 export class CommunitySlackError extends SlackError {
-  constructor(readonly code: string) {
+  constructor(
+    readonly code: string,
+    readonly retryAfterSeconds: number | null = null,
+  ) {
     super(`Slack 요청 실패: ${code}`);
   }
+}
+
+function retryAfterSeconds(response: Response): number | null {
+  const value = response.headers.get("Retry-After");
+  if (!value || !/^\d{1,5}$/.test(value)) return null;
+  const seconds = Number(value);
+  return Number.isSafeInteger(seconds) ? Math.min(Math.max(seconds, 1), 3_600) : null;
 }
 
 export async function callSlack(
@@ -70,7 +80,11 @@ export async function callSlack(
     if (error instanceof Error) throw new CommunitySlackError("transport_error");
     throw new CommunitySlackError("unknown_transport_error");
   }
-  if (!response.ok) throw new CommunitySlackError(`http_${response.status}`);
+  if (!response.ok)
+    throw new CommunitySlackError(
+      response.status === 429 ? "rate_limited" : `http_${response.status}`,
+      retryAfterSeconds(response),
+    );
   let data: Record<string, unknown>;
   try {
     data = object(await response.json());
@@ -81,7 +95,7 @@ export async function callSlack(
   if (data.ok !== true) {
     const code =
       typeof data.error === "string" && /^[a-z_]{1,60}$/.test(data.error) ? data.error : "rejected";
-    throw new CommunitySlackError(code);
+    throw new CommunitySlackError(code, retryAfterSeconds(response));
   }
   return data;
 }

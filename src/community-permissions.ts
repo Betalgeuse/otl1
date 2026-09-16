@@ -49,6 +49,10 @@ const memberActions = new Set([
   "community_introduction",
   "community_introduction_submit",
   "community_introduction_directory",
+  "community_bug_open",
+  "community_bug_submit",
+  "community_bug_confirm",
+  "community_bug_answer",
 ]);
 
 export function authorizeCommunityAction(

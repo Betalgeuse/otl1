@@ -26,6 +26,12 @@ export type CommunityEnv = {
   readonly INTENT_RATE_LIMITER?: {
     limit(input: { readonly key: string }): Promise<{ readonly success: boolean }>;
   };
+  readonly BUG_PRIVATE_KEK?: string;
+  readonly BUG_PRIVATE_KEK_VERSION?: string;
+  readonly BUG_PRIVATE_OBJECTS?: {
+    put(key: string, value: ArrayBuffer): Promise<unknown>;
+    delete(key: string): Promise<void>;
+  };
 };
 export type CommunityContext = {
   readonly env: CommunityEnv;
@@ -45,16 +51,20 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
   const channelId = data.container
     ? string(object(data.container).channel_id)
     : string(object(JSON.parse(string(object(data.view).private_metadata))).channelId);
-  const introductionAction = [
+  const expandedChannelAction = [
     "community_introduction",
     "community_introduction_submit",
     "community_introduction_directory",
+    "community_bug_open",
+    "community_bug_submit",
+    "community_bug_confirm",
+    "community_bug_answer",
   ].includes(actionId);
   if (
     teamId !== env.SLACK_TEAM_ID ||
     (![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) &&
       !(
-        introductionAction &&
+        expandedChannelAction &&
         [env.COMMUNITY_RELEASE_CHANNEL_ID, env.COMMUNITY_INTRO_CHANNEL_ID].includes(channelId)
       )) ||
     (channelId === env.COMMUNITY_CHANNEL_ID && userId !== env.COMMUNITY_ADMIN_ID) ||

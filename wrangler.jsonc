@@ -10,6 +10,7 @@
   "durable_objects": { "bindings": [{ "name": "COMMUNITY_CLOCK", "class_name": "CommunityClock" }] },
   "migrations": [{ "tag": "community-clock-v1", "new_sqlite_classes": ["CommunityClock"] }],
   "ratelimits": [{ "name": "INTENT_RATE_LIMITER", "namespace_id": "202609101", "simple": { "limit": 10, "period": 60 } }],
-  "triggers": { "crons": [] },
-  "observability": { "enabled": true }
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "observability": { "enabled": true },
+  "r2_buckets": [{ "binding": "BUG_PRIVATE_OBJECTS", "bucket_name": "otl1-bug-private" }]
 }
