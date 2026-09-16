@@ -3,7 +3,9 @@ import type { BugPacketFields } from "./community-bug-schema";
 import { bugConfirmationPayload } from "./community-bug-slack";
 import type { CommunityContext } from "./community-runtime";
 
-const RENDERER_VERSION = "bug-message.v1" as const;
+const MESSAGE_RENDERER = "bug-message.v1" as const;
+const RECEIPT_RENDERER = "bug-receipt.v1" as const;
+const HANDOFF_RENDERER = "bug-handoff.v1" as const;
 
 export async function deliverBugSummary(
   context: CommunityContext,
@@ -28,7 +30,7 @@ export async function deliverBugSummary(
       deliveryKind: "summary",
       destination,
       templateId: "summary.confirm.v1",
-      rendererVersion: RENDERER_VERSION,
+      rendererVersion: MESSAGE_RENDERER,
     },
     bugConfirmationPayload(context, input.label, input.bugId, input.revision, input.fields),
   );
@@ -50,7 +52,7 @@ export async function deliverBugReceipt(
       deliveryKind: "receipt",
       destination,
       templateId: "receipt.confirmed.v1",
-      rendererVersion: RENDERER_VERSION,
+      rendererVersion: RECEIPT_RENDERER,
     },
     { text: `접수됨 ${input.bugId}` },
   );
@@ -77,7 +79,7 @@ export async function deliverPrivateBugOutbox(
         deliveryKind: "receipt",
         destination: "reporter_ephemeral",
         templateId: "receipt.private.v1",
-        rendererVersion: RENDERER_VERSION,
+        rendererVersion: RECEIPT_RENDERER,
       },
       { text: `비공개 접수 ${input.bugId}` },
     ),
@@ -97,7 +99,7 @@ export async function deliverPrivateBugOutbox(
         deliveryKind: "admin_handoff",
         destination: "admin_channel",
         templateId: "admin_handoff.private.v1",
-        rendererVersion: RENDERER_VERSION,
+        rendererVersion: HANDOFF_RENDERER,
       },
       { text: `비공개 버그 인계 ${input.bugId}` },
     ),
@@ -125,7 +127,7 @@ export async function deliverBugHandoff(
         deliveryKind: "admin_handoff",
         destination,
         templateId: "admin_handoff.private.v1",
-        rendererVersion: RENDERER_VERSION,
+        rendererVersion: HANDOFF_RENDERER,
       },
       {
         text:

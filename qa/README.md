@@ -57,6 +57,8 @@ Operational migration and recovery requirements are in `docs/DATABASE_NORMALIZAT
 
 `bun qa/community-bug-storage.mjs`는 migration 014–021을 순서대로 적용한 폐기 가능한 PostgreSQL에서 `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql`을 실행합니다. packet·evidence digest 결합, job lease 소유권, obsolete delivery 취소, 팀별 만료·delivery claim 격리, 비공개 상태·관계형 원문 제거·receipt·관리자 handoff의 원자 커밋과 기존 중간 상태의 한 번뿐인 reconciliation과 신규 설치에서 021 backfill 0건을 확인합니다. `bun qa/community-bug-private-backfill.mjs`는 017 상태에 남은 private 관계형 canary fixture를 018–021로 올려 opaque lineage·event 보존, canary 제거, outbox 고유성, 재실행 0건을 확인합니다.
 
+`bun qa/community-bug-private-delivery.mjs`는 migration 001–021을 적용한 폐기 가능한 PostgreSQL과 Slack fake를 연결해 원자적으로 생성된 private draft·answer outbox를 TypeScript가 동일한 template/renderer 계약으로 즉시 claim·sent(attempt 1)하는지, 정확한 replay가 중복 게시하지 않는지 확인합니다.
+
 ## Slack 수락 뒤 응답 유실
 
 영구 thread와 admin delivery는 history reconciliation으로 동일 payload를 찾아 중복을 억제합니다. history에서 조회할 수 없는 `reporter_ephemeral` receipt는 at-least-once이며, Slack 수락 뒤 응답 또는 DB finish가 유실되면 재시도에서 같은 비공개 receipt가 중복될 수 있습니다. `qa/community-bugs.mjs`는 Slack이 ephemeral을 수락한 뒤 응답을 잃는 경우를 합성해 첫 delivery가 retryable `failed/1`로 남고, 다음 eligible retry가 같은 비공개 receipt를 한 번 더 보낼 수 있으며 `sent/2`로 끝나는 at-least-once 경계를 고정합니다. 연속 실패는 outbox 행을 늘리지 않고 세 번에서 멈춥니다.
