@@ -20,6 +20,7 @@ export type CommunityEnv = {
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
   readonly COMMUNITY_RELEASE_CHANNEL_ID?: string;
   readonly COMMUNITY_WELCOME_CHANNEL_ID?: string;
+  readonly COMMUNITY_INTRO_CHANNEL_ID?: string;
   readonly COMMUNITY_GUIDE_SOURCE_TS?: string;
   readonly AI?: IntentAI;
   readonly INTENT_RATE_LIMITER?: {
@@ -38,7 +39,7 @@ export type CommunityContext = {
 export function scopedValue(scope: CommunityScope, key: string): string {
   return JSON.stringify({ ownerId: scope.userId, key });
 }
-export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv) {
+export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv, actionId = "") {
   const teamId = string(object(data.team).id);
   const userId = string(object(data.user).id);
   const channelId = data.container
@@ -46,7 +47,11 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv)
     : string(object(JSON.parse(string(object(data.view).private_metadata))).channelId);
   if (
     teamId !== env.SLACK_TEAM_ID ||
-    ![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) ||
+    (![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) &&
+      !(
+        ["community_introduction", "community_introduction_submit"].includes(actionId) &&
+        channelId === env.COMMUNITY_RELEASE_CHANNEL_ID
+      )) ||
     (channelId === env.COMMUNITY_CHANNEL_ID && userId !== env.COMMUNITY_ADMIN_ID) ||
     !/^[UW][A-Z0-9]+$/.test(userId)
   )

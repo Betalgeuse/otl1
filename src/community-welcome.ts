@@ -1,4 +1,5 @@
 import { customBotEmoji, randomCustomEmoji } from "./community-emoji";
+import { introductionButton } from "./community-introduction";
 import type { CommunityEnv } from "./community-runtime";
 import { addReactions, callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
@@ -38,9 +39,14 @@ export async function welcomeTownhallMember(
     body: { source: string(event.ts ?? event.event_ts ?? ""), text },
   });
   if (!(await store.claimRecord(scope))) return true;
+  const renderedText = await customBotEmoji(env.SLACK_BOT_TOKEN, text);
   const sent = await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
     channel: channelId,
-    text: await customBotEmoji(env.SLACK_BOT_TOKEN, text),
+    text: renderedText,
+    blocks: [
+      { type: "section", text: { type: "mrkdwn", text: renderedText } },
+      { type: "actions", elements: [introductionButton(userId)] },
+    ],
     unfurl_links: false,
   });
   await store.finishRecord(scope, "sent");

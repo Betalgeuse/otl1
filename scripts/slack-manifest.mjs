@@ -13,6 +13,6 @@ console.log(JSON.stringify({
   features: {
     bot_user: { display_name: "ONE THING 잔디", always_online: false },
   },
-  oauth_config: { scopes: { bot: ["users:read", "users:read.email", "app_mentions:read", "channels:history", "channels:read", "groups:history", "chat:write", "reactions:write", "emoji:read"] } },
+  oauth_config: { scopes: { bot: ["users:read", "users:read.email", "app_mentions:read", "channels:history", "channels:read", "groups:history", "chat:write", "chat:write.public", "reactions:write", "emoji:read"] } },
   settings: { event_subscriptions: { request_url: `${url.origin}/slack/events`, bot_events: ["app_mention", "message.channels", "message.groups", "member_joined_channel"] }, interactivity: { is_enabled: true, request_url: `${url.origin}/slack/interactions` }, org_deploy_enabled: false, socket_mode_enabled: false, token_rotation_enabled: false },
 }, null, 2));

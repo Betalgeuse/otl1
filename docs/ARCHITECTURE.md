@@ -29,7 +29,7 @@ flowchart LR
 | `community_events` | 변경 전 상태·revision·중복 방지·되돌리기 이력 |
 | `community_preferences`, `channel_schedules` | 개인 안내와 공통 일정 |
 | `community_milestones` | 첫 등록·첫 완료·첫 후기 이력 |
-| `community_records` | 재처리 가능한 입력 원문, 확인 대기·발송·게시물 연결 등 워크플로 기록 |
+| `community_records` | 재처리 가능한 입력 원문, 자기소개 원문·LinkedIn·게시물 연결, 확인 대기·발송 등 워크플로 기록 |
 | `guide_versions`, `guide_deliveries` | 안내 본문 버전과 회원별 전달 |
 | `schema_migrations`, `otl_archive` | 적용 이력과 이관 전 데이터 보존 |
 
@@ -66,5 +66,7 @@ erDiagram
 ## 확장 규칙
 
 새 기능은 공통 회원 키를 참조합니다. 자기소개 원문, 소개자 관계, 외부 연락처 동의를 한 프로필 필드로 합치지 않습니다. 소개자는 별도 권한이 아닌 관계 출처이며 Silo 소속 모델은 추가하지 않습니다. 핵심 관계는 열·키·외래키로 강제하고, JSONB는 스냅샷과 버전 있는 워크플로 payload에 사용합니다. 적용한 migration은 다시 고치지 않고 새 migration을 추가합니다.
+
+자기소개 모달은 본인에게 바인딩합니다. 선택적 LinkedIn은 `https://*.linkedin.com/in/...` 프로필 주소만 받고 쿼리와 fragment를 제거합니다. 게시 목적 채널은 서버 설정으로 고정하며 사용자가 바꿀 수 없습니다. 최초 게시 기록을 고정 키로 claim해 반복 제출이 중복 게시로 이어지지 않게 합니다.
 
 구체적인 설정·실행 명령은 [개발 가이드](DEVELOPMENT.md)에서만 관리합니다.

@@ -8,7 +8,7 @@ const suites = [
   'current-garden', 'reflection-header', 'reflection-routing', 'slack-message-edit',
   'community-guide', 'townhall-milestones', 'brand-copy', 'community-language-check',
   'community-language-variety', 'community-record-decision', 'community-social', 'community-townhall',
-  'community-welcome', 'migration-maintenance', 'weekends',
+  'community-welcome', 'community-introduction', 'migration-maintenance', 'weekends',
 ];
 for (const suite of suites) execFileSync('bun', [`qa/${suite}.mjs`], { stdio: 'inherit' });
 console.log(`Passed ${suites.length} isolated synthetic suites.`);
