@@ -55,6 +55,20 @@
 
 문서나 로드맵 수정만으로 업데이트를 게시하지 않습니다. 개인 완료·색상·알림 조작은 당사자에게만 보이며, 서버에서도 소유자를 검사합니다. 관리자라는 이유로 공개 채널에서 관리 정보를 출력하지 않습니다.
 
+## 버그 제보 v0.0.54 구현 기준
+
+이 항목은 구현 기준이며 아직 배포·실제 Slack QA·운영 SLO가 없습니다. v0.0.54는 두 번째 브라우저 QA가 끝나기 전까지 pre-release입니다. 출시 뒤 `버그 제보`와 `버그: ...` 입력은 제보자 소유 초안을 시작합니다. 누락되거나 모순된 내용은 한 번에 하나씩만 묻고, 관찰하지 않은 내용은 추가하지 않습니다. 24시간 안에 다섯 질문을 넘기거나 시간이 지나면 확정하지 않고 비공개 운영자 인계 대상으로 전환합니다.
+
+제보자는 초안을 확인해 `맞아요`를 눌러야 합니다. 이 확인 전에는 관리자나 자동화가 확정 패킷을 만들 수 없습니다. 보안·개인정보 징후는 공개 답글을 계속 받지 않고 `private_incident`로 분리합니다. 운영자는 실제 식별자, 원문, 비밀, 첨부물 또는 private object 경로를 공개 채널·공개 export·Check Run 본문에 넣지 않습니다.
+
+정규화 ledger와 `bug_jobs` outbox는 후속 재현·수정·검토·배포 작업을 기록할 수 있지만, 현재는 제공자 실행을 승인하지 않습니다. 별도의 delivery outbox는 질문·요약·접수 영수증·비공개 관리자 인계를 Slack 효과보다 먼저 기록합니다. lease를 가진 worker만 발송을 마칠 수 있고, 실패는 오류와 다음 시각을 남겨 재시도하며 세 번째 실패는 retry 없이 dead-letter `failed`로 보관합니다. 공개 채널에는 비공개 인계 원문·객체 경로를 쓰지 않습니다.
+
+버그 delivery 재시도 Cron 선언은 유지보수 중에도 `wrangler.jsonc`에서 삭제하거나 다시 만들지 않습니다. `DATABASE_MAINTENANCE=true`가 예약 처리의 DB·Slack 접근을 먼저 차단하므로, 배포자는 안정된 `*/5` 트리거를 그대로 둔 채 maintenance 설정만 전환합니다. 트리거를 추가·변경·복원한 경우 Cloudflare 전파 시간 때문에 readback 직후 첫 tick을 실패로 판정하지 않습니다. 마지막 트리거 변경 뒤 최소 15분을 기다린 다음 이후 경계에서 scheduled invocation과 delivery의 `attempts` 변화를 함께 확인합니다. 스케줄러 로그는 예약 시각과 claimed·sent·failed 건수만 기록하며 회원 식별자나 메시지 본문은 넣지 않습니다.
+
+Slack delivery 실패 로그의 `providerSubcode`는 `invalid_blocks`, `invalid_arguments`, `invalid_form_data`, `msg_too_long`, `http_429`, `provider_5xx`, `other` 중 하나만 남깁니다. 원문 응답, 메타데이터 메시지, 사용자 입력은 로그나 delivery ledger에 저장하지 않습니다.
+
+`codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app` 이름을 담은 dry-run도 무변경 계획 영수증만 만듭니다. GitHub Actions는 사용하지 않습니다. 실제 운영 체크는 격리된 GenQuant 서비스에서 실행하고 GitHub Check Run으로 게시하도록 별도 승인·연결·실제 검증을 거쳐야 합니다.
+
 ## 장애와 알려진 경계
 
 DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 따로 봅니다. 발송 실패나 응답이 불확실한 상태에서는 실제 채널과 발송 기록을 대조한 뒤 복구합니다. 무조건 다시 보내지 않습니다.

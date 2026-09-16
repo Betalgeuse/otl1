@@ -10,7 +10,12 @@ flowchart LR
   Router --> Parser[명시 형식 파서 / 필요한 경우 Qwen]
   Parser --> Decision[상태·후기 본문 분리]
   Decision --> Guard[날짜·소유자·revision·정보 손실 검사]
+  Router --> BugIntake[버그 제보 초안·한 질문]
+  BugIntake --> BugGuard[근거·제보자 확인·비공개 분기]
+  BugGuard --> BugLedger[정규화 bug ledger·job outbox]
+  BugLedger --> Delivery[Slack delivery outbox·lease·retry]
   Guard --> DB[(Neon)]
+  BugLedger --> DB
   DB --> Output[공개 결과 / 본인 전용 조작]
   Output --> Slack
   Clock[Durable Object] --> DB
@@ -32,6 +37,10 @@ flowchart LR
 | `community_records` | 재처리 가능한 입력 원문, 확인 대기·발송·가입 안내 등 워크플로 기록 |
 | `member_introductions` | 회원별 현재 자기소개·선택적 LinkedIn·기타 공개 정보·공개 메시지 위치·revision |
 | `guide_versions`, `guide_deliveries` | 안내 본문 버전과 회원별 전달 |
+| `bug_reports`, `bug_report_revisions`, `bug_questions` | 제보별 정규화 상태, 제보자만 읽는 revision, 한 질문씩의 답변 이력 |
+| `bug_events`, `bug_transition_contract`, `bug_jobs` | 허용 상태 전이, idempotency 이력, 재현·수정·검토·배포 작업 outbox |
+| `bug_deliveries` | 질문·요약·접수 영수증·비공개 관리자 인계의 Slack delivery outbox와 lease·재시도·발송 영수증 |
+| `bug_artifacts`, `bug_links`, `agent_runs`, `git_changes` | digest로 참조하는 산출물, 중복·회귀 관계, 이후 작업의 관찰 이력 |
 | `schema_migrations`, `otl_archive` | 적용 이력과 이관 전 데이터 보존 |
 
 ```mermaid
@@ -63,6 +72,16 @@ erDiagram
 예약은 채널별 Durable Object alarm과 DB의 발송 조건·claim을 함께 사용합니다. 최초 축하도 DB 판정과 목적 채널별 발송 기록을 구분합니다. 부가적인 AI 응원 실패가 먼저 실행된 축하를 막지 않게 합니다.
 
 외부 Slack API와 DB 사이의 완전한 분산 원자성은 보장하지 않습니다. 실패·응답 불확실 상태에는 운영 대조가 필요합니다. DB 계정 최소 권한 분리, 대규모 부하, 자동 백업·복구 SLO는 후속 과제입니다.
+
+## 버그 제보 경계 v0.0.54 구현 상태
+
+`버그 제보`는 양식 진입을 열고 `버그: ...`는 관찰한 실제 결과를 초안으로 만듭니다. 빠진 값이나 모순은 실제 결과, 기대 결과, 두 단계 이상의 재현, 위치, 시각, 빈도, 영향 순으로 한 번에 하나만 묻습니다. 근거가 없는 값은 만들지 않으며, 24시간 안의 질문은 다섯 번을 넘기지 않습니다. 한도 또는 시간이 끝난 초안은 확정 대신 운영자 인계 대상이 됩니다.
+
+원문과 답변은 암호화된 비공개 객체에 두고 ledger에는 opaque reference와 digest, 제한된 정규화 필드만 둡니다. `privacy` 또는 보안·개인정보 영향은 `private_incident`로 전이하며 공개 export를 막고 비공개 운영자 채널로만 인계합니다. 제보자 소유권, revision, idempotency, 확인 시각과 digest가 모두 맞을 때만 `bug_packet.v1` 확정 패킷을 저장합니다.
+
+`bug_jobs`는 제공자와 분리된 재현·수정·검토·배포 작업 outbox입니다. `bug_deliveries`는 Slack에 질문·요약·접수 영수증·비공개 관리자 인계를 보내기 전의 durable record입니다. delivery key, 제보자 소유권, packet revision, template과 renderer가 같은 경우에만 idempotent하게 다시 읽고, worker lease를 가진 발송만 완료할 수 있습니다. 실패는 다음 시도 시각과 오류 분류를 남겨 독립적으로 재시도하며 세 번째 실패 뒤에는 retry 없이 `failed` dead-letter로 남깁니다.
+
+현재 구현에는 `codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app`을 표현하는 무변경 dry-run handoff가 있으나 어느 제공자도 호출하지 않습니다. GitHub Actions는 사용하지 않습니다. 이후 격리된 GenQuant 서비스가 검사를 실행하고 GitHub Check Run을 게시하는 연결은 구현·권한·실제 검증이 남아 있습니다. v0.0.54는 두 번째 브라우저 QA 전에는 pre-release입니다.
 
 ## 확장 규칙
 

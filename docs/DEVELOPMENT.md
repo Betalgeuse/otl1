@@ -9,7 +9,7 @@ bun install --frozen-lockfile
 bun run check
 ```
 
-`check`는 lint → TypeScript → 29개 합성 회귀 → Wrangler dry-run 순서로 실행하며 실패 시 중단합니다. 실제 배포·운영 DB·Slack 발송은 호출하지 않습니다. 테스트 목록은 `scripts/test-unit.mjs` 한 곳에서 관리하며 각 검사는 새 Bun 프로세스에서 실행합니다.
+`check`는 lint → TypeScript → 31개 합성 회귀 → Wrangler dry-run 순서로 실행하며 실패 시 중단합니다. 실제 배포·운영 DB·Slack 발송은 호출하지 않습니다. 테스트 목록은 `scripts/test-unit.mjs` 한 곳에서 관리하며 각 검사는 새 Bun 프로세스에서 실행합니다.
 
 ## 설정과 배포
 
@@ -38,6 +38,8 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/006_normalized_fou
 psql -X -v ON_ERROR_STOP=1 -f migrations/008_default_reminders.sql
 psql -X -v ON_ERROR_STOP=1 -f migrations/009_welcome_guides.sql -f migrations/010_first_registration.sql
 psql -X -v ON_ERROR_STOP=1 -f migrations/011_member_introductions.sql -f migrations/012_introduction_public_details.sql -f migrations/013_multiline_introductions.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/014_bug_ledger.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/015_bug_deliveries.sql
 ```
 
 006·007은 반드시 한 트랜잭션으로 적용합니다. 별도 초대 정책인002~004를 일괄 실행하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
@@ -49,10 +51,26 @@ psql -X -v ON_ERROR_STOP=1 -f migrations/011_member_introductions.sql -f migrati
 | 범위 | 실행과 주의점 |
 | --- | --- |
 | 합성 회귀 | `bun run test:unit`. 공개 코드의 기본 검증 |
-| PostgreSQL | 폐기 가능한 로컬 DB에 설치 후 `community-storage`, `community-scheduler`, `normalized-legacy`, `default-reminders` 및 SQL 검사 실행 |
+| PostgreSQL | 폐기 가능한 로컬 DB에 설치 후 `community-storage`, `community-scheduler`, `normalized-legacy`, `default-reminders`, `community-bug-storage`, `community-bug-delivery` 및 SQL 검사 실행 |
 | 실제 서비스 | 명시한 채널·회원·날짜만 검증. 전후 기록, 실제 게시, 실패 범위를 별도 보존 |
 
 DB 검사의 `COMMUNITY_PG_SOCKET`, `COMMUNITY_PG_PORT`, `COMMUNITY_PG_DATABASE`를 확인합니다. 기본값이 검사마다 다를 수 있으므로 DB 이름을 명시합니다. `*-live*`, backfill, fixture 복원, migration 스크립트를 일반 테스트에 섞지 않습니다.
+
+## 버그 제보 기반 검증과 후속 연결
+
+`community-bugs`와 `community-bug-dialogue`는 31개 합성 회귀 allowlist에 포함됩니다. `community-bugs`는 mock Slack delivery의 failed → retry → sent, summary·receipt·admin handoff 중복 억제를 검증합니다. `qa/community-bug-storage.mjs`와 `qa/community-bug-delivery.mjs`는 새 폐기 가능한 PostgreSQL 인스턴스에서 각각 migration 014 ledger와 migration 015 delivery contract를 확인하므로 일반 `check`에 넣지 않습니다. `qa/maintainer-dry-run.mjs`는 Git 작업본과 임시 디렉터리가 필요하며, 확정된 fixture로 provider-neutral 무변경 handoff만 검사합니다.
+
+```sh
+bun qa/community-bug-storage.mjs
+bun qa/community-bug-delivery.mjs
+bun qa/community-bug-slack-validator.mjs
+bun qa/maintainer-dry-run.mjs
+node scripts/maintainer-dry-run.mjs --input qa/fixtures/bug-packets/confirmed-valid.v1.json --output "local-proof-$(uuidgen)"
+```
+
+`community-bug-slack-validator`는 인증 없이 Slack의 side-effect-free `blocks.validate`만 호출하는 명시적 네트워크 계약 검사입니다. 일반 단위 테스트 allowlist에는 넣지 않으며, 네트워크 장애를 제품 회귀로 오판하지 않습니다.
+
+마지막 명령은 도구가 소유한 비공개 임시 경로의 새 직접 자식만 받아 `bug_packet.v1`의 digest, base SHA, dirty 상태를 영수증으로 남깁니다. `codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app`은 handoff의 허용 제공자 이름일 뿐 호출 대상이 아닙니다. GitHub Actions workflow는 만들지 않습니다. 향후 검사는 격리된 GenQuant 서비스에서 수행하고 GitHub Check Run으로 게시해야 하며, 그 연결은 이 구현의 검증 범위 밖입니다.
 
 ## Git과 공개 코드
 
@@ -60,6 +78,15 @@ DB 검사의 `COMMUNITY_PG_SOCKET`, `COMMUNITY_PG_PORT`, `COMMUNITY_PG_DATABASE`
 
 운영 이력이 있는 로컬 저장소는 공개 원격에 `--all`이나 `--mirror`로 push하지 않습니다. 공개 설정 예시·합성 테스트만 별도 작업본에 반영하고 staged 정보 검사와 `check`를 거쳐 push합니다. API 키·회원 원문·덤프·`.omx` 영수증은 제외합니다.
 
-`export-public.mjs`가 있는 운영 저장소에서는 공개용 스냅샷을 생성할 수 있습니다. 기존 공개 Git 이력이 있는 경로를 덮어쓰지 않도록 보호되어 있습니다. 공개용 문서 원본은 이 문서 묶음이며, 내보내기 스크립트에 별도 사용법을 복제하지 않습니다.
+`export-public.mjs`가 있는 운영 저장소에서는 공개용 스냅샷을 생성할 수 있습니다. 기존 공개 Git 이력이 있는 경로를 덮어쓰지 않도록 보호되어 있습니다. migration 014·015, 버그 ledger·delivery QA fixture·계약 SQL, `automation/`의 공개 스키마·dry-run 코드, runner를 포함하지만 운영 식별자, 실제 제보 원문, `.omx`, credential은 포함하지 않습니다. 공개용 문서 원본은 이 문서 묶음이며, 내보내기 스크립트에 별도 사용법을 복제하지 않습니다.
+
+```sh
+node scripts/export-public.mjs /tmp/otl1-public-review
+cd /tmp/otl1-public-review && bun run check
+```
+
+버그 질문 Block Kit을 Slack 계약과 직접 대조할 때는 `bun qa/community-bug-slack-validator.mjs`를 별도로 실행합니다. 이 검사는 인증·게시 없이 `blocks.validate`만 호출하며 외부 네트워크 검사이므로 일반 `check`에는 포함하지 않습니다.
+
+스냅샷은 Git 이력이 없는 경로이므로 Git 작업본이 필요한 maintainer dry-run QA는 `check` allowlist에서 제외합니다. 공개 clone에서 그 QA를 실행할 때는 별도 Git 작업본을 만들고 임시 출력 경로를 사용합니다.
 
 데이터 모델은 [시스템 구조](ARCHITECTURE.md), 서비스 사용법은 [사용 가이드](USER_GUIDE.md)를 따릅니다.
