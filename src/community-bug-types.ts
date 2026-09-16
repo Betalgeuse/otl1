@@ -80,6 +80,7 @@ export type AnswerBugRevision = EncryptedObjectRef & {
   readonly answerOpaqueRef: string;
   readonly expectedPacketRevision: number;
   readonly idempotencyKey: string;
+  readonly privacy: boolean;
   readonly sanitizedFields: BugPacketFields;
   readonly completeness: Readonly<Record<string, Json>>;
 };
@@ -87,6 +88,8 @@ export type AnswerBugRevision = EncryptedObjectRef & {
 export type ConfirmPacketInput = {
   readonly packet: ConfirmedBugPacket;
   readonly storage: EncryptedObjectRef & {
+    readonly canonicalEvidence: string;
+    readonly evidenceObjectDigest: string;
     readonly teamId: string;
     readonly reporterId: string;
     readonly expectedPacketRevision: number;
@@ -142,6 +145,7 @@ export type HeartbeatBugJob = {
 
 export type FinishBugJob = {
   readonly jobId: number;
+  readonly workerId: string;
   readonly leaseToken: string;
   readonly status: "succeeded" | "failed";
   readonly resultDigest: string;

@@ -162,7 +162,7 @@ DECLARE claimed jsonb; route jsonb; jobs_before bigint; jobs_after bigint;
 BEGIN
  SELECT count(*) INTO jobs_before FROM otl.bug_jobs;
  SELECT otl.bug_claim_due_deliveries(jsonb_build_object(
-  'workerId','slack-bug-delivery','leaseToken','scheduled-lease','leaseSeconds',300,
+  'teamId','T-DELIVERY','workerId','slack-bug-delivery','leaseToken','scheduled-lease','leaseSeconds',300,
   'limit',2,'now','2026-09-17T12:00:00Z')) INTO claimed;
  SELECT count(*) INTO jobs_after FROM otl.bug_jobs;
  IF EXISTS(SELECT 1 FROM otl.bug_deliveries WHERE delivery_key='BUG-DELIVERY01:2:question:reporter_ephemeral' AND (status<>'failed' OR attempts<>3 OR last_error_code<>'timeout' OR worker_id IS NOT NULL OR lease_token IS NOT NULL OR lease_expires_at IS NOT NULL))

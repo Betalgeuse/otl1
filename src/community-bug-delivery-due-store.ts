@@ -51,7 +51,36 @@ function parseDueDelivery(value: Json): DueBugDelivery {
 export class CommunityBugDueDeliveryStore {
   constructor(private readonly db: BugSqlClient) {}
 
+  async reconcilePrivate(input: {
+    readonly teamId: string;
+    readonly limit: number;
+    readonly now: string;
+  }): Promise<number> {
+    const value = await this.db.queryJson("SELECT otl.bug_reconcile_private_incidents($1::jsonb)", [
+      JSON.stringify(input),
+    ]);
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+      throw new BugStoreError("response");
+    }
+    return value;
+  }
+
+  async expire(input: {
+    readonly teamId: string;
+    readonly limit: number;
+    readonly now: string;
+  }): Promise<number> {
+    const value = await this.db.queryJson("SELECT otl.bug_expire_due_intakes($1::jsonb)", [
+      JSON.stringify(input),
+    ]);
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+      throw new BugStoreError("response");
+    }
+    return value;
+  }
+
   async claim(input: {
+    readonly teamId: string;
     readonly workerId: string;
     readonly leaseToken: string;
     readonly limit: number;
@@ -61,6 +90,20 @@ export class CommunityBugDueDeliveryStore {
       JSON.stringify(input),
     ]);
     if (!Array.isArray(value)) throw new BugStoreError("response");
-    return value.map(parseDueDelivery);
+    const due: DueBugDelivery[] = [];
+    for (const row of value) {
+      try {
+        due.push(parseDueDelivery(row));
+      } catch (error) {
+        if (!(error instanceof BugStoreError)) throw error;
+        console.error(
+          JSON.stringify({
+            event: "community.bug.delivery.row.skipped",
+            code: "malformed_row",
+          }),
+        );
+      }
+    }
+    return due;
   }
 }

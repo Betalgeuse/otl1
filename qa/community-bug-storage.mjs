@@ -3,6 +3,8 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { canonicalJson, confirmedBugPacket } from "../src/community-bug-schema.ts";
+import { CommunityBugStore } from "../src/community-bug-store.ts";
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -138,11 +140,100 @@ try {
   assert.equal(fixtureStored.currentRevision.latestOpaqueRef, "object/fixture/confirmed");
   assert.equal(JSON.stringify(fixtureStored).includes("encrypted-envelope"), false);
 
+  for (const migration of [
+    "015_bug_deliveries",
+    "016_bug_delivery_scheduler",
+    "017_bug_expiry_job_guard",
+    "018_bug_integrity",
+  ])
+    await psql(["-f", `migrations/${migration}.sql`]);
+  const integrity = await psql(["-At", "-f", "qa/bug-db-integrity-contract.sql"]);
+  const integrityResult = JSON.parse(
+    integrity.stdout.trim().split("\n").filter(Boolean).at(-1) ?? "null",
+  );
+  assert.equal(integrityResult.transitionEdges, 81);
+  await psql(["-f", "migrations/019_bug_team_scope.sql"]);
+  const teamScope = await psql(["-At", "-f", "qa/bug-team-scope-contract.sql"]);
+  const teamScopeResult = JSON.parse(
+    teamScope.stdout.trim().split("\n").filter(Boolean).at(-1) ?? "null",
+  );
+  assert.equal(teamScopeResult.crossTeamRowsUntouched, true);
+  await psql(["-f", "migrations/020_bug_private_atomic.sql"]);
+  const privateAtomic = await psql(["-At", "-f", "qa/bug-private-atomic-contract.sql"]);
+  const privateAtomicResult = JSON.parse(
+    privateAtomic.stdout.trim().split("\n").filter(Boolean).at(-1) ?? "null",
+  );
+  assert.equal(privateAtomicResult.privateDraftAtomic, true);
+  assert.equal(privateAtomicResult.privateAnswerAtomic, true);
+  assert.equal(privateAtomicResult.legacyReconcileOnce, true);
+
+  const evidence = [
+    {
+      field: "actual",
+      messageId: "qa-integrity-message",
+      start: 0,
+      end: 8,
+      quote: "관측 결과",
+    },
+  ];
+  const integrityPacket = await confirmedBugPacket({
+    bugId: "BUG-QAINTEGRITY1",
+    revision: 2,
+    fields: canonicalFixture.fields,
+    confirmedAt: "2026-09-17T10:02:00+09:00",
+    source: { kind: "qa_fixture", opaqueRef: "qa:integrity-001" },
+    evidence,
+  });
+  await callJson("bug_create_draft", {
+    bugId: integrityPacket.bugId,
+    teamId: "T-INTEGRITY-STORE",
+    publicAlias: "B-QAINTEGRITY01",
+    reporterId: "integrity-reporter",
+    source: "api",
+    sourceOpaqueRef: integrityPacket.source.opaqueRef,
+    idempotencyKey: "integrity-store-draft",
+    sanitizedFields: { title: "integrity fixture", ...integrityPacket.fields },
+    opaqueRef: "object/integrity/draft",
+    objectDigest: "6".repeat(64),
+    envelopeDek: "encrypted-envelope",
+    kekVersion: "v1",
+    nonce: "nonce-123456",
+  });
+  const store = new CommunityBugStore({
+    async queryJson(query, params) {
+      const functionName = query.match(/otl\.(bug_[a-z_]+)/)?.[1];
+      assert.equal(functionName, "bug_confirm_packet");
+      const response = await callJson(functionName, JSON.parse(params[0]));
+      return JSON.parse(response.stdout.trim());
+    },
+  });
+  const integrityConfirmation = await store.confirmPacket({
+    packet: integrityPacket,
+    storage: {
+      teamId: "T-INTEGRITY-STORE",
+      reporterId: "integrity-reporter",
+      expectedPacketRevision: 1,
+      idempotencyKey: "integrity-store-confirm",
+      canonicalEvidence: canonicalJson(evidence),
+      evidenceObjectDigest: "7".repeat(64),
+      opaqueRef: "object/integrity/confirmed",
+      objectDigest: "7".repeat(64),
+      envelopeDek: "encrypted-envelope",
+      kekVersion: "v1",
+      nonce: "nonce-654321",
+    },
+  });
+  assert.deepEqual(integrityConfirmation, integrityPacket);
+
   finalResult = {
     status: "PASS",
     baseline: baselineJson,
     ...result,
     canonical_fixture_digest_unchanged: true,
+    integrity_contract: integrityResult,
+    team_scope_contract: teamScopeResult,
+    private_atomic_contract: privateAtomicResult,
+    canonical_store_admission: true,
     database: "disposable-local-postgresql",
     cleanup: "complete",
   };
