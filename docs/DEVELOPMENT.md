@@ -37,7 +37,7 @@ psql -X -v ON_ERROR_STOP=1 -f migrations/001_initial.sql -f migrations/005_commu
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/006_normalized_foundation.sql -f migrations/007_normalized_legacy.sql
 psql -X -v ON_ERROR_STOP=1 -f migrations/008_default_reminders.sql
 psql -X -v ON_ERROR_STOP=1 -f migrations/009_welcome_guides.sql -f migrations/010_first_registration.sql
-psql -X -v ON_ERROR_STOP=1 -f migrations/011_member_introductions.sql -f migrations/012_introduction_public_details.sql
+psql -X -v ON_ERROR_STOP=1 -f migrations/011_member_introductions.sql -f migrations/012_introduction_public_details.sql -f migrations/013_multiline_introductions.sql
 ```
 
 006·007은 반드시 한 트랜잭션으로 적용합니다. 별도 초대 정책인002~004를 일괄 실행하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.

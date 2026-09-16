@@ -51,8 +51,8 @@ export async function welcomeIntroductionMember(
   if (!(await store.claimRecord(scope))) return true;
   const existing = await store.introduction(env.SLACK_TEAM_ID, userId);
   const text = existing
-    ? `<@${userId}> 자기소개 채널에 오신 걸 환영해요! 기존 한 문장 소개를 확인하거나 수정할 수 있어요.`
-    : `<@${userId}> 자기소개 채널에 오신 걸 환영해요! 아직 소개가 없어요. 지금 한 문장으로 알려주세요.`;
+    ? `<@${userId}> 자기소개 채널에 오신 걸 환영해요! 기존 소개를 확인하거나 수정할 수 있어요.`
+    : `<@${userId}> 자기소개 채널에 오신 걸 환영해요! 아직 소개가 없어요. 180자 안에서 알려주세요.`;
   try {
     await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: channelId,
@@ -62,7 +62,7 @@ export async function welcomeIntroductionMember(
         {
           type: "actions",
           elements: [
-            introductionButton(userId, existing ? "내 소개 수정" : "한 문장 소개 쓰기"),
+            introductionButton(userId, existing ? "내 소개 수정" : "자기소개 쓰기"),
             introductionDirectoryButton(),
           ],
         },
@@ -100,7 +100,7 @@ export async function showIntroductionDirectory(context: CommunityContext): Prom
   const pages = chunks(introductions.map(introductionLine));
   for (const [index, page] of pages.entries())
     await ephemeral(context, {
-      text: `*우리의 한 문장 자기소개${pages.length > 1 ? ` ${index + 1}/${pages.length}` : ""}*\n${page}`,
+      text: `*우리의 자기소개${pages.length > 1 ? ` ${index + 1}/${pages.length}` : ""}*\n${page}`,
       unfurl_links: false,
     });
 }
@@ -134,20 +134,20 @@ export async function remindMissingIntroductions(context: CommunityContext): Pro
   if (!missing.length) {
     await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: context.scope.channelId,
-      text: "모두 한 문장 자기소개를 남겼어요! 🙌",
+      text: "모두 자기소개를 남겼어요! 🙌",
     });
     return;
   }
   for (const page of chunks(missing.map((userId) => `<@${userId}>`)))
     await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: context.scope.channelId,
-      text: `${page}\n아직 자기소개가 없어요. 한 문장으로 서로를 알려주세요!`,
+      text: `${page}\n아직 자기소개가 없어요. 180자 안에서 서로를 알려주세요!`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `${page}\n아직 자기소개가 없어요. 한 문장으로 서로를 알려주세요!`,
+            text: `${page}\n아직 자기소개가 없어요. 180자 안에서 서로를 알려주세요!`,
           },
         },
         {
