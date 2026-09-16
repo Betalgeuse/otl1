@@ -100,7 +100,7 @@ try {
   };
   await showIntroductionDirectory(context);
   const directory = calls.find(
-    (call) => call.method === "chat.postEphemeral" && call.body.text.includes("우리의 한 문장"),
+    (call) => call.method === "chat.postEphemeral" && call.body.text.includes("우리의 자기소개"),
   );
   assert.match(directory.body.text, /<@UHAS>/);
   assert.match(directory.body.text, /LinkedIn/);

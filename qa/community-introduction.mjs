@@ -91,9 +91,8 @@ try {
   await introductionModal(context, "TRIGGER1");
   let modal = calls.at(-1).body.view;
   assert.equal(modal.title.text, "자기소개");
-  assert.equal(modal.blocks[1].element.multiline, false);
+  assert.equal(modal.blocks[1].element.multiline, true);
   assert.equal(modal.blocks[1].element.max_length, 180);
-  assert.match(modal.blocks[0].text.text, /한 문장/);
   assert.match(modal.blocks[0].text.text, /공개/);
 
   const values = {
@@ -108,13 +107,15 @@ try {
     linkedin: "https://kr.linkedin.com/in/example-name/",
     details: "https://example.com · @example",
   });
-  for (const intro of [
-    "첫 문장입니다. 두 번째 문장입니다.",
-    "첫 문장입니다.둘째 문장입니다.",
-    "첫 줄입니다.\n둘째 줄입니다.",
-  ])
+  const multiline = "첫 문장입니다.\n둘째 줄도 자유롭게 적습니다.";
+  assert.deepEqual(parseIntroduction({ ...values, intro: { value: { value: multiline } } }), {
+    intro: multiline,
+    linkedin: "https://kr.linkedin.com/in/example-name/",
+    details: "https://example.com · @example",
+  });
+  for (const intro of ["", "가".repeat(181)])
     assert.deepEqual(parseIntroduction({ ...values, intro: { value: { value: intro } } }), {
-      errors: { intro: "자기소개는 줄바꿈 없이 한 문장, 180자 이내로 적어 주세요." },
+      errors: { intro: "자기소개는 1~180자로 적어 주세요." },
     });
   assert.deepEqual(
     parseIntroduction({ ...values, linkedin: { value: { value: "https://example.com/in/fake" } } }),
@@ -155,7 +156,7 @@ try {
   assert.equal(current.revision, 2, "stale modal cannot overwrite a newer introduction");
   assert.match(calls.at(-1).body.text, /먼저 바뀌었어요/);
   console.log(
-    "PASS self-introduction: one sentence, optional canonical LinkedIn, same-message edit, stale revision block",
+    "PASS self-introduction: 180-char multiline text, optional public info, same-message edit, stale revision block",
   );
 } finally {
   globalThis.fetch = original;

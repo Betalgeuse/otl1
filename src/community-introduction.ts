@@ -34,10 +34,8 @@ function canonicalLinkedIn(value: string): string | null {
   }
 }
 
-function isSingleSentence(value: string): boolean {
-  if (!value || [...value].length > 180 || /[\r\n]/.test(value)) return false;
-  const boundaries = value.match(/[.!?…。！？]+/g) ?? [];
-  return boundaries.length === 0 || (boundaries.length === 1 && /[.!?…。！？]+\s*$/.test(value));
+function isValidIntroduction(value: string): boolean {
+  return Boolean(value) && [...value].length <= 180;
 }
 
 export function parseIntroduction(valuesInput: unknown): IntroductionParseResult {
@@ -46,8 +44,7 @@ export function parseIntroduction(valuesInput: unknown): IntroductionParseResult
   const rawLinkedIn = string(object(object(values.linkedin).value).value ?? "").trim();
   const details = string(object(object(values.details).value).value ?? "").trim();
   const errors: Record<string, string> = {};
-  if (!isSingleSentence(intro))
-    errors.intro = "자기소개는 줄바꿈 없이 한 문장, 180자 이내로 적어 주세요.";
+  if (!isValidIntroduction(intro)) errors.intro = "자기소개는 1~180자로 적어 주세요.";
   const linkedin = canonicalLinkedIn(rawLinkedIn);
   if (rawLinkedIn && !linkedin)
     errors.linkedin =
@@ -90,7 +87,7 @@ export async function introductionModal(
           type: "section",
           text: {
             type: "plain_text",
-            text: "한 문장 소개와 아래 선택 정보는 공개 채널에 올라가요.",
+            text: "자기소개와 아래 선택 정보는 공개 채널에 올라가요.",
           },
         },
         {
@@ -99,12 +96,12 @@ export async function introductionModal(
           label: { type: "plain_text", text: "요즘 어떤 일에 마음을 쓰고 있나요?" },
           hint: {
             type: "plain_text",
-            text: "하는 일, 배우는 것, 같이 이야기하고 싶은 것 중 하나를 한 문장으로 적어 주세요.",
+            text: "하는 일, 배우는 것, 같이 이야기하고 싶은 것을 자유롭게 적어 주세요.",
           },
           element: {
             type: "plain_text_input",
             action_id: "value",
-            multiline: false,
+            multiline: true,
             max_length: 180,
             ...(existing?.intro ? { initial_value: existing.intro } : {}),
             placeholder: { type: "plain_text", text: "데이터 제품을 만들고 있어요." },
