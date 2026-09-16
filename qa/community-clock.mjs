@@ -3,9 +3,26 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 
 const bugRuns = [];
+function maintenanceResult({
+  reconciled = 0,
+  expired = 0,
+  claimed = 0,
+  sent = claimed,
+  failed = 0,
+} = {}) {
+  const reconcilePrivate = { processed: reconciled, possiblyMore: reconciled === 10 };
+  const expiry = { processed: expired, possiblyMore: expired === 10 };
+  const deliveries = { claimed, sent, failed, possiblyMore: claimed === 10 };
+  return {
+    reconcilePrivate,
+    expiry,
+    deliveries,
+    possiblyMore: reconcilePrivate.possiblyMore || expiry.possiblyMore || deliveries.possiblyMore,
+  };
+}
 let bugRun = async (_env, scheduledTime) => {
   bugRuns.push(scheduledTime);
-  return 0;
+  return maintenanceResult();
 };
 const scheduleRuns = [];
 
@@ -227,7 +244,7 @@ try {
   bugRuns.length = 0;
   bugRun = async (_env, scheduledTime) => {
     bugRuns.push(scheduledTime);
-    return 0;
+    return maintenanceResult();
   };
   Date.now = () => now + 300_000;
   await clock(failingStorage).alarm();
@@ -270,12 +287,35 @@ try {
     bugRuns.push(scheduledTime);
     maintenancePhases.push("reconcile_private", "expire", "claim");
     await observeDue(now + 60_000);
-    return 2;
+    return maintenanceResult({ expired: 1, claimed: 2 });
   };
   await clock(dueStorage).alarm();
   assert.deepEqual(bugRuns, [now], "one bounded maintenance call owns due retry and 24h expiry");
   assert.deepEqual(maintenancePhases, ["reconcile_private", "expire", "claim"]);
   assert.equal(dueStorage.alarm, now + 60_000, "scheduler retry stays in local DO storage");
+
+  for (const saturated of [{ reconciled: 10 }, { expired: 10 }, { claimed: 10 }]) {
+    const backlogStorage = new FakeStorage();
+    await clock(backlogStorage).armBugDelivery({
+      reason: "due",
+      observedAt: now - 300_000,
+      nextDue: now,
+    });
+    let run = 0;
+    bugRun = async () => {
+      run += 1;
+      return run === 1 ? maintenanceResult(saturated) : maintenanceResult();
+    };
+    await clock(backlogStorage).alarm();
+    assert.equal(backlogStorage.alarm, now + 300_000);
+    assert.equal(backlogStorage.values.get("lastRun").possiblyMore, true);
+    Date.now = () => now + 300_000;
+    await clock(backlogStorage).alarm();
+    assert.equal(run, 2);
+    assert.equal(backlogStorage.alarm, now + 300_000 + 3_600_000);
+    assert.equal(backlogStorage.values.get("lastRun").possiblyMore, false);
+    Date.now = () => now;
+  }
 
   const normalStorage = new FakeStorage();
   normalStorage.values.set("role", "community_schedule");

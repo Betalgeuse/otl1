@@ -66,12 +66,22 @@ export async function runBugDeliveryClockAlarm(
   if (state.nextDue !== null && state.nextDue <= scheduledTime) await storage.delete("bugNextDue");
   await storage.put("bugSafetyDue", scheduledTime + SAFETY_SCAN_MS);
   try {
-    const deliveries = await runDueBugDeliveries(env, scheduledTime, async (nextDue) => {
+    const maintenance = await runDueBugDeliveries(env, scheduledTime, async (nextDue) => {
       const current = await storage.get<number>("bugNextDue");
       await storage.put("bugNextDue", Math.min(current ?? nextDue, nextDue));
     });
+    if (maintenance.possiblyMore)
+      await storage.put("bugActivityDue", scheduledTime + ACTIVE_TICK_MS);
     await storage.setAlarm(nextBugClockAlarm(await readBugClockState(storage, scheduledTime)));
-    await storage.put("lastRun", { at: scheduledTime, deliveries });
+    await storage.put("lastRun", {
+      at: scheduledTime,
+      reconciled: maintenance.reconcilePrivate.processed,
+      expired: maintenance.expiry.processed,
+      claimed: maintenance.deliveries.claimed,
+      sent: maintenance.deliveries.sent,
+      failed: maintenance.deliveries.failed,
+      possiblyMore: maintenance.possiblyMore,
+    });
   } catch (error) {
     const failure = error instanceof Error ? error.name : "UnknownError";
     await storage.put("bugActivityDue", scheduledTime + ACTIVE_TICK_MS);

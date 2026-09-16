@@ -23,6 +23,18 @@ class BugMaintenancePhaseError extends Error {
 }
 
 type PhaseResult<T> = { readonly value: T; readonly failed: boolean };
+type BatchSummary = { readonly processed: number; readonly possiblyMore: boolean };
+export type BugDeliveryMaintenanceResult = {
+  readonly reconcilePrivate: BatchSummary;
+  readonly expiry: BatchSummary;
+  readonly deliveries: {
+    readonly claimed: number;
+    readonly sent: number;
+    readonly failed: number;
+    readonly possiblyMore: boolean;
+  };
+  readonly possiblyMore: boolean;
+};
 
 async function isolatedPhase<T>(
   phase: "reconcile_private" | "expire" | "claim",
@@ -120,7 +132,7 @@ export async function runDueBugDeliveries(
   env: CommunityEnv,
   scheduledTime: number,
   observeDue?: BugDeliveryDueObserver,
-): Promise<number> {
+): Promise<BugDeliveryMaintenanceResult> {
   console.log(
     JSON.stringify({
       event: "community.bug.delivery.scheduler.start",
@@ -180,15 +192,38 @@ export async function runDueBugDeliveries(
     if (result === "sent") sent += 1;
     else failed += 1;
   }
+  const result = {
+    reconcilePrivate: {
+      processed: reconcile.value,
+      possiblyMore: reconcile.value >= BATCH_LIMIT,
+    },
+    expiry: { processed: expiry.value, possiblyMore: expiry.value >= BATCH_LIMIT },
+    deliveries: {
+      claimed: due.length,
+      sent,
+      failed,
+      possiblyMore: due.length >= BATCH_LIMIT,
+    },
+  };
+  const summary = {
+    ...result,
+    possiblyMore:
+      result.reconcilePrivate.possiblyMore ||
+      result.expiry.possiblyMore ||
+      result.deliveries.possiblyMore,
+  };
   console.log(
     JSON.stringify({
       event: "community.bug.delivery.scheduler.end",
       scheduledTime,
-      claimed: due.length,
-      sent,
-      failed,
+      reconciled: summary.reconcilePrivate.processed,
+      expired: summary.expiry.processed,
+      claimed: summary.deliveries.claimed,
+      sent: summary.deliveries.sent,
+      failed: summary.deliveries.failed,
+      possiblyMore: summary.possiblyMore,
     }),
   );
   if (reconcile.failed || expiry.failed || claim.failed) throw new BugMaintenancePhaseError();
-  return due.length;
+  return summary;
 }

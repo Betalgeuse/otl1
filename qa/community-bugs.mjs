@@ -1180,7 +1180,7 @@ try {
   );
   bugSchedulerFilter = privateAnswerDraft.bugId;
   calls.length = 0;
-  assert.equal(await runDueBugDeliveries(env, Date.now() + 1_000), 2);
+  assert.equal((await runDueBugDeliveries(env, Date.now() + 1_000)).deliveries.claimed, 2);
   bugSchedulerFilter = null;
   assert.deepEqual(
     privateAnswerDeliveries.map((delivery) => delivery.status),
@@ -1849,7 +1849,7 @@ try {
   const originalConsoleLog = console.log;
   console.log = (line) => schedulerLogs.push(JSON.parse(line));
   try {
-    assert.equal(await runDueBugDeliveries(env, scheduledTime), 4);
+    assert.equal((await runDueBugDeliveries(env, scheduledTime)).deliveries.claimed, 4);
   } finally {
     console.log = originalConsoleLog;
   }
@@ -1864,9 +1864,12 @@ try {
     {
       event: "community.bug.delivery.scheduler.end",
       scheduledTime,
+      reconciled: 0,
+      expired: 0,
       claimed: 4,
       sent: 4,
       failed: 0,
+      possiblyMore: false,
     },
   ]);
   assert.deepEqual(
@@ -1934,7 +1937,7 @@ try {
     },
   ]);
   assert.equal(silentDraft.state, "needs_info", "expiry must reject one millisecond early");
-  assert.equal(await runDueBugDeliveries(env, boundary), 2);
+  assert.equal((await runDueBugDeliveries(env, boundary)).deliveries.claimed, 2);
   assert.equal(silentDraft.state, "needs_info_exhausted");
   const silentDeliveries = [...deliveries.values()].filter(
     (delivery) =>
@@ -1956,7 +1959,11 @@ try {
     calls.some((call) => call.body.text === `추가 확인 종료 버그 인계 ${silentDraft.bugId}`),
     true,
   );
-  assert.equal(await runDueBugDeliveries(env, boundary), 0, "expiry replay must enqueue nothing");
+  assert.equal(
+    (await runDueBugDeliveries(env, boundary)).deliveries.claimed,
+    0,
+    "expiry replay must enqueue nothing",
+  );
   bugSchedulerFilter = null;
   assert.equal(
     calls.some((call) => call.body.query?.includes("bug_enqueue_job")),
