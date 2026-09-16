@@ -188,6 +188,15 @@ function main() {
       ? { ok: false, output: "" }
       : git(["symbolic-ref", "--quiet", "--short", "HEAD"], root);
   const branch = branchResult.ok ? branchResult.output.trim() : null;
+  const headResult =
+    root === null
+      ? { ok: false, output: "" }
+      : git(["rev-parse", "--verify", "HEAD^{commit}"], root);
+  const headCandidate = headResult.ok ? headResult.output.trim().toLowerCase() : "";
+  const headSha = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(headCandidate)
+    ? headCandidate
+    : null;
+  if (root !== null && headSha === null) errors.push({ code: "head_commit_unavailable" });
   const statusResult =
     root === null
       ? { ok: false, output: "" }
@@ -266,6 +275,7 @@ function main() {
     ops_remote: expectedRemoteState.ops.matches,
     public_remote: expectedRemoteState.public.matches,
     canonical_branch: branch === EXPECTED_BRANCH,
+    head_commit: headSha !== null,
     clean_worktree: clean,
     worktree_registered: worktreeBlocks.length > 0,
     ruleset_metadata: metadata !== null,
@@ -288,7 +298,9 @@ function main() {
     repository: {
       expected_branch: EXPECTED_BRANCH,
       branch_matches: requirements.canonical_branch,
-      detached: branch === null,
+      head_resolved: requirements.head_commit,
+      head_sha: headSha,
+      detached: headSha !== null && branch === null,
       clean_worktree: clean,
       worktree_registered: requirements.worktree_registered,
     },

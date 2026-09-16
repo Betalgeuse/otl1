@@ -105,25 +105,30 @@ Run this from the checkout under inspection:
 node scripts/check-canonical-repo.mjs
 ```
 
-The command reads `git rev-parse`, symbolic branch state, porcelain status,
-remote URLs, and `git worktree list`. It does not run `git fetch`, create a
-repository, alter remotes, write Git config, change a branch, or deploy. A
+The command reads `git rev-parse`, the full commit object resolved by
+`HEAD^{commit}`, symbolic branch state, porcelain status, remote URLs, and
+`git worktree list`. It does not run `git fetch`, create a repository, alter
+remotes, write Git config, change a branch, or deploy. A
 metadata file can be supplied with `--metadata PATH`, or with the
 `CANONICAL_REPO_METADATA` environment variable. `--repo PATH` inspects another
 local checkout without changing it.
 
 The output is one JSON object with `canonical`, remote match booleans and URL
-cardinalities,
-worktree/branch state, stable expected names, `missing_requirements`, and
-code-only errors. The `ci` object always states `check_source` as
+cardinalities, worktree/branch state bound to the resolved full `head_sha`,
+stable expected names, `missing_requirements`, and code-only errors. An unborn
+repository, malformed `HEAD`, or any state where `HEAD^{commit}` does not
+resolve to a full SHA reports `head_resolved: false`, adds `head_commit` to
+`missing_requirements`, and cannot be canonical. A detached `HEAD` reports its
+resolved SHA but still fails the required `main` branch check. The `ci` object always states `check_source` as
 `genquant-ci-github-apps` and reports GitHub Actions as disabled unless input
 metadata explicitly claims otherwise. Remote URLs are reduced to GitHub
-repository paths; metadata
-contents, App IDs, commit SHAs, filesystem paths, credentials, and arbitrary
-Git error text are never emitted. Exit status is 0 only when local remotes,
-`main`, a clean registered worktree, valid metadata, and verified ruleset
-readback all pass. The current public-only/feature-branch checkout therefore
-must report JSON `canonical: false` and missing requirements.
+repository paths; metadata contents, App IDs, filesystem paths, credentials,
+and arbitrary Git error text are never emitted. The one emitted commit value is
+the exact locally resolved `head_sha` that binds the reported source state.
+Exit status is 0 only when that commit resolves, local remotes, `main`, a clean
+registered worktree, valid metadata, and verified ruleset readback all pass.
+The current public-only/feature-branch checkout therefore must report JSON
+`canonical: false` and missing requirements.
 
 This is a local preflight. It cannot replace the GitHub ruleset API readback or
 deployment evidence.

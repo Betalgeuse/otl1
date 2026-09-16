@@ -67,6 +67,30 @@ function initRepository(directory) {
   ]);
 }
 
+function commitRepository(directory) {
+  writeFileSync(join(directory, "tracked.txt"), "canonical source\n");
+  execFileSync("git", ["-C", directory, "add", "tracked.txt"]);
+  execFileSync(
+    "git",
+    [
+      "-C",
+      directory,
+      "-c",
+      "user.name=Canonical Fixture",
+      "-c",
+      "user.email=canonical-fixture@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "Create canonical fixture",
+    ],
+    { encoding: "utf8" },
+  );
+  return execFileSync("git", ["-C", directory, "rev-parse", "--verify", "HEAD^{commit}"], {
+    encoding: "utf8",
+  }).trim();
+}
+
 const metadataDirectory = mkdtempSync(join(tmpdir(), "otl1-canonical-metadata-"));
 const metadataPath = join(metadataDirectory, "ruleset.json");
 writeFileSync(metadataPath, JSON.stringify(metadata));
@@ -104,11 +128,59 @@ try {
   const clean = mkdtempSync(join(tmpdir(), "otl1-canonical-repo-"));
   temporaryDirectories.push(clean);
   initRepository(clean);
+  const unbornBefore = execFileSync("git", ["-C", clean, "status", "--porcelain=v1", "--branch"], {
+    encoding: "utf8",
+  });
+  const unborn = run("--repo", clean, "--metadata", metadataPath);
+  assert.equal(unborn.exitCode, 1);
+  assert.equal(unborn.value.canonical, false);
+  assert.equal(unborn.value.repository.head_resolved, false);
+  assert.equal(unborn.value.repository.head_sha, null);
+  assert.ok(unborn.value.missing_requirements.includes("head_commit"));
+  assert.ok(unborn.value.errors.some((error) => error.code === "head_commit_unavailable"));
+  assert.equal(
+    execFileSync("git", ["-C", clean, "status", "--porcelain=v1", "--branch"], {
+      encoding: "utf8",
+    }),
+    unbornBefore,
+  );
+
+  const headSha = commitRepository(clean);
   const cleanResult = run("--repo", clean, "--metadata", metadataPath);
   assert.equal(cleanResult.exitCode, 0);
   assert.equal(cleanResult.value.canonical, true);
+  assert.equal(cleanResult.value.repository.head_resolved, true);
+  assert.equal(cleanResult.value.repository.head_sha, headSha);
+  assert.match(cleanResult.value.repository.head_sha, /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/);
   assert.equal(cleanResult.value.remotes.ops.matches, true);
   assert.equal(cleanResult.value.remotes.public.matches, true);
+
+  const detached = mkdtempSync(join(tmpdir(), "otl1-canonical-detached-"));
+  temporaryDirectories.push(detached);
+  initRepository(detached);
+  const detachedSha = commitRepository(detached);
+  execFileSync("git", ["-C", detached, "checkout", "--quiet", "--detach", detachedSha]);
+  const detachedResult = run("--repo", detached, "--metadata", metadataPath);
+  assert.equal(detachedResult.exitCode, 1);
+  assert.equal(detachedResult.value.canonical, false);
+  assert.equal(detachedResult.value.repository.detached, true);
+  assert.equal(detachedResult.value.repository.head_resolved, true);
+  assert.equal(detachedResult.value.repository.head_sha, detachedSha);
+  assert.ok(detachedResult.value.missing_requirements.includes("canonical_branch"));
+
+  const malformedHead = mkdtempSync(join(tmpdir(), "otl1-canonical-malformed-head-"));
+  temporaryDirectories.push(malformedHead);
+  initRepository(malformedHead);
+  writeFileSync(join(malformedHead, ".git", "HEAD"), "ref: refs/heads/../invalid\n");
+  const malformedHeadResult = run("--repo", malformedHead, "--metadata", metadataPath);
+  assert.equal(malformedHeadResult.exitCode, 1);
+  assert.equal(malformedHeadResult.value.canonical, false);
+  assert.equal(malformedHeadResult.value.repository.head_resolved, false);
+  assert.equal(malformedHeadResult.value.repository.head_sha, null);
+  assert.ok(malformedHeadResult.value.missing_requirements.includes("head_commit"));
+  assert.ok(
+    malformedHeadResult.value.errors.some((error) => error.code === "head_commit_unavailable"),
+  );
 
   execFileSync("git", [
     "-C",
@@ -180,5 +252,5 @@ try {
 }
 
 console.log(
-  "PASS canonical repository preflight: baseline, metadata gating, clean/dirty, malformed config, redaction, and read-only status",
+  "PASS canonical repository preflight: exact HEAD, unborn/detached/malformed HEAD, metadata, remotes, and read-only status",
 );
