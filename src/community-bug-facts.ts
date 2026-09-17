@@ -141,13 +141,46 @@ export function appendBugAnswer(
     messages.push({ id: messageId, text: value, at: new Date().toISOString() });
     candidates.push({ ...bugCandidate(field, messageId, value), value: answerValue(field, value) });
   }
+  if (field === "steps" && values.length === 1) appendScheduledFacts(candidates, `${id}:0`, answer);
   return { messages, candidates };
+}
+
+function appendScheduledFacts(candidates: BugCandidate[], messageId: string, answer: string): void {
+  const stepPatterns = [
+    [/동작(?:은|이)?\s*없[^,.!?\n]*/u, "사용자 동작 없음"],
+    [
+      /(?:원\s*씽\s*)?후기\s*(?:수집|collect)\s*(?:trigger|트리거)?[^,.!?\n]*/iu,
+      "ONE THING 후기 수집 트리거 실행",
+    ],
+  ] as const;
+  for (const [pattern, normalized] of stepPatterns) {
+    const match = pattern.exec(answer);
+    if (!match?.[0] || match.index === undefined) continue;
+    candidates.push({
+      field: "steps",
+      messageId,
+      start: match.index,
+      end: match.index + match[0].length,
+      quote: match[0],
+      value: [normalized],
+    });
+  }
+  const frequency = /매일|정기적으로|매번/u.exec(answer);
+  if (frequency?.[0] && frequency.index !== undefined)
+    candidates.push({
+      field: "frequency",
+      messageId,
+      start: frequency.index,
+      end: frequency.index + frequency[0].length,
+      quote: frequency[0],
+      value: "always",
+    });
 }
 
 function answerValue(field: BugField, value: string): BugCandidate["value"] {
   if (field === "steps") return [value];
   if (field === "frequency") {
-    if (/항상|매번/.test(value)) return "always";
+    if (/항상|매번|매일|정기적으로/.test(value)) return "always";
     if (/가끔|종종|간헐/.test(value)) return "sometimes";
     if (/한\s*번|1회/.test(value)) return "once";
   }

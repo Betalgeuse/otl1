@@ -7,6 +7,7 @@ import {
   sha256,
 } from "../automation/maintainer/contract.mjs";
 import { advanceBugDialogue } from "../src/community-bug-dialogue.ts";
+import { appendBugAnswer } from "../src/community-bug-facts.ts";
 import {
   confirmedBugPacket,
   canonicalJson as dialogueCanonicalJson,
@@ -242,7 +243,8 @@ async function runCases() {
       [{ field: "expected", askedAt: now }],
     ),
   );
-  assert.equal(nonrepeat.question.field, "steps");
+  assert.equal(nonrepeat.question.field, "expected");
+  assert.match(nonrepeat.question.text, /다시/);
   const stale = await advanceBugDialogue(
     base(
       [message("m", "오류 내용")],
@@ -274,6 +276,94 @@ async function runCases() {
     ),
   );
   assert.equal(repeated.status, "exhausted");
+  let scheduled = {
+    messages: [
+      message("a", "정기 후기 수집 때 탈퇴한 계정이 멘션돼요"),
+      message("e", "현재 멤버만 한 메시지에서 멘션되어야 해요"),
+    ],
+    candidates: [
+      span("actual", "a", "정기 후기 수집 때 탈퇴한 계정이 멘션돼요"),
+      span("expected", "e", "현재 멤버만 한 메시지에서 멘션되어야 해요"),
+    ],
+  };
+  const scheduledAsked = [{ field: "steps", askedAt: now }];
+  scheduled = appendBugAnswer(
+    scheduled,
+    "steps",
+    "b7-steps",
+    "동작은 없고 정기적으로 원씽 후기 수집하는 시간에 현재 없는 멤버가 멘션돼요",
+  );
+  let scheduledResult = await advanceBugDialogue(
+    base(scheduled.messages, scheduled.candidates, scheduledAsked),
+  );
+  assert.deepEqual(
+    scheduledResult.packet.steps.status === "known" ? scheduledResult.packet.steps.value : [],
+    ["사용자 동작 없음", "ONE THING 후기 수집 트리거 실행"],
+  );
+  assert.equal(scheduledResult.packet.frequency.status, "known");
+  assert.equal(scheduledResult.packet.frequency.value, "always");
+  assert.equal(scheduledResult.question.field, "location");
+
+  scheduled = appendBugAnswer(scheduled, "location", "b7-location", "#ot1l-daily-scrum");
+  scheduledResult = await advanceBugDialogue(
+    base(scheduled.messages, scheduled.candidates, [
+      ...scheduledAsked,
+      { field: "location", askedAt: now },
+    ]),
+  );
+  assert.equal(scheduledResult.question.field, "occurredAt");
+
+  scheduled = appendBugAnswer(
+    scheduled,
+    "occurredAt",
+    "b7-time-invalid",
+    "매일 오후 6시. 하지만 이 시간은 하드코딩되면 안 돼요",
+  );
+  const beforeCorrectionAsked = [
+    ...scheduledAsked,
+    { field: "location", askedAt: now },
+    { field: "occurredAt", askedAt: now },
+  ];
+  scheduledResult = await advanceBugDialogue(
+    base(scheduled.messages, scheduled.candidates, beforeCorrectionAsked),
+  );
+  assert.equal(scheduledResult.question.field, "occurredAt");
+  assert.match(scheduledResult.question.text, /가장 최근에 실제로 발생한 날짜와 시각/);
+
+  scheduled = appendBugAnswer(
+    scheduled,
+    "occurredAt",
+    "b7-time-correction",
+    "2026-09-17T18:00:00+09:00",
+  );
+  const afterCorrectionAsked = [...beforeCorrectionAsked, { field: "occurredAt", askedAt: now }];
+  scheduledResult = await advanceBugDialogue(
+    base(scheduled.messages, scheduled.candidates, afterCorrectionAsked),
+  );
+  assert.equal(scheduledResult.question.field, "impact");
+  scheduled = appendBugAnswer(scheduled, "impact", "b7-impact", "불편");
+  scheduledResult = await advanceBugDialogue(
+    base(scheduled.messages, scheduled.candidates, [
+      ...afterCorrectionAsked,
+      { field: "impact", askedAt: now },
+    ]),
+  );
+  assert.equal(scheduledResult.status, "awaiting_confirmation");
+
+  const invalidImpact = appendBugAnswer(
+    appendBugAnswer(scheduled, "impact", "b7-invalid-impact", "잘 모르겠어요"),
+    "occurredAt",
+    "b7-invalid-time-copy",
+    "2026-09-17T18:00:00+09:00",
+  );
+  const exhaustedInvalid = await advanceBugDialogue(
+    base(
+      invalidImpact.messages,
+      invalidImpact.candidates.filter((candidate) => candidate.messageId !== "b7-impact:0"),
+      [...afterCorrectionAsked, { field: "impact", askedAt: now }],
+    ),
+  );
+  assert.equal(exhaustedInvalid.status, "exhausted");
   const cancelled = await advanceBugDialogue(
     base(completeMessages, completeCandidates, [], {
       cancelledAt: now,

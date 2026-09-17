@@ -1,3 +1,4 @@
+import { bugTextEntryState } from "./community-bug-entry-session";
 import { parseBugIntakeCandidate } from "./community-bug-intent";
 import { digestBugText } from "./community-bug-private";
 import { replayBugDelivery } from "./community-bugs";
@@ -64,12 +65,24 @@ export async function handleCommunityEvent(
   const key = `incoming:${source}${event.edit_ts ? `:edit:${string(event.edit_ts)}` : ""}`;
   const thread = string(event.thread_ts ?? event.ts);
   const date = await messageDate(store, scope, string(env.COMMUNITY_ADMIN_ID), source, thread);
-  const context = { env, store, scope, key, thread, source, date };
+  const textEntryState =
+    thread === source ? "missing" : await bugTextEntryState(store, scope, thread);
+  const context = {
+    env,
+    store,
+    scope,
+    key,
+    thread,
+    source,
+    date,
+    bugTextEntryState: textEntryState,
+  };
   const bugCandidate = parseBugIntakeCandidate(
     text,
     [env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_FEEDBACK_CHANNEL_ID].includes(scope.channelId),
   );
   if (isFeedbackChannel && !bugCandidate && thread === source) return true;
+  const textEntryInput = textEntryState !== "missing";
   const feedbackBugInput = isFeedbackChannel && (bugCandidate !== null || thread !== source);
   await store.putRecord({
     ...scope,
@@ -83,7 +96,7 @@ export async function handleCommunityEvent(
         normalizedText: text,
         editTs: event.edit_ts ? string(event.edit_ts) : null,
       },
-      bugCandidate || feedbackBugInput
+      bugCandidate || feedbackBugInput || textEntryInput
         ? { messageType: "bug_intake", contentDigest: await digestBugText(text) }
         : null,
     ),

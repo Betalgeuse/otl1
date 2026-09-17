@@ -1,7 +1,5 @@
+import { nextBugQuestion } from "./community-bug-questions";
 import {
-  BUG_ENUM_QUESTIONS,
-  BUG_FIELD_ORDER,
-  BUG_FREE_QUESTIONS,
   BUG_FREQUENCIES,
   BUG_IMPACTS,
   type BugDialogueInput,
@@ -12,7 +10,6 @@ import {
   type BugFrequency,
   type BugImpact,
   type BugPacketFields,
-  type BugQuestion,
   type BugSafetyFlag,
   bugSafetyFlags,
   canonicalBugEvidence,
@@ -57,7 +54,7 @@ function enumValue(
   const value = candidate.value;
   if (field === "frequency") {
     if (!BUG_FREQUENCIES.some((item) => item === value)) return null;
-    if (value === "always" && /항상|매번|언제나/.test(quote)) return value;
+    if (value === "always" && /항상|매번|언제나|매일|정기적으로/.test(quote)) return value;
     if (value === "sometimes" && /가끔|때때로|간헐|종종/.test(quote)) return value;
     if (value === "once" && /한\s*번|1회|이번에만/.test(quote)) return value;
     return null;
@@ -89,8 +86,11 @@ function draft(input: BugDialogueInput): {
     }
     if (evidence.field === "steps") {
       const value = candidate.value;
-      return Array.isArray(value) && value.length === 1 && value[0] === evidence.quote
-        ? [{ evidence, value: evidence.quote }]
+      const normalized = normalizedScheduledStep(evidence.quote);
+      return Array.isArray(value) &&
+        value.length === 1 &&
+        (value[0] === evidence.quote || value[0] === normalized)
+        ? [{ evidence, value: normalized ?? evidence.quote }]
         : [];
     }
     return candidate.value === evidence.quote ? [{ evidence, value: evidence.quote }] : [];
@@ -164,6 +164,13 @@ function draft(input: BugDialogueInput): {
   return { packet, contradictions, evidence, safetyFlags: bugSafetyFlags(evidence) };
 }
 
+function normalizedScheduledStep(quote: string): string | null {
+  if (/동작(?:은|이)?\s*없/.test(quote)) return "사용자 동작 없음";
+  if (/(?:원\s*씽\s*)?후기\s*(?:수집|collect)\s*(?:trigger|트리거)?/i.test(quote))
+    return "ONE THING 후기 수집 트리거 실행";
+  return null;
+}
+
 function fields(packet: DraftBugPacket): BugPacketFields | null {
   if (
     packet.actual.status === "unknown" ||
@@ -186,22 +193,6 @@ function fields(packet: DraftBugPacket): BugPacketFields | null {
     frequency: packet.frequency.value,
     impact: packet.impact.value,
   };
-}
-
-function nextQuestion(
-  packet: DraftBugPacket,
-  contradictions: readonly string[],
-  asked: ReadonlySet<BugField>,
-): BugQuestion | null {
-  const conflictField = contradictions.includes("actual_equals_expected") ? "actual" : undefined;
-  const target =
-    conflictField && !asked.has(conflictField)
-      ? conflictField
-      : BUG_FIELD_ORDER.find((field) => packet[field].status === "unknown" && !asked.has(field));
-  if (!target) return null;
-  if (target === "frequency" || target === "impact")
-    return { field: target, kind: "single_select", ...BUG_ENUM_QUESTIONS[target] };
-  return { field: target, kind: "free_text", text: BUG_FREE_QUESTIONS[target] };
 }
 
 export async function advanceBugDialogue(input: BugDialogueInput): Promise<BugDialogueResult> {
@@ -244,8 +235,15 @@ export async function advanceBugDialogue(input: BugDialogueInput): Promise<BugDi
     const at = Date.parse(item.askedAt);
     return Number.isFinite(at) && at >= cutoff && at <= Date.parse(input.now);
   });
-  const recentFields = new Set(recent.map((item) => item.field));
-  const question = nextQuestion(packet, contradictions, recentFields);
-  if (recent.length >= 5 || !question) return { ...context, status: "exhausted", handoff: true };
+  const questionCount = input.questionCount ?? recent.length;
+  const startedAt = input.needsInfoStartedAt ? Date.parse(input.needsInfoStartedAt) : Number.NaN;
+  const expired = Number.isFinite(startedAt) && startedAt <= Date.parse(input.now) - 86_400_000;
+  if (questionCount >= 5 || recent.length >= 5 || expired)
+    return { ...context, status: "exhausted", handoff: true };
+  const question = nextBugQuestion(
+    packet,
+    contradictions,
+    recent.map((item) => item.field),
+  );
   return { ...context, status: "needs_info", question };
 }

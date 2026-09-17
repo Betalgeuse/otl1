@@ -16,6 +16,7 @@ import {
 } from "./community-bug-facts";
 import { digestBugText, writeBugPrivateObject } from "./community-bug-private";
 import { readBugPrivateReport } from "./community-bug-private-report";
+import { resumeBugDialogue } from "./community-bug-resume";
 import { canonicalJson, isBugField } from "./community-bug-schema";
 import { bugDialogueInput, exhaustBugReport } from "./community-bug-session-state";
 import { CommunityBugStore } from "./community-bug-store";
@@ -45,8 +46,7 @@ export async function continueBugReport(
   }
   const question = active.questions.findLast((item) => !item.answered);
   if (!question || !isBugField(question.fieldName)) {
-    await ephemeral(context, { text: "이 제보는 운영자 확인이 필요해요." });
-    return true;
+    return resumeBugDialogue(context, active);
   }
   if (expectedQuestionId && expectedQuestionId !== question.questionId) {
     await replayBugDelivery(context);
@@ -59,7 +59,7 @@ export async function continueBugReport(
     return true;
   }
   if (/^버그 제보 계속$/.test(answer.trim())) {
-    await replayBugDelivery(context);
+    if (!(await replayBugDelivery(context))) await resumeBugDialogue(context, active);
     return true;
   }
   if (await restoreUnseenBugQuestion(context, active, question)) return true;

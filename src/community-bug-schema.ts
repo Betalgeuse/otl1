@@ -71,6 +71,8 @@ export type BugDialogueInput = {
   readonly messages: readonly { readonly id: string; readonly text: string; readonly at: string }[];
   readonly candidates?: readonly unknown[];
   readonly askedQuestions?: readonly { readonly field: BugField; readonly askedAt: string }[];
+  readonly questionCount?: number;
+  readonly needsInfoStartedAt?: string;
   readonly now: string;
   readonly reporterConfirmedAt?: string;
   readonly cancelledAt?: string;

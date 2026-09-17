@@ -6,6 +6,7 @@ import {
   deliverPrivateBugOutbox,
 } from "./community-bug-delivery-messages";
 import { confirmedFieldsFromDraft } from "./community-bug-facts";
+import { resumeBugDialogue } from "./community-bug-resume";
 import { CommunityBugStore } from "./community-bug-store";
 import type { CommunityContext } from "./community-runtime";
 import { NeonStore } from "./store";
@@ -61,7 +62,7 @@ export async function replayBugDelivery(context: CommunityContext): Promise<bool
     return true;
   }
   const fields = confirmedFieldsFromDraft(draft);
-  if (!fields) return false;
+  if (!fields) return resumeBugDialogue(context, draft);
   await deliverBugSummary(context, {
     bugId: draft.bugId,
     reporterId: draft.reporterId,

@@ -19,6 +19,8 @@ export function bugDialogueInput(draft: BugDraftRead, parsed: ParsedBugReport): 
       field: isBugField(question.fieldName) ? question.fieldName : "actual",
       askedAt: question.askedAt,
     })),
+    questionCount: draft.questions.length,
+    ...(draft.needsInfoStartedAt ? { needsInfoStartedAt: draft.needsInfoStartedAt } : {}),
     now: new Date().toISOString(),
   };
 }
