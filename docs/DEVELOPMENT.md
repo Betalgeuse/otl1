@@ -106,3 +106,9 @@ cd /tmp/otl1-public-review && bun run check
 스냅샷은 Git 이력이 없는 경로이므로 Git 작업본이 필요한 maintainer dry-run QA는 `check` allowlist에서 제외합니다. 공개 clone에서 그 QA를 실행할 때는 별도 Git 작업본을 만들고 임시 출력 경로를 사용합니다.
 
 데이터 모델은 [시스템 구조](ARCHITECTURE.md), 서비스 사용법은 [사용 가이드](USER_GUIDE.md)를 따릅니다.
+
+## 자연어 대상 날짜 회귀 검사
+
+대상 날짜는 메시지 맨 앞의 날짜 헤더나 기록 대상 표현에서만 결정합니다. 본문 속 교재 장 번호, 시각, URL, 버전, 백분율과 이유에 포함된 과거 표현은 목표·후기 내용으로 유지합니다. 다른 날짜의 기록 변경과 여러 대상 날짜는 기존 확인·거절 경계를 유지합니다.
+
+`bun qa/community-target-date.mjs`는 순수 판별과 Qwen 호출 경계를, `bun qa/community-target-date-routing.mjs`는 서명된 합성 Slack 이벤트의 저장·부분 후기·재전송 멱등성을 검사합니다. 두 검사는 실제 Slack이나 Neon을 호출하지 않습니다.
