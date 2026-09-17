@@ -1,6 +1,6 @@
 import {readFileSync,writeFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
-import {generateEncouragement} from '../src/community-language.ts';
+import {generateEncouragement} from '../src/community-encouragement.ts';
 const config=readFileSync('/Users/zayden/.config/.wrangler/config/default.toml','utf8');const token=config.match(/oauth_token\s*=\s*"([^"]+)"/)?.[1];if(!token)throw Error('Missing Cloudflare login');
 let calls=0;const ai={run:async(model,input)=>{calls++;const r=await fetch(`https://api.cloudflare.com/client/v4/accounts/1216831373fd0ae2b3e7c2b6641bee46/ai/run/${model}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(input),signal:AbortSignal.timeout(15000)});const d=await r.json();if(!r.ok||!d.success)throw Error('Inference unavailable');return d.result;}};
 const input={kind:'goal',text:'QA 문서 한 쪽 읽기',userId:'U0BV52VENTD'};const first=await generateEncouragement(ai,input);const second=await generateEncouragement(ai,{...input,previous:first});assert.notEqual(first,second);const evidence={checkedAt:new Date().toISOString(),calls,first,second,immediateRepeat:false};writeFileSync('.omx/qa/v001-v019/live-variety.json',JSON.stringify(evidence,null,2));console.log(evidence);

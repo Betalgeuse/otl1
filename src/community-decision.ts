@@ -1,5 +1,5 @@
 import type { CommunityIntent, CommunityInterpretation } from "./community-language";
-import { isCurrentDateSafe } from "./community-temporal";
+import { type TargetDateContext, targetDateIsSafe } from "./community-temporal";
 
 export type CommunityRecordDecision = {
   readonly intent: CommunityIntent;
@@ -44,8 +44,9 @@ function decision(
 export function decideCommunityRecord(
   interpretation: CommunityInterpretation,
   text: string,
+  target: TargetDateContext,
 ): CommunityRecordDecision {
-  const currentDateSafe = isCurrentDateSafe(text);
+  const currentDateSafe = targetDateIsSafe(target);
   const candidate = currentDateSafe ? potentialReflection(text) : null;
   switch (interpretation.intent) {
     case "completion": {

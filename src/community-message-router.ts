@@ -15,6 +15,7 @@ import {
   scopedValue,
   textReply,
 } from "./community-runtime";
+import { targetDateContext } from "./community-temporal";
 import type { DayChange } from "./community-types";
 import { koreaDate } from "./input";
 
@@ -85,9 +86,16 @@ export async function dispatchCommunityMessage(
     await textReply(context, "잠시 후 다시 알려주세요. 기록은 바꾸지 않았어요.");
     return;
   }
+  const today = koreaDate(Date.now() / 1000);
+  const target = targetDateContext(text, context.date, today);
   const intent = decideCommunityRecord(
-    await classifyCommunityIntent(context.env.AI, { goal: day.goal || null, text }),
+    await classifyCommunityIntent(
+      context.env.AI,
+      { goal: day.goal || null, text, date: context.date, today },
+      target,
+    ),
     text,
+    target,
   );
   const base = {
     ...context.scope,
@@ -114,7 +122,7 @@ export async function dispatchCommunityMessage(
       return;
     case "goal": {
       const goal = intent.goalText ?? text;
-      if (intent.needsConfirmation || context.date !== koreaDate(Date.now() / 1000) || day.goal) {
+      if (intent.needsConfirmation || context.date !== today || day.goal) {
         await confirmChange(context, day, goal, "goal");
         return;
       }
@@ -122,7 +130,7 @@ export async function dispatchCommunityMessage(
       return;
     }
     case "rest":
-      if (intent.needsConfirmation || context.date !== koreaDate(Date.now() / 1000)) {
+      if (intent.needsConfirmation || context.date !== today) {
         await confirmChange(context, day, text, "rest");
         return;
       }
@@ -135,7 +143,7 @@ export async function dispatchCommunityMessage(
         intent.needsConfirmation ||
         !day.goal ||
         intent.outcome === "unknown" ||
-        context.date !== koreaDate(Date.now() / 1000)
+        context.date !== today
       ) {
         await confirmChange(context, day, text, reflectionText ? "reflection" : "complete");
         return;

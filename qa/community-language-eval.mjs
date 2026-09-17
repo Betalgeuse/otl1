@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { classifyCommunityIntent, generateEncouragement } from '../src/community-language.ts';
+import { classifyCommunityIntent } from '../src/community-language.ts';
+import { generateEncouragement } from '../src/community-encouragement.ts';
+const today=new Date(Date.now()+9*60*60*1000).toISOString().slice(0,10);
 const token = readFileSync(`${homedir()}/.config/.wrangler/config/default.toml`, 'utf8').match(/oauth_token\s*=\s*"([^"]+)"/)?.[1];
 if (!token) throw new Error('Wrangler OAuth required');
 const calls=[];
@@ -27,7 +29,7 @@ const fixtures=[
 ];
 const results=[];
 for(const [goal,text,intent,outcome,hasReflection] of fixtures){
- const started=Date.now(); const actual=await classifyCommunityIntent(ai,{goal,text});
+ const started=Date.now(); const actual=await classifyCommunityIntent(ai,{goal,text,date:today,today});
  results.push({goal,text,expected:{intent,outcome,hasReflection},actual,ms:Date.now()-started,pass:actual.intent===intent&&actual.outcome===outcome&&actual.hasReflection===hasReflection});
 }
 const encouragement=[];
