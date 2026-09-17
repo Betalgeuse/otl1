@@ -1,3 +1,5 @@
+import { parseBugIntakeCandidate } from "./community-bug-intent";
+import { digestBugText } from "./community-bug-private";
 import { replayBugDelivery } from "./community-bugs";
 import { enrollReminderMember } from "./community-enrollment";
 import { messageDate } from "./community-followup";
@@ -61,17 +63,21 @@ export async function handleCommunityEvent(
   const thread = string(event.thread_ts ?? event.ts);
   const date = await messageDate(store, scope, string(env.COMMUNITY_ADMIN_ID), source, thread);
   const context = { env, store, scope, key, thread, source, date };
+  const bugCandidate = parseBugIntakeCandidate(text, scope.channelId === env.COMMUNITY_CHANNEL_ID);
   await store.putRecord({
     ...scope,
     key,
     kind: "incoming",
-    body: incomingMessageBody({
-      date,
-      thread,
-      rawText,
-      normalizedText: text,
-      editTs: event.edit_ts ? string(event.edit_ts) : null,
-    }),
+    body: incomingMessageBody(
+      {
+        date,
+        thread,
+        rawText,
+        normalizedText: text,
+        editTs: event.edit_ts ? string(event.edit_ts) : null,
+      },
+      bugCandidate ? { messageType: "bug_intake", contentDigest: await digestBugText(text) } : null,
+    ),
   });
   if (!(await store.claimRecord({ ...scope, key }))) {
     await replayBugDelivery(context);

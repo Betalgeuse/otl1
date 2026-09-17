@@ -14,4 +14,8 @@ assert.deepEqual(decideCommunityRecord({...base,intent:'unclear',outcome:'unknow
 assert.equal(decideCommunityRecord({...base,intent:'unclear',outcome:'unknown',needsConfirmation:true},'지난 주 목표를 완료했어요.').currentDateSafe,false);
 
 assert.deepEqual(incomingMessageBody({date:'2026-09-15',thread:'100.000001',rawText:'<@UBOT> 완료. 배웠어요',normalizedText:'완료. 배웠어요',editTs:null,unexpected:'discard me'}),{date:'2026-09-15',thread:'100.000001',rawText:'<@UBOT> 완료. 배웠어요',normalizedText:'완료. 배웠어요',editTs:null});
-console.log('PASS record decision separates outcome from preserved reflection; intake keeps replayable raw text');
+const bugCanary='BUG_INTAKE_CANARY';
+const bugBody=incomingMessageBody({date:'2026-09-15',thread:'100.000002',rawText:bugCanary,normalizedText:bugCanary,editTs:null},{messageType:'bug_intake',contentDigest:'a'.repeat(64)});
+assert.deepEqual(bugBody,{date:'2026-09-15',thread:'100.000002',editTs:null,messageType:'bug_intake',contentDigest:'a'.repeat(64)});
+assert.equal(JSON.stringify(bugBody).includes(bugCanary),false);
+console.log('PASS record decision separates outcome from preserved reflection; ordinary intake stays replayable and bug intake stores digest-only metadata');

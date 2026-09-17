@@ -103,10 +103,6 @@ export function bugConfirmationPayload(
   };
 }
 
-export function isBugReportMessage(text: string): boolean {
-  return text.trim() === "버그 제보" || /^버그\s*:\s*\S.+$/s.test(text.trim());
-}
-
 export function bugEntryPayload(context: CommunityContext) {
   return {
     text: "버그 제보를 시작합니다.",

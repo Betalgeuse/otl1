@@ -10,14 +10,10 @@ import {
   type ParsedBugReport,
   storedBugFields,
 } from "./community-bug-facts";
+import { isBugReportMessage, parseBugIntakeCandidate } from "./community-bug-intent";
 import { randomBugIdentity, writeBugPrivateObject } from "./community-bug-private";
 import { confirmBugReport, continueBugReport } from "./community-bug-session";
-import {
-  bugEntryPayload,
-  isBugReportMessage,
-  openBugReportModal,
-  parseBugReportModal,
-} from "./community-bug-slack";
+import { bugEntryPayload, openBugReportModal, parseBugReportModal } from "./community-bug-slack";
 import { CommunityBugStore } from "./community-bug-store";
 import type { BugDraft } from "./community-bug-types";
 import { type CommunityContext, post } from "./community-runtime";
@@ -173,12 +169,16 @@ export async function handleBugReportMessage(
   context: CommunityContext,
   text: string,
 ): Promise<boolean> {
-  if (!isBugReportMessage(text)) return false;
-  if (text.trim() === "버그 제보") {
+  const intent = parseBugIntakeCandidate(
+    text,
+    context.scope.channelId === context.env.COMMUNITY_CHANNEL_ID,
+  );
+  if (!intent) return false;
+  if (intent.kind === "entry") {
     await post(context, bugEntryPayload(context));
     return true;
   }
-  const report = text.trim().replace(/^버그\s*:\s*/s, "");
+  const report = intent.report;
   const message = { id: context.source, text: report, at: new Date().toISOString() };
   const candidates = [bugCandidate("actual", message.id, report)];
   const sensitive = /개인정보|보안|토큰|비밀번호|노출/.exec(report);

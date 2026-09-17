@@ -6,7 +6,27 @@ export type IncomingMessageInput = {
   readonly editTs: string | null;
 };
 
-export function incomingMessageBody(input: IncomingMessageInput): IncomingMessageInput {
+export type BugIntakeRecord = {
+  readonly messageType: "bug_intake";
+  readonly contentDigest: string;
+};
+
+type IncomingMessageBody =
+  | IncomingMessageInput
+  | (Pick<IncomingMessageInput, "date" | "thread" | "editTs"> & BugIntakeRecord);
+
+export function incomingMessageBody(
+  input: IncomingMessageInput,
+  bugIntake: BugIntakeRecord | null = null,
+): IncomingMessageBody {
+  if (bugIntake)
+    return {
+      date: input.date,
+      thread: input.thread,
+      editTs: input.editTs,
+      messageType: bugIntake.messageType,
+      contentDigest: bugIntake.contentDigest,
+    };
   return {
     date: input.date,
     thread: input.thread,
