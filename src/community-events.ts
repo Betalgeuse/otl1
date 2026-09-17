@@ -6,7 +6,7 @@ import { messageDate } from "./community-followup";
 import { deliverWelcomeGuide } from "./community-guide";
 import { incomingMessageBody } from "./community-intake";
 import { handleIntroductionChannelMessage } from "./community-introduction-channel";
-import { dispatchCommunityMessage } from "./community-message-router";
+import { dispatchCommunityMessage, dispatchFeedbackBugMessage } from "./community-message-router";
 import { type CommunityEnv, textReply } from "./community-runtime";
 import { CommunityStore } from "./community-store";
 import { welcomeTownhallMember } from "./community-welcome";
@@ -34,11 +34,13 @@ export async function handleCommunityEvent(
       env.COMMUNITY_CHANNEL_ID,
       env.COMMUNITY_PUBLIC_CHANNEL_ID,
       env.COMMUNITY_RELEASE_CHANNEL_ID,
+      env.COMMUNITY_FEEDBACK_CHANNEL_ID,
     ].includes(string(event.channel))
   )
     return false;
+  const isFeedbackChannel = event.channel === env.COMMUNITY_FEEDBACK_CHANNEL_ID;
   if (
-    event.type !== "message" ||
+    !["message", ...(isFeedbackChannel ? ["app_mention"] : [])].includes(string(event.type)) ||
     event.bot_id ||
     (event.subtype !== undefined && event.subtype !== "thread_broadcast")
   )
@@ -63,7 +65,12 @@ export async function handleCommunityEvent(
   const thread = string(event.thread_ts ?? event.ts);
   const date = await messageDate(store, scope, string(env.COMMUNITY_ADMIN_ID), source, thread);
   const context = { env, store, scope, key, thread, source, date };
-  const bugCandidate = parseBugIntakeCandidate(text, scope.channelId === env.COMMUNITY_CHANNEL_ID);
+  const bugCandidate = parseBugIntakeCandidate(
+    text,
+    [env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_FEEDBACK_CHANNEL_ID].includes(scope.channelId),
+  );
+  if (isFeedbackChannel && !bugCandidate && thread === source) return true;
+  const feedbackBugInput = isFeedbackChannel && (bugCandidate !== null || thread !== source);
   await store.putRecord({
     ...scope,
     key,
@@ -76,7 +83,9 @@ export async function handleCommunityEvent(
         normalizedText: text,
         editTs: event.edit_ts ? string(event.edit_ts) : null,
       },
-      bugCandidate ? { messageType: "bug_intake", contentDigest: await digestBugText(text) } : null,
+      bugCandidate || feedbackBugInput
+        ? { messageType: "bug_intake", contentDigest: await digestBugText(text) }
+        : null,
     ),
   });
   if (!(await store.claimRecord({ ...scope, key }))) {
@@ -88,11 +97,13 @@ export async function handleCommunityEvent(
       await store.finishRecord({ ...scope, key }, "sent");
       return true;
     }
-    await dispatchCommunityMessage(
-      context,
-      text,
-      Boolean(env.COMMUNITY_BOT_USER_ID && rawText.includes(`<@${env.COMMUNITY_BOT_USER_ID}>`)),
-    );
+    if (isFeedbackChannel) await dispatchFeedbackBugMessage(context, text);
+    else
+      await dispatchCommunityMessage(
+        context,
+        text,
+        Boolean(env.COMMUNITY_BOT_USER_ID && rawText.includes(`<@${env.COMMUNITY_BOT_USER_ID}>`)),
+      );
     await store.finishRecord({ ...scope, key }, "sent");
   } catch (error) {
     console.error(

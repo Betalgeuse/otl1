@@ -18,6 +18,7 @@ export type CommunityEnv = {
   readonly COMMUNITY_CHANNEL_ID?: string;
   readonly COMMUNITY_ADMIN_ID?: string;
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
+  readonly COMMUNITY_FEEDBACK_CHANNEL_ID?: string;
   readonly COMMUNITY_RELEASE_CHANNEL_ID?: string;
   readonly COMMUNITY_WELCOME_CHANNEL_ID?: string;
   readonly COMMUNITY_INTRO_CHANNEL_ID?: string;
@@ -52,22 +53,32 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
   const channelId = data.container
     ? string(object(data.container).channel_id)
     : string(object(JSON.parse(string(object(data.view).private_metadata))).channelId);
-  const expandedChannelAction = [
-    "community_introduction",
-    "community_introduction_submit",
-    "community_introduction_directory",
+  const bugAction = [
     "community_bug_open",
     "community_bug_submit",
     "community_bug_confirm",
     "community_bug_answer",
   ].includes(actionId);
+  const introductionAction = [
+    "community_introduction",
+    "community_introduction_submit",
+    "community_introduction_directory",
+  ].includes(actionId);
+  const expandedChannelAllowed =
+    (bugAction &&
+      [
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+        env.COMMUNITY_INTRO_CHANNEL_ID,
+        env.COMMUNITY_FEEDBACK_CHANNEL_ID,
+      ].includes(channelId)) ||
+    (introductionAction &&
+      [env.COMMUNITY_RELEASE_CHANNEL_ID, env.COMMUNITY_INTRO_CHANNEL_ID].includes(channelId));
+  const feedbackActionDenied = channelId === env.COMMUNITY_FEEDBACK_CHANNEL_ID && !bugAction;
   if (
     teamId !== env.SLACK_TEAM_ID ||
+    feedbackActionDenied ||
     (![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) &&
-      !(
-        expandedChannelAction &&
-        [env.COMMUNITY_RELEASE_CHANNEL_ID, env.COMMUNITY_INTRO_CHANNEL_ID].includes(channelId)
-      )) ||
+      !expandedChannelAllowed) ||
     (channelId === env.COMMUNITY_CHANNEL_ID && userId !== env.COMMUNITY_ADMIN_ID) ||
     !/^[UW][A-Z0-9]+$/.test(userId)
   )

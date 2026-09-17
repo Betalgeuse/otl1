@@ -25,6 +25,7 @@ export {
   continueBugReport,
   isBugReportMessage,
   openBugReportModal,
+  parseBugIntakeCandidate,
   parseBugReportModal,
   replayBugDelivery,
 };
@@ -171,7 +172,9 @@ export async function handleBugReportMessage(
 ): Promise<boolean> {
   const intent = parseBugIntakeCandidate(
     text,
-    context.scope.channelId === context.env.COMMUNITY_CHANNEL_ID,
+    [context.env.COMMUNITY_CHANNEL_ID, context.env.COMMUNITY_FEEDBACK_CHANNEL_ID].includes(
+      context.scope.channelId,
+    ),
   );
   if (!intent) return false;
   if (intent.kind === "entry") {

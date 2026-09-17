@@ -12,6 +12,7 @@ const {
   replayBugDelivery,
   submitBugReportModal,
 } = await import("../src/community-bugs.ts");
+const { parseBugIntakeCandidate } = await import("../src/community-bug-intent.ts");
 const { communityInteraction } = await import("../src/community-interactions.ts");
 const { runDueBugDeliveries } = await import("../src/community-bug-delivery-scheduler.ts");
 const { communityCron } = await import("../src/community-cron.ts");
@@ -93,6 +94,7 @@ const env = {
   COMMUNITY_ADMIN_ID: "UADMIN",
   COMMUNITY_PUBLIC_CHANNEL_ID: "CPUBLIC",
   COMMUNITY_RELEASE_CHANNEL_ID: "CRELEASE",
+  COMMUNITY_FEEDBACK_CHANNEL_ID: "CFEEDBACK",
   BUG_PRIVATE_KEK: key,
   BUG_PRIVATE_KEK_VERSION: "qa-v1",
   BUG_PRIVATE_OBJECTS: {
@@ -723,6 +725,23 @@ try {
   for (const ordinary of ["버그를 읽었어요", "오늘 버그 책 읽기", "버그:", "오늘 ONE THING"]) {
     assert.equal(isBugReportMessage(ordinary), false);
   }
+  for (const entry of ["버그제보", "버그 제보", "버그제보:", "버그 제보:   "])
+    assert.deepEqual(parseBugIntakeCandidate(entry), { kind: "entry" }, entry);
+  for (const [text, report] of [
+    ["버그제보: 버튼이 멈춰요", "버튼이 멈춰요"],
+    ["버그 제보: 버튼이 멈춰요", "버튼이 멈춰요"],
+    ["버그: 버튼이 멈춰요", "버튼이 멈춰요"],
+    ["문제: 버튼이 멈춰요", "버튼이 멈춰요"],
+    ["오류: 버튼이 멈춰요", "버튼이 멈춰요"],
+    ["버그제보 버튼이 멈춰요", "버튼이 멈춰요"],
+  ])
+    assert.deepEqual(
+      parseBugIntakeCandidate(text, /^(?:문제|오류)/.test(text)),
+      { kind: "report", report },
+      text,
+    );
+  for (const rejected of ["버그제보자", "버그 제보서를 읽었어요", "버그를 읽었어요"])
+    assert.equal(parseBugIntakeCandidate(rejected), null, rejected);
 
   assert.equal(await handleBugReportMessage(context, "버그 제보"), true);
   assert.equal(calls.length, 1);
@@ -2286,10 +2305,196 @@ try {
       body: naturalEventBody,
     });
   const runtime = {
-    env: { ...env, SLACK_SIGNING_SECRET: "signing-secret" },
+    env: { ...env, COMMUNITY_BOT_USER_ID: "UBOT", SLACK_SIGNING_SECRET: "signing-secret" },
     store: {},
     invitations: {},
   };
+  async function sendFeedbackEvent({
+    type = "message",
+    text,
+    user = "UMEMBER",
+    suffix,
+    threadTs,
+  }) {
+    const eventTs = `${timestamp}.${suffix}`;
+    const body = JSON.stringify({
+      type: "event_callback",
+      team_id: "TQA",
+      event_id: `E-FEEDBACK-${type}-${suffix}`,
+      event: {
+        type,
+        channel: "CFEEDBACK",
+        user,
+        text,
+        ts: eventTs,
+        ...(threadTs ? { thread_ts: threadTs } : {}),
+        event_ts: eventTs,
+      },
+    });
+    const signature = await sign(`v0:${timestamp}:${body}`, "signing-secret");
+    const request = () =>
+      new Request("https://worker.test/slack/events", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-slack-request-timestamp": timestamp,
+          "x-slack-signature": `v0=${signature}`,
+        },
+        body,
+      });
+    const effects = [];
+    const response = await handleRequest(request(), runtime, {
+      waitUntil(effect) { effects.push(effect); },
+    });
+    await Promise.all(effects);
+    return { eventTs, request, response };
+  }
+
+  calls.length = 0;
+  const feedbackEntry = await sendFeedbackEvent({ text: "버그제보", suffix: "100001" });
+  assert.equal(feedbackEntry.response.status, 200);
+  const feedbackEntryCall = calls.find((call) => call.body?.blocks?.[1]?.elements?.[0]?.action_id === "community_bug_open");
+  assert.notEqual(feedbackEntryCall, undefined, "feedback keyword must post the entry card");
+  const entryPosts = calls.filter((call) => call.body?.blocks?.[1]?.elements?.[0]?.action_id === "community_bug_open").length;
+  await sendFeedbackEvent({ type: "app_mention", text: "<@UBOT> 버그제보", suffix: "100001" });
+  assert.equal(
+    calls.filter((call) => call.body?.blocks?.[1]?.elements?.[0]?.action_id === "community_bug_open").length,
+    entryPosts,
+    "message plus app_mention duplicate must not repeat the entry card",
+  );
+  const feedbackIncoming = calls.find((call) =>
+    call.body?.query?.includes("community_execute") &&
+    call.body.params?.[0] === "put_record" &&
+    JSON.parse(call.body.params[1]).key === `incoming:${feedbackEntry.eventTs}`
+  );
+  const feedbackIncomingBody = JSON.parse(feedbackIncoming.body.params[1]).body;
+  assert.deepEqual(Object.keys(feedbackIncomingBody).sort(), [
+    "contentDigest", "date", "editTs", "messageType", "thread",
+  ]);
+
+  const feedbackOpenPayload = {
+    ...openPayload,
+    container: { channel_id: "CFEEDBACK", message_ts: feedbackEntry.eventTs, thread_ts: feedbackEntry.eventTs },
+    actions: [{
+      ...openPayload.actions[0],
+      value: JSON.stringify({ ownerId: "UMEMBER", key: "new", source: feedbackEntry.eventTs, thread: feedbackEntry.eventTs }),
+    }],
+  };
+  assert.equal((await communityInteraction(feedbackOpenPayload, env, () => {}))?.status, 200);
+  assert.equal(calls.at(-1).body.view.callback_id, "community_bug_submit");
+  assert.equal(JSON.parse(calls.at(-1).body.view.private_metadata).channelId, "CFEEDBACK");
+  await assert.rejects(
+    () => communityInteraction({ ...feedbackOpenPayload, actions: [{ ...feedbackOpenPayload.actions[0], action_id: "community_settings" }] }, env, () => {}),
+    /사용/,
+    "non-bug controls must fail closed in feedback",
+  );
+
+  calls.length = 0;
+  const feedbackReport = await sendFeedbackEvent({ text: "버그 제보: 버튼이 멈춰요", suffix: "100002" });
+  const feedbackDraft = [...bugRows.values()].find(
+    (row) => row.source.opaqueRef === `slack:TQA:CFEEDBACK:${feedbackReport.eventTs}`,
+  );
+  assert.notEqual(feedbackDraft, undefined);
+  assert.equal(
+    calls.filter((call) => call.target.endsWith("chat.postMessage") && call.body.thread_ts === feedbackReport.eventTs).length,
+    1,
+  );
+  const feedbackDeliveryCount = deliveries.size;
+  const feedbackPostCount = calls.filter((call) => call.target.endsWith("chat.postMessage")).length;
+  const feedbackDuplicateEffects = [];
+  await handleRequest(feedbackReport.request(), runtime, { waitUntil(effect) { feedbackDuplicateEffects.push(effect); } });
+  await Promise.all(feedbackDuplicateEffects);
+  assert.equal(deliveries.size, feedbackDeliveryCount);
+  assert.equal(calls.filter((call) => call.target.endsWith("chat.postMessage")).length, feedbackPostCount);
+
+  calls.length = 0;
+  const feedbackContinuation = await sendFeedbackEvent({
+    text: "버튼을 누르면 다음 화면으로 가야 해요",
+    suffix: "100005",
+    threadTs: feedbackReport.eventTs,
+  });
+  const feedbackContinuationRecord = calls.find((call) =>
+    call.body?.params?.[0] === "put_record" &&
+    JSON.parse(call.body.params[1]).key === `incoming:${feedbackContinuation.eventTs}`
+  );
+  const feedbackContinuationBody = JSON.parse(feedbackContinuationRecord.body.params[1]).body;
+  assert.equal(feedbackContinuationBody.messageType, "bug_intake");
+  assert.equal("rawText" in feedbackContinuationBody, false);
+  assert.equal("normalizedText" in feedbackContinuationBody, false);
+  assert.equal(objects.size, 36, "R2 fake fixture count before duplicate continuation");
+  const continuationSnapshot = {
+    rows: JSON.stringify([...bugRows.entries()]),
+    transitions: JSON.stringify([...transitions.entries()]),
+    deliveries: JSON.stringify([...deliveries.entries()]),
+    objects: [...objects.entries()].map(([objectKey, bytes]) => [
+      objectKey,
+      Buffer.from(bytes).toString("base64"),
+    ]),
+    posts: calls.filter((call) => call.target.endsWith("chat.postMessage")).length,
+  };
+  const duplicateContinuationEffects = [];
+  await Promise.all([
+    handleRequest(feedbackContinuation.request(), runtime, {
+      waitUntil(effect) { duplicateContinuationEffects.push(effect); },
+    }),
+    handleRequest(feedbackContinuation.request(), runtime, {
+      waitUntil(effect) { duplicateContinuationEffects.push(effect); },
+    }),
+  ]);
+  await Promise.all(duplicateContinuationEffects);
+  assert.equal(objects.size, 36, "duplicate continuation must keep R2 fake count 36 -> 36");
+  assert.deepEqual(
+    {
+      rows: JSON.stringify([...bugRows.entries()]),
+      transitions: JSON.stringify([...transitions.entries()]),
+      deliveries: JSON.stringify([...deliveries.entries()]),
+      objects: [...objects.entries()].map(([objectKey, bytes]) => [
+        objectKey,
+        Buffer.from(bytes).toString("base64"),
+      ]),
+      posts: calls.filter((call) => call.target.endsWith("chat.postMessage")).length,
+    },
+    continuationSnapshot,
+    "duplicate continuation may only replay delivery; revision, delivery, post, and R2 bytes stay unchanged",
+  );
+
+  calls.length = 0;
+  const mentionedReport = await sendFeedbackEvent({
+    type: "app_mention",
+    text: "<@UBOT> 버그제보: 알림 버튼이 안 보여요",
+    user: "UOTHER",
+    suffix: "100003",
+  });
+  assert.notEqual(
+    [...bugRows.values()].find((row) => row.source.opaqueRef === `slack:TQA:CFEEDBACK:${mentionedReport.eventTs}`),
+    undefined,
+    "feedback app_mention must be consumed before legacy mention handling",
+  );
+  assert.equal(calls.some((call) => JSON.stringify(call.body).includes("nl_confirm")), false);
+  const mentionedDeliveryCount = deliveries.size;
+  const mentionedPostCount = calls.filter((call) => call.target.endsWith("chat.postMessage")).length;
+  await sendFeedbackEvent({
+    type: "message",
+    text: "버그제보: 알림 버튼이 안 보여요",
+    user: "UOTHER",
+    suffix: "100003",
+  });
+  assert.equal(deliveries.size, mentionedDeliveryCount);
+  assert.equal(calls.filter((call) => call.target.endsWith("chat.postMessage")).length, mentionedPostCount);
+
+  calls.length = 0;
+  const rowsBeforeDiscussion = bugRows.size;
+  await sendFeedbackEvent({ text: "오늘 점심 뭐 먹지", user: "UTHIRD", suffix: "100004" });
+  assert.equal(bugRows.size, rowsBeforeDiscussion);
+  assert.equal(calls.some((call) => call.target.includes("slack.com/api/")), false);
+  assert.equal(
+    calls.some((call) => call.body?.params?.[0] === "put_record"),
+    false,
+    "non-bug feedback discussion must not persist or fall through",
+  );
+  statusSequence.length = 0;
+  calls.length = 0;
+
   const naturalEffects = [];
   const naturalLogs = [];
   const naturalConsoleError = console.error;

@@ -20,16 +20,16 @@ export function parseBugIntakeCandidate(
   allowNatural = false,
 ): BugMessageIntent | null {
   const trimmed = text.trim();
-  if (trimmed === "버그 제보") return { kind: "entry" };
-  const explicit = /^버그\s*:\s*(\S.+)$/su.exec(trimmed);
+  if (/^버그\s*제보\s*:?\s*$/u.test(trimmed)) return { kind: "entry" };
+  if (/^버그\s*제보\s+계속$/u.test(trimmed)) return null;
+  const explicit = /^(?:버그\s*제보\s*:\s*|버그\s*제보\s+|버그\s*:\s*)(\S.+)$/su.exec(trimmed);
   if (explicit?.[1]) return { kind: "report", report: explicit[1] };
   if (!allowNatural) return null;
   const prefixed = /^(?:문제|오류)\s*:\s*(\S.*)$/su.exec(trimmed);
   if (prefixed?.[1])
     return isMeaningfulProductFailure(prefixed[1]) ? { kind: "report", report: prefixed[1] } : null;
   if (ONE_THING_RECORD_GRAMMAR.test(trimmed) || !isMeaningfulProductFailure(trimmed)) return null;
-  const report = trimmed;
-  return { kind: "report", report };
+  return { kind: "report", report: trimmed };
 }
 
 export function isBugReportMessage(text: string, allowNatural = false): boolean {

@@ -163,3 +163,11 @@ export async function dispatchCommunityMessage(
 function exhaustive(value: never): never {
   throw new TypeError(String(value));
 }
+
+export async function dispatchFeedbackBugMessage(
+  context: CommunityContext,
+  text: string,
+): Promise<boolean> {
+  if (await handleBugReportMessage(context, text)) return true;
+  return continueBugReport(context, text);
+}
