@@ -54,9 +54,10 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/019_bug_team_scope
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/020_bug_private_atomic.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/021_bug_private_backfill.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/022_bug_private_read.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/023_current_channel_membership.sql
 ```
 
-번호 순서는 001부터 022까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger → 015 delivery → 016 retry scheduler → 017 원자적 24시간 만료·job guard → 018 packet·lease·비공개 경계 무결성 → 019 팀별 만료·delivery claim 격리 → 020 비공개 전환·outbox 원자 커밋과 기존 행 reconciliation → 021 기존 private 행의 1회 scrub·outbox 보정 → 022 소유자 범위 암호화 객체 복원 정보 순서를 바꾸지 않습니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
+번호 순서는 001부터 023까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger → 015 delivery → 016 retry scheduler → 017 원자적 24시간 만료·job guard → 018 packet·lease·비공개 경계 무결성 → 019 팀별 만료·delivery claim 격리 → 020 비공개 전환·outbox 원자 커밋과 기존 행 reconciliation → 021 기존 private 행의 1회 scrub·outbox 보정 → 022 소유자 범위 암호화 객체 복원 정보 → 023 현재 채널 회원 스냅샷과 일괄 안내 lease 순서를 바꾸지 않습니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
 
 기존 DB는 **백업 → 별도 복원 → 원본 충돌 대조 → 쓰기 정리 → 이관 → 전후 비교 → 실제 사용자 확인** 순서로 다룹니다. 알 수 없는 충돌을 덮어쓰거나 검사를 제거하지 않습니다. 복구는 이관 뒤 생긴 새 기록도 보존해야 합니다. 옛 rollback 파일이 현재 모든 후속 migration에 맞는다고 가정하지 않습니다.
 
@@ -65,7 +66,7 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/022_bug_private_re
 | 범위 | 실행과 주의점 |
 | --- | --- |
 | 합성 회귀 | `bun run test:unit`. 공개 코드의 기본 검증 |
-| PostgreSQL | 폐기 가능한 로컬 DB에 설치 후 `community-storage`, `community-scheduler`, `normalized-legacy`, `default-reminders`, `community-bug-storage`, `community-bug-delivery`, `community-bug-expiry-job-guard`, `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql`, `community-bug-private-backfill` 검사 실행 |
+| PostgreSQL | 폐기 가능한 로컬 DB에 설치 후 `community-storage`, `community-scheduler`, `normalized-legacy`, `default-reminders`, `community-bug-storage`, `community-bug-delivery`, `community-bug-expiry-job-guard`, `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql`, `community-bug-private-backfill`, `current-member-reminders.sql` 검사 실행 |
 | 실제 서비스 | 명시한 채널·회원·날짜만 검증. 전후 기록, 실제 게시, 실패 범위를 별도 보존 |
 
 DB 검사의 `COMMUNITY_PG_SOCKET`, `COMMUNITY_PG_PORT`, `COMMUNITY_PG_DATABASE`를 확인합니다. 기본값이 검사마다 다를 수 있으므로 DB 이름을 명시합니다. `*-live*`, backfill, fixture 복원, migration 스크립트를 일반 테스트에 섞지 않습니다.
@@ -94,7 +95,7 @@ node scripts/maintainer-dry-run.mjs --input qa/fixtures/bug-packets/confirmed-va
 
 운영 이력이 있는 로컬 저장소는 공개 원격에 `--all`이나 `--mirror`로 push하지 않습니다. 공개 설정 예시·합성 테스트만 별도 작업본에 반영하고 staged 정보 검사와 `check`를 거쳐 push합니다. API 키·회원 원문·덤프·`.omx` 영수증은 제외합니다.
 
-`export-public.mjs`가 있는 운영 저장소에서는 공개용 스냅샷을 생성할 수 있습니다. 기존 공개 Git 이력이 있는 경로를 덮어쓰지 않도록 보호되어 있습니다. migration 014–022, 버그 ledger·delivery·만료·무결성 QA fixture와 계약 SQL, 전역 시계 코드와 `automation/`의 공개 스키마·dry-run runner를 포함하지만 운영 식별자, 실제 제보 원문, `.omx`, credential은 포함하지 않습니다. 공개용 문서 원본은 이 문서 묶음이며, 내보내기 스크립트에 별도 사용법을 복제하지 않습니다.
+`export-public.mjs`가 있는 운영 저장소에서는 공개용 스냅샷을 생성할 수 있습니다. 기존 공개 Git 이력이 있는 경로를 덮어쓰지 않도록 보호되어 있습니다. migration 014–023, 버그 ledger·delivery·만료·무결성 QA fixture와 계약 SQL, 전역 시계 코드와 `automation/`의 공개 스키마·dry-run runner를 포함하지만 운영 식별자, 실제 제보 원문, `.omx`, credential은 포함하지 않습니다. 공개용 문서 원본은 이 문서 묶음이며, 내보내기 스크립트에 별도 사용법을 복제하지 않습니다.
 
 ```sh
 node scripts/export-public.mjs /tmp/otl1-public-review

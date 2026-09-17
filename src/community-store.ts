@@ -1,5 +1,7 @@
+import { reminderBatch, snapshotPayload } from "./community-reminder-store";
 import type {
   ChangeResult,
+  ChannelMembershipSnapshot,
   CommunityDay,
   CommunityRecord,
   CommunityScope,
@@ -10,7 +12,8 @@ import type {
   Outcome,
   PreferencePatch,
   RecordKey,
-  ReminderJob,
+  ReminderBatch,
+  ReminderBatchFinish,
   SupportPreferences,
 } from "./community-types";
 import { date, InputError, type Json, list, object, string } from "./input";
@@ -213,22 +216,29 @@ export class CommunityStore {
   async finishRecord(input: RecordKey, status: "sent" | "failed" | "cancelled"): Promise<boolean> {
     return bool(await this.call("finish_record", { ...input, status }));
   }
-  async due(teamId: string, channelId: string, now: string): Promise<readonly ReminderJob[]> {
+  async reminderTriggerDue(teamId: string, channelId: string, now: string): Promise<boolean> {
     if (!Number.isFinite(Date.parse(now))) throw new InputError("Invalid time");
-    return list(await this.call("due", { teamId, channelId, now })).map((item) => {
-      const v = object(item);
-      if (v.kind !== "goal" && v.kind !== "review") throw new InputError("Invalid reminder kind");
-      return { ...scope(v), key: string(v.key), date: date(v.date), kind: v.kind };
-    });
+    return bool(await this.call("reminder_trigger_due", { teamId, channelId, now }));
   }
-  async claimReminder(input: RecordKey, now = new Date().toISOString()): Promise<boolean> {
-    if (!Number.isFinite(Date.parse(now))) throw new InputError("Invalid time");
-    return bool(await this.call("claim_reminder", { ...input, now }));
-  }
-  async finishReminder(
-    input: RecordKey,
-    status: "sent" | "failed" | "cancelled",
+  async reconcileChannelMembers(
+    input: CommunityScope,
+    snapshot: ChannelMembershipSnapshot,
   ): Promise<boolean> {
-    return this.finishRecord(input, status);
+    return bool(
+      await this.call("reconcile_channel_members", { ...input, ...snapshotPayload(snapshot) }),
+    );
+  }
+  async claimReminderBatch(input: {
+    readonly teamId: string;
+    readonly channelId: string;
+    readonly now: string;
+    readonly workerId: string;
+    readonly leaseToken: string;
+  }): Promise<ReminderBatch | null> {
+    if (!Number.isFinite(Date.parse(input.now))) throw new InputError("Invalid time");
+    return reminderBatch(await this.call("claim_reminder_batch", input));
+  }
+  async finishReminderBatch(input: ReminderBatchFinish): Promise<boolean> {
+    return bool(await this.call("finish_reminder_batch", input));
   }
 }

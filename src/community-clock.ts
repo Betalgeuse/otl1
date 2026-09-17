@@ -16,6 +16,7 @@ import {
 import { publishGardenNow } from "./community-garden";
 import type { CommunityEnv } from "./community-runtime";
 import { runCommunitySchedule } from "./community-scheduler";
+import { CommunitySlackError } from "./community-social";
 import { CommunityStore } from "./community-store";
 import { InputError, object, string } from "./input";
 import { NeonStore } from "./store";
@@ -250,7 +251,9 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
           at: Date.now(),
           failure: error instanceof Error ? error.name : "UnknownError",
         });
-        await this.ctx.storage.setAlarm(Date.now() + 60_000);
+        const retrySeconds =
+          error instanceof CommunitySlackError ? (error.retryAfterSeconds ?? 60) : 60;
+        await this.ctx.storage.setAlarm(Date.now() + Math.min(retrySeconds, 3_600) * 1_000);
       }
     });
   }

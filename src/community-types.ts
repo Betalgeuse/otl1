@@ -57,6 +57,31 @@ export type CommunityRecord = CommunityScope & {
 };
 export type RecordKey = CommunityScope & { readonly key: string };
 export type ReminderJob = RecordKey & { readonly date: string; readonly kind: "goal" | "review" };
+export type ChannelMember = {
+  readonly userId: string;
+  readonly isBot: boolean;
+  readonly isAppUser: boolean;
+  readonly deleted: boolean;
+};
+export type ChannelMembershipSnapshot = {
+  readonly observedAt: string;
+  readonly members: readonly ChannelMember[];
+  readonly eligibleHumanIds: readonly string[];
+};
+export type ReminderBatch = {
+  readonly leaseToken: string;
+  readonly attempt: number;
+  readonly firstAttemptAt: string;
+  readonly jobs: readonly ReminderJob[];
+};
+export type ReminderBatchFinish = {
+  readonly teamId: string;
+  readonly channelId: string;
+  readonly leaseToken: string;
+  readonly status: "sent" | "failed" | "cancelled";
+  readonly errorCode?: string;
+  readonly retryAfterSeconds?: number;
+};
 export type MemberIntroduction = {
   readonly teamId: string;
   readonly userId: string;

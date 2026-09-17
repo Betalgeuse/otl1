@@ -58,6 +58,10 @@
 | v0.0.52 | 자기소개 채널 신규 회원 안내, 한 문장 제한, 선택적 LinkedIn·기타 공개 정보, 전체 보기, 미작성자 멘션과 같은 글 수정 | 구현·배포·admin 실제 QA |
 | v0.0.53 | 자기소개 문장 수 제한 제거와 180자 내 여러 줄 입력 | 구현·배포·Chrome Slack Web 실제 QA |
 
+## 2026-09-17 미출시 회원 기준 일괄 수집 수정
+
+현재 daily-scrum의 완전한 Slack 회원 목록을 수집 시점마다 확인하고, 이탈·삭제·봇 계정을 제외한 목표·후기 대상자를 채널당 한 메시지로 묶는 구현 후보를 추가했습니다. 일부 회원 조회 실패 시에는 멘션과 비활성화를 모두 중단하며, 사용자 설정과 과거 기록은 보존합니다. migration 023과 폐기 가능한 PostgreSQL·합성 Slack 검증은 완료했지만 운영 migration·배포·Chrome Slack Web 관찰 전이므로 출시 버전 표에는 넣지 않았습니다.
+
 ## 2026-09-16 v0.0.54 버그 제보 기반 삽입 재번호화
 
 v0.0.54 버그 제보 정의 기반은 migration 014–021, 기존 private 관계형 원문의 1회 scrub·outbox 보정, 팀별 만료·delivery claim 격리와 비공개 전환·outbox 원자 커밋, 암호화 비공개 객체·정규화 ledger 경계, delivery outbox, 원자적 만료·job guard와 팀별 전역 Durable Object 시계까지 구현했고 exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web QA를 통과했다. 다만 현재 checkout은 canonical private `ops/main`이 아니고 정식 release authority가 없으므로 아직 출시 결과가 아니다. 따라서 현재 운영 기준은 v0.0.53으로 유지한다. 아래는 기존 미출시 순서를 보존하면서 v0.0.54 뒤 항목을 한 칸씩 이동한 기록이다.

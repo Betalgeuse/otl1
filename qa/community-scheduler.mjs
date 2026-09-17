@@ -10,14 +10,17 @@ const store = new CommunityStore({
   async queryJson(_query, params) {
     const parsed=JSON.parse(params[1]); if(params[0]==="preferences"){parsed.goalTime ??= "10:00";parsed.reviewTime ??= "18:00";}
     const payload = JSON.stringify(parsed).replaceAll("'", "''");
-    const { stdout } = await exec("psql", ["-h", "/tmp/otl-community-pg", "-p", "55439", "-d", process.env.COMMUNITY_PG_DATABASE ?? "postgres", "-XAtq", "-v", "ON_ERROR_STOP=1", "-c", `DO $$ BEGIN IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='otl' AND table_name='community_preferences' AND column_name='eligible_from') THEN UPDATE otl.community_preferences SET eligible_from='2026-09-10' WHERE team_id='${parsed.teamId}'; END IF; END $$; SELECT otl.community_execute('${params[0]}','${payload}'::jsonb)`]);
+    const { stdout } = await exec("psql", ["-h", process.env.COMMUNITY_PG_SOCKET ?? "/tmp/otl-community-pg", "-p", process.env.COMMUNITY_PG_PORT ?? "55439", "-d", process.env.COMMUNITY_PG_DATABASE ?? "postgres", "-XAtq", "-v", "ON_ERROR_STOP=1", "-c", `DO $$ BEGIN IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='otl' AND table_name='community_preferences' AND column_name='eligible_from') THEN UPDATE otl.community_preferences SET eligible_from='2026-09-10' WHERE team_id='${parsed.teamId}'; END IF; END $$; SELECT otl.community_execute('${params[0]}','${payload}'::jsonb)`]);
     return JSON.parse(stdout);
   },
 });
-const env = { SLACK_TEAM_ID: `QA-${randomUUID()}`, SLACK_BOT_TOKEN: "test-token", COMMUNITY_CHANNEL_ID: "admin", COMMUNITY_ADMIN_ID: "owner" };
-const scope = { teamId: env.SLACK_TEAM_ID, channelId: "admin", userId: "owner" };
+const env = { SLACK_TEAM_ID: `QA-${randomUUID()}`, SLACK_BOT_TOKEN: "test-token", COMMUNITY_CHANNEL_ID: "admin", COMMUNITY_PUBLIC_CHANNEL_ID: "admin", COMMUNITY_BOT_USER_ID: "UBOT", COMMUNITY_ADMIN_ID: "UOWNER" };
+const scope = { teamId: env.SLACK_TEAM_ID, channelId: "admin", userId: "UOWNER" };
 const messages = [];
 globalThis.fetch = async (url, request) => {
+  const parsedUrl = new URL(url);
+  if (parsedUrl.pathname.endsWith("conversations.members")) return Response.json({ok:true,members:["UOWNER","UQUIET","UBOT"],response_metadata:{next_cursor:""}});
+  if (parsedUrl.pathname.endsWith("users.info")) { const id=parsedUrl.searchParams.get("user"); return Response.json({ok:true,user:{id,is_bot:id==="UBOT",is_app_user:false,deleted:false}}); }
   if (url === "https://slack.com/api/emoji.list") return Response.json({ok:true,emoji:{party:"https://test/party",cat:"https://test/cat"}});
   assert.equal(url, "https://slack.com/api/chat.postMessage");
   const payload = JSON.parse(request.body);
@@ -35,7 +38,6 @@ await store.setGroupSchedule(scope, { enabled: false, goalTime: "10:05", reviewT
 assert.equal((await store.getRecord({ ...scope, key: "group-schedule" })).body.enabled, false);
 await store.preferences(scope, { enabled: true, goalTime: "10:00", reviewTime: "18:00" });
 assert.deepEqual(await runCommunitySchedule(env, store, morning), { common: 0, personal: 1 });
-assert.equal(messages.at(-1).thread_ts, "1234567.1");
 assert.equal(messages.at(-1).blocks.some(block=>block.type==="actions"), false);
 assert.match(messages.at(-1).text,/알림 설정/);
 assert.deepEqual(await runCommunitySchedule(env, store, morning), { common: 0, personal: 0 });
@@ -43,9 +45,9 @@ await store.change({ ...scope, date: "2026-09-11", key: "goal", action: "goal", 
 await store.change({ ...scope, date: "2026-09-11", key: "rest", action: "rest" });
 assert.deepEqual(await runCommunitySchedule(env, store, new Date("2026-09-11T09:00:00Z")), { common: 0, personal: 0 });
 assert.equal((await store.history(scope)).length, 1);
-await store.preferences({ ...scope, userId: "quiet" }, { enabled: true });
-assert.equal((await store.due(scope.teamId, scope.channelId, "2026-09-11T09:00:00Z")).length, 1);
+await store.preferences({ ...scope, userId: "UQUIET" }, { enabled: true });
+assert.equal(await store.reminderTriggerDue(scope.teamId, scope.channelId, "2026-09-11T09:00:00Z"), true);
 const sentBeforeQuiet = messages.length;
 assert.deepEqual(await runCommunitySchedule(env, store, new Date("2026-09-11T13:01:00Z")), { common: 0, personal: 0 });
 assert.equal(messages.length, sentBeforeQuiet);
-console.log("PASS scheduler: real PostgreSQL settings edits, KST timing, opt-in, single delivery, prompt context, threaded user mention, stop button, rest suppression");
+console.log("PASS scheduler: real PostgreSQL settings edits, KST timing, opt-in, single delivery, prompt context, batched user mention, stop copy, rest suppression");
