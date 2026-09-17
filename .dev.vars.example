@@ -12,3 +12,4 @@ BUG_PRIVATE_KEK_VERSION=
 
 # Bot user ID used to recognize an optional mention.
 COMMUNITY_BOT_USER_ID=
+COMMUNITY_FEEDBACK_CHANNEL_ID=

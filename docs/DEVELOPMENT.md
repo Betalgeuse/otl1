@@ -14,7 +14,7 @@ bun run check
 ## 설정과 배포
 
 1. `.dev.vars.example`을 `.dev.vars`로 복사하고 로컬 값을 채웁니다. 완성된 파일은 Git에 넣지 않습니다.
-2. `wrangler.jsonc`에 본인 계정의 Worker·관리자·공개 채널·townhall·welcome·자기소개 채널을 지정합니다. 관리자 채널은 비공개로 유지합니다.
+2. `wrangler.jsonc`에 본인 계정의 Worker·관리자·공개 채널·feedback·townhall·welcome·자기소개 채널을 지정합니다. `COMMUNITY_FEEDBACK_CHANNEL_ID`는 버그 제보 전용 채널이며 공개 export에서는 반드시 placeholder로 치환합니다. 관리자 채널은 비공개로 유지합니다.
 3. `COMMUNITY_GUIDE_SOURCE_TS`에는 지정 관리자가 welcome 채널에 작성한 원본 안내글의 timestamp를 넣습니다.
 4. 서명 키, 봇 토큰, DB URL, 보드 서명 키를 Wrangler secret으로 등록합니다. 값은 명령문·문서·공개 이력에 남기지 않습니다.
 5. 앱 manifest를 생성해 Slack에 적용하고 필요한 채널에 봇을 연결합니다. 슬래시 `/one`은 사용하지 않습니다.
