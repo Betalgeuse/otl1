@@ -30,6 +30,7 @@ export type CommunityEnv = {
   readonly BUG_PRIVATE_KEK_VERSION?: string;
   readonly BUG_PRIVATE_OBJECTS?: {
     put(key: string, value: ArrayBuffer): Promise<unknown>;
+    get?(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
     delete(key: string): Promise<void>;
   };
 };

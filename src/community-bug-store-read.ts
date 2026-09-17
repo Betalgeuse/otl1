@@ -139,6 +139,7 @@ export function parseBugDraftRead(value: Json): BugDraftRead {
       status: revisionStatus(textField(revision, "status")),
       latestOpaqueRef: textField(revision, "latestOpaqueRef"),
       objectDigest: textField(revision, "objectDigest"),
+      envelopeDek: textField(revision, "envelopeDek"),
       kekVersion: textField(revision, "kekVersion"),
       nonce: textField(revision, "nonce"),
       evidenceDigest: nullableText(revision, "evidenceDigest"),

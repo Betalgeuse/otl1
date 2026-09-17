@@ -4,7 +4,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { canonicalJson, confirmedBugPacket } from "../src/community-bug-schema.ts";
+import { digestBugText } from "../src/community-bug-private.ts";
 import { CommunityBugStore } from "../src/community-bug-store.ts";
+import { incomingMessageBody } from "../src/community-intake.ts";
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -28,6 +30,14 @@ async function callJson(functionName, payload) {
   return psql([
     "-Atc",
     `SELECT otl.${functionName}(convert_from(decode('${encoded}','base64'),'UTF8')::jsonb)`,
+  ]);
+}
+
+async function callCommunity(operation, payload) {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64");
+  return psql([
+    "-Atc",
+    `SELECT otl.community_execute('${operation}',convert_from(decode('${encoded}','base64'),'UTF8')::jsonb)`,
   ]);
 }
 
@@ -167,11 +177,41 @@ try {
   assert.equal(privateAtomicResult.privateAnswerAtomic, true);
   assert.equal(privateAtomicResult.legacyReconcileOnce, true);
   await psql(["-f", "migrations/021_bug_private_backfill.sql"]);
+  await psql(["-f", "migrations/022_bug_private_read.sql"]);
   const freshBackfill = await psql([
     "-Atc",
     "SELECT otl.bug_backfill_private_incidents_021()",
   ]);
   assert.equal(freshBackfill.stdout.trim(), "0");
+
+  const relationalCanary = "RELATIONAL_PG_CANARY_7DB8C42E";
+  const safeIncomingBody = incomingMessageBody(
+    {
+      date: "2026-09-17",
+      thread: "1700000000.000001",
+      rawText: relationalCanary,
+      normalizedText: relationalCanary,
+      editTs: null,
+    },
+    {
+      messageType: "bug_intake",
+      contentDigest: await digestBugText(relationalCanary),
+    },
+  );
+  const storedIncoming = await callCommunity("put_record", {
+    teamId: "T-RELATIONAL-BOUNDARY",
+    channelId: "C-RELATIONAL-BOUNDARY",
+    userId: "U-RELATIONAL-BOUNDARY",
+    key: "incoming:1700000000.000001",
+    kind: "incoming",
+    body: safeIncomingBody,
+  });
+  const storedIncomingJson = JSON.parse(storedIncoming.stdout.trim());
+  assert.equal(JSON.stringify(storedIncomingJson).includes(relationalCanary), false);
+  assert.equal("rawText" in storedIncomingJson.body, false);
+  assert.equal("normalizedText" in storedIncomingJson.body, false);
+  assert.equal(storedIncomingJson.body.messageType, "bug_intake");
+  assert.match(storedIncomingJson.body.contentDigest, /^[a-f0-9]{64}$/);
 
   const evidence = [
     {
@@ -205,6 +245,16 @@ try {
     kekVersion: "v1",
     nonce: "nonce-123456",
   });
+  const ownedDraft = JSON.parse(
+    (
+      await callJson("bug_get_draft", {
+        teamId: "T-INTEGRITY-STORE",
+        bugId: integrityPacket.bugId,
+        reporterId: "integrity-reporter",
+      })
+    ).stdout.trim(),
+  );
+  assert.equal(ownedDraft.currentRevision.envelopeDek, "encrypted-envelope");
   const store = new CommunityBugStore({
     async queryJson(query, params) {
       const functionName = query.match(/otl\.(bug_[a-z_]+)/)?.[1];
@@ -240,6 +290,8 @@ try {
     team_scope_contract: teamScopeResult,
     private_atomic_contract: privateAtomicResult,
     fresh_private_backfill_zero: true,
+    relational_bug_intake_redacted: true,
+    owned_private_envelope_read: true,
     canonical_store_admission: true,
     database: "disposable-local-postgresql",
     cleanup: "complete",

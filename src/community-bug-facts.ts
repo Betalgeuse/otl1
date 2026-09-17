@@ -8,6 +8,7 @@ import { isBugFrequency, isBugImpact } from "./community-bug-schema";
 import type { BugDraftRead, BugPacketFields } from "./community-bug-types";
 
 const PRIVATE_TEXT = "[비공개]";
+const ENCRYPTED_TEXT = "[암호화 보관]";
 const SENSITIVE_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/giu,
   /\bxox(?:a|b|p|r|s)-[A-Za-z0-9-]{10,}\b/giu,
@@ -68,6 +69,22 @@ export function bugFieldsForDatabase(
     ),
     location: fields.location === null ? null : redactBugDbText(fields.location),
     occurredAt: fields.occurredAt,
+    frequency: fields.frequency,
+    impact: fields.impact,
+  };
+}
+
+export function initialBugFieldsForDatabase(
+  fields: BugPacketFields,
+  privateIncident: boolean,
+): BugPacketFields {
+  if (privateIncident) return bugFieldsForDatabase(fields, true);
+  return {
+    actual: fields.actual === null ? null : ENCRYPTED_TEXT,
+    expected: null,
+    steps: [],
+    location: null,
+    occurredAt: null,
     frequency: fields.frequency,
     impact: fields.impact,
   };

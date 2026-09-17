@@ -6,6 +6,13 @@ function base64(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
+function decodeBase64(value: string): ArrayBuffer {
+  const bytes = Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+  const result = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(result).set(bytes);
+  return result;
+}
+
 function decodeKey(value: string): ArrayBuffer {
   let decoded: string;
   try {
@@ -96,4 +103,53 @@ export async function writeBugPrivateObject(
     kekVersion: keyVersion,
     nonce: base64(nonce),
   };
+}
+
+export async function readBugPrivateObject(
+  context: CommunityContext,
+  input: EncryptedObjectRef & {
+    readonly bugId: string;
+    readonly revision: number;
+    readonly schemaVersion: "bug_intake.v1" | "bug_packet.v1";
+  },
+): Promise<unknown> {
+  const bucket = context.env.BUG_PRIVATE_OBJECTS;
+  const configuredKey = context.env.BUG_PRIVATE_KEK;
+  if (!bucket?.get || !configuredKey) throw new InputError("버그 비공개 저장소를 읽을 수 없어요.");
+  const stored = await bucket.get(input.opaqueRef);
+  if (!stored) throw new InputError("버그 비공개 기록을 찾을 수 없어요.");
+  const ciphertext = await stored.arrayBuffer();
+  if ((await digest(ciphertext)) !== input.objectDigest)
+    throw new InputError("버그 비공개 기록의 무결성을 확인할 수 없어요.");
+  const kek = await crypto.subtle.importKey(
+    "raw",
+    decodeKey(configuredKey),
+    { name: "AES-GCM" },
+    false,
+    ["unwrapKey"],
+  );
+  const [envelopeNonce, wrappedDek] = input.envelopeDek.split(".");
+  if (!envelopeNonce || !wrappedDek) throw new InputError("버그 비공개 기록을 열 수 없어요.");
+  const additionalData = bugPrivateAdditionalData(
+    input.bugId,
+    input.revision,
+    input.schemaVersion,
+    input.kekVersion,
+  );
+  const dek = await crypto.subtle.unwrapKey(
+    "raw",
+    decodeBase64(wrappedDek),
+    kek,
+    { name: "AES-GCM", iv: decodeBase64(envelopeNonce), additionalData },
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"],
+  );
+  const cleartext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: decodeBase64(input.nonce), additionalData },
+    dek,
+    ciphertext,
+  );
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(cleartext));
+  return parsed;
 }

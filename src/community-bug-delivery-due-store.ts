@@ -1,4 +1,5 @@
 import { type BugDelivery, parseBugDelivery } from "./community-bug-delivery-store";
+import type { PrivateBugRevision } from "./community-bug-private-report";
 import type { BugSqlClient } from "./community-bug-store";
 import { BugStoreError } from "./community-bug-types";
 import type { Json } from "./input";
@@ -10,6 +11,7 @@ export type DueBugDelivery = {
   readonly sourceThread: string;
   readonly reportRevision: number;
   readonly sanitizedFields: JsonObject;
+  readonly privateRevision: PrivateBugRevision | null;
 };
 
 type JsonObject = { readonly [key: string]: Json };
@@ -38,6 +40,12 @@ function number(value: JsonObject, key: string): number {
 
 function parseDueDelivery(value: Json): DueBugDelivery {
   const row = object(value);
+  const revisionValue = row.private_revision;
+  const revision =
+    revisionValue === null || revisionValue === undefined ? null : object(revisionValue);
+  const schemaVersion = revision ? text(revision, "schemaVersion") : null;
+  if (schemaVersion !== null && schemaVersion !== "bug_intake.v1")
+    throw new BugStoreError("response");
   return {
     delivery: parseBugDelivery(value),
     reporterId: text(row, "reporter_id"),
@@ -45,6 +53,18 @@ function parseDueDelivery(value: Json): DueBugDelivery {
     sourceThread: text(row, "source_thread"),
     reportRevision: number(row, "report_revision"),
     sanitizedFields: object(row.sanitized_fields ?? null),
+    privateRevision: revision
+      ? {
+          bugId: text(row, "bug_id"),
+          packetRevision: number(revision, "packetRevision"),
+          schemaVersion: "bug_intake.v1",
+          opaqueRef: text(revision, "opaqueRef"),
+          objectDigest: text(revision, "objectDigest"),
+          envelopeDek: text(revision, "envelopeDek"),
+          kekVersion: text(revision, "kekVersion"),
+          nonce: text(revision, "nonce"),
+        }
+      : null,
   };
 }
 

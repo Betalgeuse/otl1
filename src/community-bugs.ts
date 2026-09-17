@@ -5,10 +5,9 @@ import { replayBugDelivery } from "./community-bug-delivery-replay";
 import { advanceBugDialogue } from "./community-bug-dialogue";
 import {
   bugCandidate,
-  bugFieldsForDatabase,
   containsSensitiveBugText,
+  initialBugFieldsForDatabase,
   type ParsedBugReport,
-  redactBugDbText,
   storedBugFields,
 } from "./community-bug-facts";
 import { randomBugIdentity, writeBugPrivateObject } from "./community-bug-private";
@@ -57,9 +56,12 @@ async function startBugReport(
     (dialogue.packet.impact.status === "known" &&
       dialogue.packet.impact.value === "security_privacy") ||
     parsed.messages.some((message) => containsSensitiveBugText(message.text));
-  const databaseFields = bugFieldsForDatabase(storedBugFields(dialogue.packet), privateIncident);
+  const databaseFields = initialBugFieldsForDatabase(
+    storedBugFields(dialogue.packet),
+    privateIncident,
+  );
   const store = new CommunityBugStore(new NeonStore(context.env.DATABASE_URL));
-  const encrypted = await writeBugPrivateObject(context, bugId, 1, parsed);
+  const encrypted = await writeBugPrivateObject(context, bugId, 1, { parsed });
   const createInput = {
     ...encrypted,
     bugId,
@@ -72,11 +74,7 @@ async function startBugReport(
     sourceThread: context.thread,
     idempotencyKey: `slack:${context.scope.teamId}:${context.scope.channelId}:${context.source}`,
     sanitizedFields: {
-      title: privateIncident
-        ? "비공개 버그 제보"
-        : dialogue.packet.actual.status === "known"
-          ? redactBugDbText(dialogue.packet.actual.value).slice(0, 160)
-          : "Slack 버그 제보",
+      title: privateIncident ? "비공개 버그 제보" : "Slack 버그 제보",
       ...databaseFields,
       privacy: privateIncident,
     },

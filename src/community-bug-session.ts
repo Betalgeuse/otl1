@@ -12,10 +12,10 @@ import {
   appendBugAnswer,
   bugFieldsForDatabase,
   containsSensitiveBugText,
-  parsedBugDraft,
   storedBugFields,
 } from "./community-bug-facts";
 import { digestBugText, writeBugPrivateObject } from "./community-bug-private";
+import { readBugPrivateReport } from "./community-bug-private-report";
 import { canonicalJson, isBugField } from "./community-bug-schema";
 import { bugDialogueInput, exhaustBugReport } from "./community-bug-session-state";
 import { CommunityBugStore } from "./community-bug-store";
@@ -64,7 +64,7 @@ export async function continueBugReport(
   }
   if (await restoreUnseenBugQuestion(context, active, question)) return true;
   const parsed = appendBugAnswer(
-    parsedBugDraft(active),
+    await readBugPrivateReport(context, active),
     question.fieldName,
     context.source,
     answer,
@@ -76,8 +76,7 @@ export async function continueBugReport(
       result.packet.impact.value === "security_privacy") ||
     containsSensitiveBugText(answer);
   const encrypted = await writeBugPrivateObject(context, active.bugId, active.packetRevision + 1, {
-    questionId: question.questionId,
-    answer,
+    parsed,
   });
   const packetRevision = await store.answerRevision({
     ...encrypted,
@@ -186,7 +185,7 @@ export async function confirmBugReport(
   if (draft.revision !== expectedRevision)
     throw new InputError("최신 버그 초안을 다시 확인해 주세요.");
   const result = await advanceBugDialogue({
-    ...bugDialogueInput(draft, parsedBugDraft(draft)),
+    ...bugDialogueInput(draft, await readBugPrivateReport(context, draft)),
     expectedRevision: draft.packetRevision + 1,
     currentRevision: draft.packetRevision + 1,
     reporterConfirmedAt: new Date().toISOString(),

@@ -201,6 +201,7 @@ export type BugRevisionRead = {
   readonly status: "draft" | "answered" | "confirmed";
   readonly latestOpaqueRef: string;
   readonly objectDigest: string;
+  readonly envelopeDek: string;
   readonly kekVersion: string;
   readonly nonce: string;
   readonly evidenceDigest: string | null;

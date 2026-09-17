@@ -6,7 +6,8 @@ import {
   sendClaimedBugDelivery,
 } from "./community-bug-delivery";
 import { CommunityBugDueDeliveryStore } from "./community-bug-delivery-due-store";
-import { confirmedFieldsFromSanitized } from "./community-bug-facts";
+import { advanceBugDialogue } from "./community-bug-dialogue";
+import { readBugPrivateReportRevision } from "./community-bug-private-report";
 import { isBugField } from "./community-bug-schema";
 import { bugConfirmationPayload, bugQuestionPayload } from "./community-bug-slack";
 import type { CommunityContext, CommunityEnv } from "./community-runtime";
@@ -78,10 +79,10 @@ function contextFor(
   };
 }
 
-function render(
+async function render(
   due: Awaited<ReturnType<CommunityBugDueDeliveryStore["claim"]>>[number],
   context: CommunityContext,
-): Json | null {
+): Promise<Json | null> {
   const delivery = due.delivery;
   switch (delivery.deliveryKind) {
     case "question": {
@@ -96,14 +97,27 @@ function render(
       );
     }
     case "summary": {
-      const fields = confirmedFieldsFromSanitized(due.sanitizedFields);
-      return fields
+      if (!due.privateRevision) return null;
+      const parsed = await readBugPrivateReportRevision(context, due.privateRevision);
+      const dialogue = await advanceBugDialogue({
+        bugId: delivery.bugId,
+        expectedRevision: delivery.packetRevision,
+        currentRevision: delivery.packetRevision,
+        source: {
+          kind: "slack_thread",
+          opaqueRef: `slack:${delivery.teamId}:${due.sourceChannelId}:${due.sourceThread}`,
+        },
+        messages: parsed.messages,
+        candidates: parsed.candidates,
+        now: new Date().toISOString(),
+      });
+      return dialogue.status === "awaiting_confirmation"
         ? bugConfirmationPayload(
             context,
             delivery.bugId,
             delivery.bugId,
             due.reportRevision,
-            fields,
+            dialogue.summary.fields,
           )
         : null;
     }
@@ -175,7 +189,7 @@ export async function runDueBugDeliveries(
       item.sourceThread,
       scheduledTime,
     );
-    const message = render(item, context);
+    const message = await render(item, context);
     if (message === null) {
       await failClaimedBugDelivery(context, item.delivery, item.reporterId, leaseToken, observeDue);
       failed += 1;
