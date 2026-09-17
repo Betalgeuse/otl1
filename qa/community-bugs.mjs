@@ -1094,6 +1094,12 @@ try {
   const resumedQuestion = actionDraft.questions.findLast((question) => !question.answered);
   assert.equal(resumedQuestion.fieldName, "steps");
   assert.equal(resumedQuestion.questionId, `${actionDraft.bugId}:q2:steps`);
+  const resumeTransition = transitions.get(
+    `resume:${actionDraft.bugId}:${actionDraft.packetRevision}:2`,
+  );
+  assert.deepEqual(resumeTransition.actors, ["reporter", "deterministic_worker"]);
+  assert.equal(resumeTransition.evidence.answerRevision, actionDraft.packetRevision);
+  assert.equal(resumeTransition.evidence.completenessResult, "needs_info");
   assert.equal(
     calls.filter(
       (call) =>

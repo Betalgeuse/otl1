@@ -38,9 +38,10 @@ export async function resumeBugDialogue(
   await new CommunityBugStore(new NeonStore(context.env.DATABASE_URL)).transition({
     bugId: draft.bugId,
     toState: "needs_info",
-    actors: ["deterministic_worker"],
+    actors: ["reporter", "deterministic_worker"],
     guard: { stillIncomplete: true },
     evidence: {
+      answerRevision: draft.packetRevision,
       completenessResult: result.status,
       questionId,
       fieldName: result.question.field,
