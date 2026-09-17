@@ -53,9 +53,10 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/018_bug_integrity.
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/019_bug_team_scope.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/020_bug_private_atomic.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/021_bug_private_backfill.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/022_bug_private_read.sql
 ```
 
-번호 순서는 001부터 021까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger → 015 delivery → 016 retry scheduler → 017 원자적 24시간 만료·job guard → 018 packet·lease·비공개 경계 무결성 → 019 팀별 만료·delivery claim 격리 → 020 비공개 전환·outbox 원자 커밋과 기존 행 reconciliation → 021 기존 private 행의 1회 scrub·outbox 보정 순서를 바꾸지 않습니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
+번호 순서는 001부터 022까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger → 015 delivery → 016 retry scheduler → 017 원자적 24시간 만료·job guard → 018 packet·lease·비공개 경계 무결성 → 019 팀별 만료·delivery claim 격리 → 020 비공개 전환·outbox 원자 커밋과 기존 행 reconciliation → 021 기존 private 행의 1회 scrub·outbox 보정 → 022 소유자 범위 암호화 객체 복원 정보 순서를 바꾸지 않습니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
 
 기존 DB는 **백업 → 별도 복원 → 원본 충돌 대조 → 쓰기 정리 → 이관 → 전후 비교 → 실제 사용자 확인** 순서로 다룹니다. 알 수 없는 충돌을 덮어쓰거나 검사를 제거하지 않습니다. 복구는 이관 뒤 생긴 새 기록도 보존해야 합니다. 옛 rollback 파일이 현재 모든 후속 migration에 맞는다고 가정하지 않습니다.
 
@@ -71,7 +72,7 @@ DB 검사의 `COMMUNITY_PG_SOCKET`, `COMMUNITY_PG_PORT`, `COMMUNITY_PG_DATABASE`
 
 ## 버그 제보 기반 검증과 후속 연결
 
-`community-bugs`, `community-bug-dialogue`, `community-bug-due-store`, `community-bug-backlog`, `community-clock`은 합성 회귀 allowlist에 포함됩니다. mock Slack delivery의 failed → retry → sent, 응답이 사라진 DB 커밋 복구, 전역 시계의 정확한 due·activity 예약, 단계별 10건 배치의 5분 후속 실행, 빈 상태 한 시간 안전 검사와 일반 채널 스케줄 격리를 검증합니다. `qa/community-bug-storage.mjs`는 새 폐기 가능한 PostgreSQL 인스턴스에 migration 014–021을 적용하고 DB 무결성·팀 격리·비공개 원자 커밋·신규 설치 무변경 backfill을 확인합니다. `qa/community-bug-private-backfill.mjs`는 017 상태의 오염 fixture를 만든 뒤 018–021 upgrade가 opaque lineage와 event를 보존하면서 관계형 canary를 제거하고 outbox를 한 번만 보정하는지 검증합니다. `qa/community-bug-delivery.mjs`와 `qa/community-bug-expiry-job-guard.mjs`는 각각 delivery와 원자적 만료·job guard 경계를 확인합니다. 이 PostgreSQL 검사들은 일반 `check`에 넣지 않습니다. `qa/maintainer-dry-run.mjs`는 Git 작업본과 임시 디렉터리가 필요하며, 확정된 fixture로 provider-neutral 무변경 handoff만 검사합니다.
+`community-bugs`, `community-bug-dialogue`, `community-bug-due-store`, `community-bug-backlog`, `community-clock`은 합성 회귀 allowlist에 포함됩니다. mock Slack delivery의 failed → retry → sent, 응답이 사라진 DB 커밋 복구, 전역 시계의 정확한 due·activity 예약, 단계별 10건 배치의 5분 후속 실행, 빈 상태 한 시간 안전 검사와 일반 채널 스케줄 격리를 검증합니다. `qa/community-bug-storage.mjs`는 새 폐기 가능한 PostgreSQL 인스턴스에 migration 014–022를 적용하고 DB 무결성·팀 격리·비공개 원자 커밋·신규 설치 무변경 backfill·원문 없는 incoming marker·소유자 범위 암호화 객체 복원 정보를 확인합니다. `qa/community-bug-private-backfill.mjs`는 017 상태의 오염 fixture를 만든 뒤 018–021 upgrade가 opaque lineage와 event를 보존하면서 관계형 canary를 제거하고 outbox를 한 번만 보정하는지 검증합니다. `qa/community-bug-delivery.mjs`와 `qa/community-bug-expiry-job-guard.mjs`는 각각 delivery와 원자적 만료·job guard 경계를 확인합니다. 이 PostgreSQL 검사들은 일반 `check`에 넣지 않습니다. `qa/maintainer-dry-run.mjs`는 Git 작업본과 임시 디렉터리가 필요하며, 확정된 fixture로 provider-neutral 무변경 handoff만 검사합니다.
 
 ```sh
 bun qa/community-bug-storage.mjs
@@ -93,7 +94,7 @@ node scripts/maintainer-dry-run.mjs --input qa/fixtures/bug-packets/confirmed-va
 
 운영 이력이 있는 로컬 저장소는 공개 원격에 `--all`이나 `--mirror`로 push하지 않습니다. 공개 설정 예시·합성 테스트만 별도 작업본에 반영하고 staged 정보 검사와 `check`를 거쳐 push합니다. API 키·회원 원문·덤프·`.omx` 영수증은 제외합니다.
 
-`export-public.mjs`가 있는 운영 저장소에서는 공개용 스냅샷을 생성할 수 있습니다. 기존 공개 Git 이력이 있는 경로를 덮어쓰지 않도록 보호되어 있습니다. migration 014–021, 버그 ledger·delivery·만료·무결성 QA fixture와 계약 SQL, 전역 시계 코드와 `automation/`의 공개 스키마·dry-run runner를 포함하지만 운영 식별자, 실제 제보 원문, `.omx`, credential은 포함하지 않습니다. 공개용 문서 원본은 이 문서 묶음이며, 내보내기 스크립트에 별도 사용법을 복제하지 않습니다.
+`export-public.mjs`가 있는 운영 저장소에서는 공개용 스냅샷을 생성할 수 있습니다. 기존 공개 Git 이력이 있는 경로를 덮어쓰지 않도록 보호되어 있습니다. migration 014–022, 버그 ledger·delivery·만료·무결성 QA fixture와 계약 SQL, 전역 시계 코드와 `automation/`의 공개 스키마·dry-run runner를 포함하지만 운영 식별자, 실제 제보 원문, `.omx`, credential은 포함하지 않습니다. 공개용 문서 원본은 이 문서 묶음이며, 내보내기 스크립트에 별도 사용법을 복제하지 않습니다.
 
 ```sh
 node scripts/export-public.mjs /tmp/otl1-public-review

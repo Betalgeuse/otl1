@@ -55,7 +55,7 @@ Operational migration and recovery requirements are in `docs/DATABASE_NORMALIZAT
 
 ## 버그 제보 DB 무결성과 팀 격리
 
-`bun qa/community-bug-storage.mjs`는 migration 014–021을 순서대로 적용한 폐기 가능한 PostgreSQL에서 `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql`을 실행합니다. packet·evidence digest 결합, job lease 소유권, obsolete delivery 취소, 팀별 만료·delivery claim 격리, 비공개 상태·관계형 원문 제거·receipt·관리자 handoff의 원자 커밋과 기존 중간 상태의 한 번뿐인 reconciliation과 신규 설치에서 021 backfill 0건을 확인합니다. `bun qa/community-bug-private-backfill.mjs`는 017 상태에 남은 private 관계형 canary fixture를 018–021로 올려 opaque lineage·event 보존, canary 제거, outbox 고유성, 재실행 0건을 확인합니다.
+`bun qa/community-bug-storage.mjs`는 migration 014–022를 순서대로 적용한 폐기 가능한 PostgreSQL에서 `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql`을 실행합니다. packet·evidence digest 결합, job lease 소유권, obsolete delivery 취소, 팀별 만료·delivery claim 격리, 비공개 상태·관계형 원문 제거·receipt·관리자 handoff의 원자 커밋과 기존 중간 상태의 한 번뿐인 reconciliation과 신규 설치에서 021 backfill 0건을 확인합니다. `bun qa/community-bug-private-backfill.mjs`는 017 상태에 남은 private 관계형 canary fixture를 018–021로 올려 opaque lineage·event 보존, canary 제거, outbox 고유성, 재실행 0건을 확인합니다.
 
 `bun qa/community-bug-private-delivery.mjs`는 migration 001–021을 적용한 폐기 가능한 PostgreSQL과 Slack fake를 연결해 원자적으로 생성된 private draft·answer outbox를 TypeScript가 동일한 template/renderer 계약으로 즉시 claim·sent(attempt 1)하는지, 정확한 replay가 중복 게시하지 않는지 확인합니다.
 
