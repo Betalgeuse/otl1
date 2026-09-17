@@ -1,4 +1,5 @@
 import { publishRelease, releasePreview } from "./community-admin";
+import { runPublicCollectionTest } from "./community-admin-collection";
 import { stopSettings } from "./community-controls";
 import { enablePublicSchedule } from "./community-cutover";
 import { confirmedRecordEdit } from "./community-edits";
@@ -13,6 +14,10 @@ export async function processRecordAction(
   id: string,
   key: string,
 ): Promise<void> {
+  if (id === "community_test_public_collection") {
+    await runPublicCollectionTest(context, key);
+    return;
+  }
   if (id === "community_live_schedule") {
     await enablePublicSchedule(context);
     return;

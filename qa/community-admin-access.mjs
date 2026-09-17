@@ -19,7 +19,7 @@ try {
    const before=effects;await assert.rejects(run,/운영자|관리/);assert.equal(effects,before,'denied operation must have no effects');
   }
  }
- const adminIds=['community_group_settings','community_group_submit','community_release_preview','community_publish','community_test_schedule','community_test_group','community_live_schedule'];
+ const adminIds=['community_group_settings','community_group_submit','community_release_preview','community_publish','community_test_schedule','community_test_group','community_test_public_collection','community_live_schedule'];
  for(const id of [...adminIds,'community_unknown']) {
   for(const actor of ['UADMIN','UMEMBER']) {
    const before=effects;

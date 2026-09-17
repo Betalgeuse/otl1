@@ -28,6 +28,7 @@ const adminActions = new Set([
   "community_publish",
   "community_test_schedule",
   "community_test_group",
+  "community_test_public_collection",
   "community_live_schedule",
 ]);
 const memberActions = new Set([

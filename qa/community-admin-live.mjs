@@ -4,7 +4,7 @@ import {writeFileSync} from 'node:fs';
 process.loadEnvFile('.dev.vars');
 const results=[];
 for(const actor of ['U0BV52VENTD','U0OTHERQA1']) {
- for(const id of ['community_group_settings','community_group_submit','community_release_preview','community_publish','community_test_schedule','community_test_group','community_live_schedule','community_unknown']) {
+ for(const id of ['community_group_settings','community_group_submit','community_release_preview','community_publish','community_test_schedule','community_test_group','community_test_public_collection','community_live_schedule','community_unknown']) {
   const payload={type:'block_actions',team:{id:process.env.SLACK_TEAM_ID},user:{id:actor},container:{channel_id:'C0BVB9HSL10'},actions:[{action_id:id,value:JSON.stringify({ownerId:actor,key:'auth-qa-denied'})}]};
   const body=new URLSearchParams({payload:JSON.stringify(payload)}).toString();const ts=String(Math.floor(Date.now()/1000));
   const sig='v0='+createHmac('sha256',process.env.SLACK_SIGNING_SECRET).update(`v0:${ts}:${body}`).digest('hex');
