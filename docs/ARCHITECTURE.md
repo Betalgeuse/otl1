@@ -38,6 +38,7 @@ flowchart LR
 | `community_preferences`, `channel_schedules` | 개인 안내와 공통 일정 |
 | `community_milestones` | 첫 등록·첫 완료·첫 후기 이력 |
 | `community_records` | 재처리 가능한 입력 원문, 확인 대기·발송·가입 안내 등 워크플로 기록 |
+| `community_garden_deliveries` | 날짜 revision별 잔디 게시 outbox, lease·payload digest·재시도·Slack 영수증 |
 | `member_introductions` | 회원별 현재 자기소개·선택적 LinkedIn·기타 공개 정보·공개 메시지 위치·revision |
 | `guide_versions`, `guide_deliveries` | 안내 본문 버전과 회원별 전달 |
 | `bug_reports`, `bug_report_revisions`, `bug_questions` | 제보별 정규화 상태, 제보자만 읽는 revision, 한 질문씩의 답변 이력 |
@@ -72,7 +73,9 @@ erDiagram
 
 ## 게시와 예약
 
-공개 잔디에는 결과만 표시하고 개인 조작은 ephemeral로 보냅니다. 잔디는 수정 대상 날짜와 별개로 오늘까지의 이력을 사용합니다. 새 게시 성공 후 관리 중인 옛 이미지·버튼만 제거해 댓글을 보존합니다.
+공개 잔디에는 결과만 표시하고 개인 조작은 ephemeral로 보냅니다. 처음에는 네 칸, 참여 기간이 늘면 여덟 칸으로 확장합니다. 아홉째 날부터는 새 페이지로 초기화하지 않고 오늘을 포함한 최근 평일과 참여한 주말을 시간순으로 보여줍니다. 미참여 주말은 숨기며, 오늘 목표는 즉시 연두색으로 나타납니다.
+
+날짜 변경과 같은 트랜잭션에서 revision별 잔디 delivery를 저장합니다. Durable Object는 lease로 이를 claim하고 실패를 최대 세 번 재시도합니다. Slack 응답을 잃으면 스레드의 안정적인 block marker를 먼저 대조해 중복 게시를 막습니다. 새 메시지 영수증을 DB에 저장한 뒤에만 관리 중인 옛 이미지·버튼을 제거하므로, 실패가 기존 이력을 지우지 않습니다.
 
 일반 커뮤니티 예약은 채널별 Durable Object alarm과 DB의 발송 조건·claim을 함께 사용합니다. 공개 수집 시점마다 `conversations.members` 전 페이지와 최대 동시 5개의 `users.info` 조회를 끝낸 완전한 스냅샷만 반영합니다. 일부 페이지·프로필 조회가 실패하면 소속을 바꾸거나 누구도 멘션하지 않습니다. 현재 사람 회원 중 같은 시각에 대상이 된 목표·후기 안내는 채널당 한 메시지로 lease하며, 최대 세 번 재시도합니다. 비공개 관리 채널의 관리자 전용 수집 테스트도 저장된 공개 채널 시각과 같은 경로를 호출하고, 발급 메시지·당일·소유자에 묶인 일회성 record를 먼저 claim합니다. Slack 수락 뒤 DB 완료가 불명확하면 같은 채널의 정확히 같은 본문을 먼저 대조해 중복 게시를 막습니다. 버그 delivery와 24시간 만료는 팀별 전역 Durable Object alarm이 자기 팀으로 범위를 고정해 정확한 due·activity 시각을 잡습니다. reconciliation·만료·claim 중 한 단계라도 10건 batch를 채우면 backlog가 남을 수 있으므로 5분 alarm을 유지하고, 모두 batch 미만으로 내려간 뒤에만 한 시간 안전 검사로 돌아갑니다. Cron은 이 alarm을 다시 거는 backup/nudge이며 delivery SQL을 실행하지 않습니다. 최초 축하도 DB 판정과 목적 채널별 발송 기록을 구분합니다. 부가적인 AI 응원 실패가 먼저 실행된 축하를 막지 않게 합니다.
 

@@ -58,6 +58,11 @@
 
 `데일리스크럼 수집 테스트`는 비공개 관리 채널에서 관리자에게만 보입니다. 저장된 공개 채널 공통 안내 시각을 그대로 사용해 목표·후기 수집 경로를 각각 한 번 실행하며 설정을 바꾸지 않습니다. 결과는 대상 인원과 생성된 일괄 메시지 수만 관리자에게 비공개로 보여줍니다. 버튼은 발급 당일의 원래 관리 메시지와 소유자에 묶이며 같은 요청을 다시 눌러도 공개 수집 메시지를 반복하지 않습니다.
 
+
+## 잔디 게시 복구
+
+Migration 024는 날짜 변경과 잔디 게시 요청을 한 트랜잭션에 기록합니다. `community_garden_deliveries`에서 `pending`·`claimed`·`failed` 행을 확인하며, 시도는 세 번을 넘지 않습니다. `failed` 행의 `retry_after`, `error_code`, `attempts`로 다음 재시도를 판단합니다. Slack 게시가 수락됐지만 DB 완료 응답을 잃은 경우에는 같은 스레드의 안정적인 block marker를 대조하고 기존 메시지를 영수증으로 채택합니다. 새 delivery가 `sent`가 되기 전에는 이전 잔디 이미지를 제거하지 않습니다.
+
 ## 버그 제보 v0.0.54 구현 기준
 
 비정규 pre-release QA 배포 계보는 exact source, maintenance로 보호한 migration, Worker 활성화와 설정 보존을 영수증으로 남겼고, exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web 시나리오까지 통과했습니다. 다만 private `ops/main`·ruleset readback·canonical provenance와 정식 release authority가 없으므로 정식 배포나 출시로 취급하지 않습니다. 이것이 v0.0.54가 pre-release로 남는 유일한 이유이며 현재 운영 출시 기준은 v0.0.53입니다.

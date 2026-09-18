@@ -28,6 +28,7 @@ export type GardenRequest = {
   readonly thread: string;
   readonly key: string;
   readonly undoKey: string | null;
+  readonly deliveryKey?: string;
 };
 
 export type ClockInspection = {

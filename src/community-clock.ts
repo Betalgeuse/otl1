@@ -3,7 +3,6 @@ import {
   BUG_DELIVERY_CLOCK_ROLE,
   type BugDeliveryArm,
   type BugDeliveryArmResult,
-  type ClockBinding,
   type ClockInspection,
   COMMUNITY_SCHEDULE_CLOCK_ROLE,
   type GardenRequest,
@@ -13,7 +12,9 @@ import {
   readBugClockState,
   runBugDeliveryClockAlarm,
 } from "./community-clock-bug";
-import { publishGardenNow } from "./community-garden";
+import { nextAlarmTime } from "./community-clock-client";
+import { publishGardenRequest } from "./community-clock-garden";
+import { runDueGardenDeliveries } from "./community-garden-delivery";
 import type { CommunityEnv } from "./community-runtime";
 import { runCommunitySchedule } from "./community-scheduler";
 import { CommunitySlackError } from "./community-social";
@@ -23,27 +24,7 @@ import { NeonStore } from "./store";
 
 export { armBugDeliveryClock, bugDeliveryClockName } from "./community-bug-clock-client";
 
-export function nextAlarmTime(times: readonly string[], now: number): number | null {
-  if (!Number.isFinite(now)) throw new InputError("Invalid clock time");
-  const offset = 9 * 60 * 60 * 1000;
-  const midnight = Math.floor((now + offset) / 86_400_000) * 86_400_000 - offset;
-  let next: number | null = null;
-  for (const time of new Set(times)) {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new InputError("Invalid schedule time");
-    const candidate = midnight + (Number(time.slice(0, 2)) * 60 + Number(time.slice(3))) * 60_000;
-    const future = candidate > now ? candidate : candidate + 86_400_000;
-    next = next === null ? future : Math.min(next, future);
-  }
-  return next;
-}
-
-export async function armCommunityClock(
-  env: CommunityEnv & { readonly COMMUNITY_CLOCK?: ClockBinding },
-  channelId: string,
-): Promise<{ readonly next: number | null }> {
-  if (!env.COMMUNITY_CLOCK) return { next: null };
-  return env.COMMUNITY_CLOCK.getByName(`${env.SLACK_TEAM_ID}:${channelId}`).refresh(channelId);
-}
+export { armCommunityClock, nextAlarmTime } from "./community-clock-client";
 
 export class CommunityClock extends DurableObject<CommunityEnv> {
   private queue: Promise<void> = Promise.resolve();
@@ -58,45 +39,7 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
   }
 
   publishGarden(input: GardenRequest): Promise<string> {
-    return this.serialize(async () => {
-      if (
-        this.env.DATABASE_MAINTENANCE === "true" ||
-        ![this.env.COMMUNITY_CHANNEL_ID, this.env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(
-          input.channelId,
-        ) ||
-        !/^[UW][A-Z0-9]+$/.test(input.userId) ||
-        (input.channelId === this.env.COMMUNITY_CHANNEL_ID &&
-          input.userId !== this.env.COMMUNITY_ADMIN_ID)
-      )
-        throw new InputError("Garden scope unavailable");
-      const [role, channelId] = await Promise.all([
-        this.ctx.storage.get<string>("role"),
-        this.ctx.storage.get<string>("channel"),
-      ]);
-      if (role && role !== COMMUNITY_SCHEDULE_CLOCK_ROLE)
-        throw new InputError("Clock role cannot publish a garden");
-      if (channelId && channelId !== input.channelId)
-        throw new InputError("Clock channel cannot change");
-      await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
-      await this.ctx.storage.put("channel", input.channelId);
-      return publishGardenNow(
-        {
-          env: this.env,
-          store: new CommunityStore(new NeonStore(this.env.DATABASE_URL)),
-          scope: {
-            teamId: this.env.SLACK_TEAM_ID,
-            channelId: input.channelId,
-            userId: input.userId,
-          },
-          date: input.date,
-          thread: input.thread,
-          source: input.source,
-          key: input.key,
-        },
-        input.date,
-        input.undoKey,
-      );
-    });
+    return this.serialize(() => publishGardenRequest(this.env, this.ctx.storage, input));
   }
 
   refresh(channelId: string): Promise<{ readonly next: number | null }> {
@@ -229,6 +172,7 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
       if (!role) await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
       try {
         const now = new Date();
+        const garden = await runDueGardenDeliveries(this.env, channelId, now.getTime());
         if (
           this.env.COMMUNITY_ENABLED === "true" &&
           this.env.COMMUNITY_ADMIN_ID &&
@@ -246,6 +190,11 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
           await this.ctx.storage.put("lastRun", { at: now.getTime(), ...result });
         }
         await this.refreshSchedule(channelId);
+        if (garden.nextDue !== null) {
+          const current = await this.ctx.storage.getAlarm();
+          if (current === null || garden.nextDue < current)
+            await this.ctx.storage.setAlarm(garden.nextDue);
+        }
       } catch (error) {
         await this.ctx.storage.put("lastRun", {
           at: Date.now(),

@@ -45,6 +45,10 @@ mock.module("../src/community-scheduler.ts", () => ({
 mock.module("../src/community-scheduler", () => ({
   runCommunitySchedule: (...args) => scheduleRun(...args),
 }));
+mock.module("../src/community-garden-delivery.ts", () => ({
+  deliverGardenByKey: async () => "garden",
+  runDueGardenDeliveries: async () => ({ processed: 0, nextDue: null }),
+}));
 
 const {
   CommunityClock,

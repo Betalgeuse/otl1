@@ -182,6 +182,9 @@ export class CommunityStore {
       firstRegistration: v.firstRegistration === true,
       firstReflection: bool(v.firstReflection),
       undoKey: string(v.undoKey),
+      ...(typeof v.gardenDeliveryKey === "string"
+        ? { gardenDeliveryKey: v.gardenDeliveryKey }
+        : {}),
     };
   }
   async enrollReminders(input: CommunityScope): Promise<SupportPreferences> {

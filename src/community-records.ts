@@ -4,11 +4,12 @@ import { customBotEmoji, randomCustomEmoji } from "./community-emoji";
 import { earlierDayNotice } from "./community-followup";
 import { generateEncouragement } from "./community-language";
 import { communityConfirmationMessage, communityStatusMessage } from "./community-messages";
-import { correctMilestone, emitMilestones } from "./community-milestones";
+import { emitMilestones } from "./community-milestones";
+import { publishStatus } from "./community-record-publication";
 import { type CommunityContext, ephemeral, scopedValue, textReply } from "./community-runtime";
-import { addReactions, removeReactions, socialReactions } from "./community-social";
+import { addReactions, socialReactions } from "./community-social";
 import type { CommunityDay, DayChange } from "./community-types";
-import { DEFAULT_PALETTE, koreaDate, object, string } from "./input";
+import { DEFAULT_PALETTE, koreaDate, object } from "./input";
 import { NeonStore } from "./store";
 
 export async function statusMessage(
@@ -126,6 +127,11 @@ export async function applyChange(context: CommunityContext, change: DayChange):
   const result = await context.store.change({
     ...change,
     syncLegacy: context.scope.channelId === context.env.COMMUNITY_PUBLIC_CHANNEL_ID,
+    delivery: {
+      source: context.source,
+      thread: context.thread,
+      undoKey: null,
+    },
   });
   if (result.conflict) {
     await textReply(context, "그 뒤에 기록이 바뀌었어요. 현재 상태를 확인하고 다시 알려주세요.");
@@ -136,7 +142,7 @@ export async function applyChange(context: CommunityContext, change: DayChange):
     return;
   }
   if (change.preserveOutcome) {
-    await publishStatus(context, result.day, null);
+    await publishStatus(context, result.day, null, result.gardenDeliveryKey);
     return;
   }
   try {
@@ -181,7 +187,7 @@ export async function applyChange(context: CommunityContext, change: DayChange):
       revision: result.day.revision,
     },
   });
-  await publishStatus(context, result.day, undoRecordKey);
+  await publishStatus(context, result.day, undoRecordKey, result.gardenDeliveryKey);
   if (change.action === "undo") return;
   try {
     await addReactions(context.env.SLACK_BOT_TOKEN, {
@@ -218,58 +224,4 @@ export async function applyChange(context: CommunityContext, change: DayChange):
   }
 }
 
-export async function undoChange(context: CommunityContext, key: string): Promise<void> {
-  const record = await context.store.getRecord({ ...context.scope, key });
-  if (record?.kind !== "undo") {
-    await textReply(context, "되돌릴 기록을 찾지 못했어요.");
-    return;
-  }
-  const data = object(record.body);
-  const undoKey = string(data.undoKey);
-  const result = await context.store.change({
-    ...context.scope,
-    date: string(data.date),
-    key: context.key,
-    action: "undo",
-    syncLegacy: context.scope.channelId === context.env.COMMUNITY_PUBLIC_CHANNEL_ID,
-    undoKey,
-  });
-  if (result.conflict) {
-    await textReply(context, "그 뒤에 기록이 바뀌어 이 변경은 되돌릴 수 없어요.");
-    return;
-  }
-  if (!result.changed) {
-    await textReply(context, "이미 되돌린 기록이에요.");
-    return;
-  }
-  const names = Array.isArray(data.names)
-    ? data.names.filter((n): n is string => typeof n === "string")
-    : [];
-  await removeReactions(context.env.SLACK_BOT_TOKEN, {
-    channel: context.scope.channelId,
-    ts: string(data.source),
-    names,
-  });
-  await publishStatus(context, result.day, null);
-  await correctMilestone(context, undoKey);
-  await textReply(context, "방금 변경을 되돌렸어요. ↩️");
-}
-
-export async function publishStatus(
-  context: CommunityContext,
-  day: CommunityDay,
-  undoKey: string | null,
-): Promise<string> {
-  if (!context.env.COMMUNITY_CLOCK) throw new Error("Garden coordinator unavailable");
-  return context.env.COMMUNITY_CLOCK.getByName(
-    `${context.scope.teamId}:${context.scope.channelId}`,
-  ).publishGarden({
-    userId: context.scope.userId,
-    channelId: context.scope.channelId,
-    date: day.date,
-    source: context.source,
-    thread: context.thread,
-    key: context.key,
-    undoKey,
-  });
-}
+export { publishStatus, undoChange } from "./community-record-publication";

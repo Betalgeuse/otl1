@@ -1,4 +1,5 @@
 import { armBugDeliveryClock } from "./community-bug-clock-client";
+import { runDueGardenDeliveries } from "./community-garden-delivery";
 import type { CommunityEnv } from "./community-runtime";
 import { runCommunitySchedule } from "./community-scheduler";
 import { CommunityStore } from "./community-store";
@@ -23,11 +24,19 @@ export async function communityCron(env: CommunityEnv, scheduledTime: number): P
     (v): v is string => Boolean(v),
   );
   for (const channel of new Set(channels)) {
+    const garden = await runDueGardenDeliveries(env, channel, scheduledTime);
     const result = await runCommunitySchedule(
       { ...env, COMMUNITY_CHANNEL_ID: channel, COMMUNITY_ADMIN_ID: env.COMMUNITY_ADMIN_ID },
       new CommunityStore(new NeonStore(env.DATABASE_URL)),
       new Date(scheduledTime),
     );
-    console.log(JSON.stringify({ event: "community.cron", scheduledTime, channel, ...result }));
+    console.log(
+      JSON.stringify({
+        event: "community.cron",
+        scheduledTime,
+        gardenProcessed: garden.processed,
+        ...result,
+      }),
+    );
   }
 }

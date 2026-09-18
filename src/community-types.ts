@@ -23,6 +23,11 @@ export type DayChange = DayScope & {
   readonly outcome?: Outcome;
   readonly expectedRevision?: number;
   readonly undoKey?: string;
+  readonly delivery?: {
+    readonly source: string;
+    readonly thread: string;
+    readonly undoKey: string | null;
+  };
 };
 export type ChangeResult = {
   readonly day: CommunityDay;
@@ -32,6 +37,7 @@ export type ChangeResult = {
   readonly firstRegistration?: boolean;
   readonly firstReflection: boolean;
   readonly undoKey: string;
+  readonly gardenDeliveryKey?: string;
 };
 export type SupportPreferences = CommunityScope & {
   readonly enabled: boolean;

@@ -215,6 +215,7 @@ globalThis.fetch = async (url, options) => {
       if (operation === "due") return Response.json({ rows: [["[]"]] });
       if (operation === "reminder_trigger_due") return Response.json({ rows: [["false"]] });
       if (operation === "claim_reminder_batch") return Response.json({ rows: [["null"]] });
+      if (operation === "claim_garden_delivery") return Response.json({ rows: [["null"]] });
       if (operation === "reminder_trigger_due") return Response.json({ rows: [["false"]] });
       if (operation === "finish_reminder_batch" || operation === "reconcile_channel_members")
         return Response.json({ rows: [["true"]] });

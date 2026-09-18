@@ -57,28 +57,35 @@ export function buildBoard(snapshot: Snapshot, today: string, anchor = today): B
   if (current < origin || selected < origin || selected > current) {
     throw new RangeError("시작일부터 오늘까지의 날짜를 선택해 주세요.");
   }
-  const selectedDay = selected - origin + 1;
-  const firstDay = selectedDay <= 8 ? 1 : 9 + Math.floor((selectedDay - 9) / 8) * 8;
-  const count = current - origin < 4 ? 4 : 8;
   const records = new Map(snapshot.goals.map((goal) => [goal.date, goal]));
-  const cells = Array.from({ length: count }, (_, index): Cell => {
-    const day = firstDay + index;
-    const stamp = origin + day - 1;
+  const elapsed: number[] = [];
+  for (let stamp = origin; stamp <= current; stamp += 1) {
     const date = isoDate(stamp);
-    const goal = records.get(date);
+    if (!isWeekend(date) || records.has(date)) elapsed.push(stamp);
+  }
+  const calendarDay = current - origin + 1;
+  const count = calendarDay <= 4 ? 4 : 8;
+  const visible = elapsed.slice(-count);
+  for (let stamp = current + 1; calendarDay <= 8 && visible.length < count; stamp += 1) {
+    const date = isoDate(stamp);
+    if (!isWeekend(date) || records.has(date)) visible.push(stamp);
+  }
+  const cells = visible.map((stamp): Cell => {
+    const cellDate = isoDate(stamp);
+    const goal = records.get(cellDate);
     return {
-      day,
-      date,
+      day: stamp - origin + 1,
+      date: cellDate,
       status: goal === undefined ? "empty" : goal.completed ? "complete" : "written",
       future: stamp > current,
-      optional: goal === undefined && isWeekend(date),
+      optional: false,
       today: stamp === current,
     };
-  }).filter((cell) => !cell.optional);
+  });
   return {
     cells,
     palette: snapshot.palette,
-    startDate: isoDate(origin + firstDay - 1),
-    endDate: isoDate(origin + firstDay + count - 2),
+    startDate: cells[0]?.date ?? today,
+    endDate: cells.at(-1)?.date ?? today,
   };
 }
