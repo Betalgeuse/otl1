@@ -71,6 +71,7 @@ export const PUBLIC_QA_NAMES = [
   "community-guide-cli.mjs",
   "community-guide-pg.mjs",
   "community-guide-security-pg.mjs",
+  "community-guide-neon-owner-pg.mjs",
   "community-guide-db-routing.mjs",
   "community-guide-bootstrap.mjs",
   "slack-manifest-scopes.mjs",
