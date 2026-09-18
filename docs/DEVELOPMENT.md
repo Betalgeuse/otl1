@@ -9,13 +9,13 @@ bun install --frozen-lockfile
 bun run check
 ```
 
-`check`는 lint → TypeScript → 33개 합성 회귀 → Wrangler dry-run 순서로 실행하며 실패 시 중단합니다. 실제 배포·운영 DB·Slack 발송은 호출하지 않습니다. 테스트 목록은 `scripts/test-unit.mjs` 한 곳에서 관리하며 각 검사는 새 Bun 프로세스에서 실행합니다.
+`check`는 lint → TypeScript → 합성 회귀 → Wrangler dry-run 순서로 실행하며 실패 시 중단합니다. 실제 배포·운영 DB·Slack 발송은 호출하지 않습니다. 테스트 목록은 `scripts/test-unit.mjs` 한 곳에서 관리하며 각 검사는 새 Bun 프로세스에서 실행합니다.
 
 ## 설정과 배포
 
 1. `.dev.vars.example`을 `.dev.vars`로 복사하고 로컬 값을 채웁니다. 완성된 파일은 Git에 넣지 않습니다.
 2. `wrangler.jsonc`에 본인 계정의 Worker·관리자·공개 채널·feedback·townhall·welcome·자기소개 채널을 지정합니다. `COMMUNITY_FEEDBACK_CHANNEL_ID`는 버그 제보 전용 채널이며 공개 export에서는 반드시 placeholder로 치환합니다. 관리자 채널은 비공개로 유지합니다.
-3. `COMMUNITY_GUIDE_SOURCE_TS`에는 지정 관리자가 welcome 채널에 작성한 원본 안내글의 timestamp를 넣습니다.
+3. `COMMUNITY_GUIDE_SOURCE_TS`에는 지정 관리자가 welcome 채널에 작성한 원본 안내글 timestamp를, `COMMUNITY_GUIDE_FILE_IDS`에는 그 원문에 첨부된 로고와 daily scrum 화면의 Slack 파일 ID를 그 순서로 정확히 두 개 넣습니다. `COMMUNITY_GUIDE_VERSION`은 본문에 표시하며 이전 발행본보다 큰 `vMAJOR.MINOR.PATCH`입니다. 설정 순서와 원문 첨부 순서가 다르면 발행을 거부합니다.
 4. 서명 키, 봇 토큰, DB URL, 보드 서명 키를 Wrangler secret으로 등록합니다. 값은 명령문·문서·공개 이력에 남기지 않습니다.
 5. 앱 manifest를 생성해 Slack에 적용하고 필요한 채널에 봇을 연결합니다. 슬래시 `/one`은 사용하지 않습니다.
 
@@ -55,9 +55,31 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/020_bug_private_at
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/021_bug_private_backfill.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/022_bug_private_read.sql
 psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/023_current_channel_membership.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/024_durable_garden_publication.sql -f migrations/025_garden_projection_consistency.sql -f migrations/026_welcome_guide_images.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/027_membership_reminder_audit.sql
+psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/028_welcome_guide_roles.sql
 ```
 
-번호 순서는 001부터 023까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger → 015 delivery → 016 retry scheduler → 017 원자적 24시간 만료·job guard → 018 packet·lease·비공개 경계 무결성 → 019 팀별 만료·delivery claim 격리 → 020 비공개 전환·outbox 원자 커밋과 기존 행 reconciliation → 021 기존 private 행의 1회 scrub·outbox 보정 → 022 소유자 범위 암호화 객체 복원 정보 → 023 현재 채널 회원 스냅샷과 일괄 안내 lease 순서를 바꾸지 않습니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
+번호 순서는 001부터 028까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger부터 023 현재 채널 회원 스냅샷까지의 순서를 바꾸지 않고, 024 잔디 delivery → 025 projection → 026 welcome 발행본 → 027 회원·안내 delivery 감사 경계 → 028 welcome DB 역할 분리 순서로 적용합니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
+
+Migration 028 뒤에는 DB 소유자 연결로 [환영 안내 DB 권한 부트스트랩](GUIDE_DATABASE_SECURITY.md)을 한 번 실행해 `GUIDE_DATABASE_URL`과 `GUIDE_ADMIN_DATABASE_URL`을 서로 다른 로그인으로 발급합니다. 소유자 연결은 migration과 부트스트랩에만 쓰고 Worker에는 넣지 않습니다. Worker에는 런타임 자격증명만, 발행 CLI를 실행하는 로컬 비밀 저장소에는 관리자 자격증명만 둡니다.
+
+Migration 026·028과 DB 역할 부트스트랩을 마친 뒤 승인된 관리자 원본을 발행할 때만 아래 작업을 실행합니다. 인자 없이 실행하면 Slack 원본과 설정을 검증하는 dry run이며 DB를 바꾸지 않습니다. `--apply`를 붙인 실행만 `GUIDE_ADMIN_DATABASE_URL`을 사용해 발행본을 저장합니다. Slack 원본 편집만으로는 현재 발행본이 바뀌지 않습니다. 두 모드 모두 본문·토큰·DB 주소를 출력하지 않고 버전과 content hash만 출력합니다. 신규 회원 입장 처리는 Worker의 `GUIDE_DATABASE_URL`로 DB 최신 발행본만 읽습니다.
+
+```sh
+set -a
+. ./.dev.vars
+set +a
+bun scripts/publish-welcome-guide.mjs
+bun scripts/publish-welcome-guide.mjs --apply
+```
+
+이미 이전 안내를 받은 회원에게 새 hash의 수정본을 전달할 때도 dry run을 먼저 실행합니다. `--apply`는 `SLACK_BOT_TOKEN`의 OT1L 봇 프로필로 현재 발행본을 같은 회원에게 한 번 게시하고 반환된 bot message timestamp를 저장할 뿐, 기존 메시지를 삭제하지 않습니다. Slack Web에서 봇 프로필·멘션·본문·이미지 두 장을 확인한 다음 기존 메시지를 수동으로 정리합니다. 사용자 토큰이나 관리자 프로필 게시로 대체하지 않습니다.
+
+```sh
+bun scripts/publish-welcome-guide.mjs --replace-user U_REPLACE
+bun scripts/publish-welcome-guide.mjs --replace-user U_REPLACE --apply
+```
 
 기존 DB는 **백업 → 별도 복원 → 원본 충돌 대조 → 쓰기 정리 → 이관 → 전후 비교 → 실제 사용자 확인** 순서로 다룹니다. 알 수 없는 충돌을 덮어쓰거나 검사를 제거하지 않습니다. 복구는 이관 뒤 생긴 새 기록도 보존해야 합니다. 옛 rollback 파일이 현재 모든 후속 migration에 맞는다고 가정하지 않습니다.
 
@@ -66,7 +88,7 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/023_current_channe
 | 범위 | 실행과 주의점 |
 | --- | --- |
 | 합성 회귀 | `bun run test:unit`. 공개 코드의 기본 검증 |
-| PostgreSQL | 폐기 가능한 로컬 DB에 설치 후 `community-storage`, `community-scheduler`, `normalized-legacy`, `default-reminders`, `community-bug-storage`, `community-bug-delivery`, `community-bug-expiry-job-guard`, `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql`, `community-bug-private-backfill`, `current-member-reminders.sql` 검사 실행 |
+| PostgreSQL | 폐기 가능한 로컬 DB에 설치 후 `community-guide-pg`, `community-guide-security-pg`, `membership-reminder-audit-pg`, `community-storage`, `community-scheduler`, `normalized-legacy`, `default-reminders`, `community-bug-storage`, `community-bug-delivery`, `community-bug-expiry-job-guard`, `bug-db-integrity-contract.sql`, `bug-team-scope-contract.sql`, `bug-private-atomic-contract.sql`, `community-bug-private-backfill`, `current-member-reminders.sql` 검사 실행. guide 검사는 009 운영 상태와 001–028 신규 설치를 모두 순차 이관함 |
 | 실제 서비스 | 명시한 채널·회원·날짜만 검증. 전후 기록, 실제 게시, 실패 범위를 별도 보존 |
 
 DB 검사의 `COMMUNITY_PG_SOCKET`, `COMMUNITY_PG_PORT`, `COMMUNITY_PG_DATABASE`를 확인합니다. 기본값이 검사마다 다를 수 있으므로 DB 이름을 명시합니다. `*-live*`, backfill, fixture 복원, migration 스크립트를 일반 테스트에 섞지 않습니다.

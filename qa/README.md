@@ -61,6 +61,12 @@ Operational migration and recovery requirements are in `docs/DATABASE_NORMALIZAT
 
 `bun qa/community-bug-resume-pg.mjs`는 migration 001·005–007과 014–022를 적용한 폐기 가능한 PostgreSQL, 메모리 R2, Slack fake를 연결합니다. 질문 1–3의 답과 packet revision 4는 저장됐지만 다음 질문 전이가 유실된 상태에서 재개 로직이 필수 actor·evidence 계약으로 질문 4를 정확히 한 번 만들고 전송하는지, `버그 제보 계속`과 재실행이 중복 전송·R2 변경·job 생성을 일으키지 않는지 확인합니다.
 
+`bun qa/community-guide-pg.mjs`는 migration 009의 기존 안내·전달 이력이 있는 upgrade DB와 migration 001–028 신규 DB를 따로 구성합니다. migration 026이 기존 행을 historical/legacy 감사 이력으로 보존하고, 버전·본문·순서 있는 파일 ID·원본 metadata가 정확히 같은 발행만 멱등 처리하는지 확인합니다. 같은 회원의 같은 hash 중복·동시 claim은 막고 새 hash 수정본은 한 번 허용하며, finish가 정확한 version/hash에만 적용되는지도 검증합니다. `bun qa/community-guide-security-pg.mjs`와 `bun qa/community-guide-db-routing.mjs`는 migration 028의 runtime/admin 역할, 직접 테이블 차단, 함수 allowlist와 두 연결 문자열의 분리를 확인합니다. `bun qa/community-guide-bootstrap.mjs`는 생성한 자격증명이 stdout·stderr·프로세스 인자에 노출되지 않고 지정 sink의 stdin으로만 전달되는지 확인합니다. `bun qa/community-guide-cli.mjs`는 인자 없는 게시 명령과 대상 회원 repair 명령이 모두 dry run이고 본문·토큰·DB 주소·회원 ID·Slack timestamp를 출력하지 않는지 확인합니다.
+
+`bun qa/community-reminder-audit.mjs`, `bun qa/community-schedule-overlap.mjs`, `bun qa/community-common-delivery.mjs`는 migration 027과 대응하는 101/201명 결정적 chunk, 같은 시각의 공통·개인 공개 글 분리, 429 재시도, 여러 history 페이지의 정확한 본문 대조를 확인합니다. `bun qa/membership-reminder-audit-pg.mjs`는 오래된 스냅샷 무시, 재입장 시 기록·시각·opt-out 보존, 이탈 회원 제외와 due 재검사를 폐기 가능한 PostgreSQL에서 검증합니다.
+
+합성·PostgreSQL 검사는 실제 예약 실행이나 Slack 수신을 증명하지 않습니다. 2026-09-18 지정 회원 welcome 수정본은 Slack Web에서 확인했지만 자연스러운 신규 입장 이벤트는 아직 관찰하지 않았습니다. 2026-09-19 토요일과 2026-09-21 월요일의 자연 예약 실행도 관찰 뒤 별도 운영 영수증이 필요합니다.
+
 ## Slack 수락 뒤 응답 유실
 
 영구 thread와 admin delivery는 history reconciliation으로 동일 payload를 찾아 중복을 억제합니다. history에서 조회할 수 없는 `reporter_ephemeral` receipt는 at-least-once이며, Slack 수락 뒤 응답 또는 DB finish가 유실되면 재시도에서 같은 비공개 receipt가 중복될 수 있습니다. `qa/community-bugs.mjs`는 Slack이 ephemeral을 수락한 뒤 응답을 잃는 경우를 합성해 첫 delivery가 retryable `failed/1`로 남고, 다음 eligible retry가 같은 비공개 receipt를 한 번 더 보낼 수 있으며 `sent/2`로 끝나는 at-least-once 경계를 고정합니다. 연속 실패는 outbox 행을 늘리지 않고 세 번에서 멈춥니다.

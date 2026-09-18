@@ -41,7 +41,7 @@ flowchart LR
 | `community_garden_projections` | 회원·날짜·Slack 스레드별 잔디의 desired/published revision과 활성 메시지 영수증 |
 | `community_garden_deliveries` | projection route·날짜 revision별 잔디 게시 outbox, lease·payload digest·재시도·Slack 영수증 |
 | `member_introductions` | 회원별 현재 자기소개·선택적 LinkedIn·기타 공개 정보·공개 메시지 위치·revision |
-| `guide_versions`, `guide_deliveries` | 안내 본문 버전과 회원별 전달 |
+| `guide_versions`, `guide_deliveries`, `guide_publishers` | 불변 발행 hash·버전·정제 본문·순서 있는 Slack 이미지 ID, 등록 발행자와 회원·hash별 전달 및 수정본 감사 이력 |
 | `bug_reports`, `bug_report_revisions`, `bug_questions` | 제보별 정규화 상태, 제보자만 읽는 revision, 한 질문씩의 답변 이력 |
 | `bug_events`, `bug_transition_contract`, `bug_jobs` | 허용 상태 전이, idempotency 이력, 재현·수정·검토·배포 작업 outbox |
 | `bug_deliveries` | 질문·요약·접수 영수증·비공개 관리자 인계의 Slack delivery outbox와 lease·재시도·발송 영수증 |
@@ -78,9 +78,9 @@ erDiagram
 
 날짜 변경과 같은 트랜잭션에서 revision별 잔디 delivery를 저장합니다. Durable Object는 lease로 이를 claim하고 실패를 최대 세 번 재시도합니다. Slack 응답을 잃으면 팀·채널·회원·날짜·revision·thread·source·payload digest를 모두 포함한 block marker로 해당 스레드만 대조해 중복 게시를 막습니다. 활성 카드는 회원 전체가 아니라 날짜와 스레드로 정한 projection route마다 하나입니다. 새 메시지 영수증을 DB에 저장한 뒤 같은 route의 옛 이미지만 제거하므로, 오늘 변경이 9월 15일이나 다른 스레드의 잔디를 지우지 않습니다. Migration 025의 bounded reconciliation은 canonical `community_days`를 바꾸지 않고 기록된 상호작용 route를 우선 복원하며, 없을 때만 정확한 일일 prompt timestamp를 fallback provenance와 함께 사용합니다.
 
-일반 커뮤니티 예약은 채널별 Durable Object alarm과 DB의 발송 조건·claim을 함께 사용합니다. 공개 수집 시점마다 `conversations.members` 전 페이지와 최대 동시 5개의 `users.info` 조회를 끝낸 완전한 스냅샷만 반영합니다. 일부 페이지·프로필 조회가 실패하면 소속을 바꾸거나 누구도 멘션하지 않습니다. 현재 사람 회원 중 같은 시각에 대상이 된 목표·후기 안내는 채널당 한 메시지로 lease하며, 최대 세 번 재시도합니다. 비공개 관리 채널의 관리자 전용 수집 테스트도 저장된 공개 채널 시각과 같은 경로를 호출하고, 발급 메시지·당일·소유자에 묶인 일회성 record를 먼저 claim합니다. Slack 수락 뒤 DB 완료가 불명확하면 같은 채널의 정확히 같은 본문을 먼저 대조해 중복 게시를 막습니다. 버그 delivery와 24시간 만료는 팀별 전역 Durable Object alarm이 자기 팀으로 범위를 고정해 정확한 due·activity 시각을 잡습니다. reconciliation·만료·claim 중 한 단계라도 10건 batch를 채우면 backlog가 남을 수 있으므로 5분 alarm을 유지하고, 모두 batch 미만으로 내려간 뒤에만 한 시간 안전 검사로 돌아갑니다. Cron은 이 alarm을 다시 거는 backup/nudge이며 delivery SQL을 실행하지 않습니다. 최초 축하도 DB 판정과 목적 채널별 발송 기록을 구분합니다. 부가적인 AI 응원 실패가 먼저 실행된 축하를 막지 않게 합니다.
+일반 커뮤니티 예약은 채널별 Durable Object alarm과 DB의 발송 조건·claim을 함께 사용합니다. 공개 수집 시점마다 `conversations.members` 전 페이지와 최대 동시 5개의 `users.info` 조회를 끝낸 완전한 스냅샷만 반영합니다. 채널의 마지막 관찰 시각보다 오래된 out-of-order 스냅샷은 무시하고, 재입장은 현재 소속만 되살리며 기록·개인 시각·opt-out을 보존합니다. 일부 페이지·프로필 조회가 실패하면 소속을 바꾸거나 누구도 멘션하지 않습니다. 공통 10시·18시 수집은 현재 사람 회원을 공개 글 하나로 묶고, 개인 기본 11시·20시 대상도 저장 시각과 당일 상태로 due인 회원을 공개 채널 일괄 글로 보냅니다. DM이나 한 사람별 fanout은 없습니다. 한 글은 100명과 Slack 본문 한도로 제한해 결정적 순서로 나누고, 각 delivery는 lease와 최대 세 번 시도를 사용합니다. 재시도 전에는 정확한 본문을 최대 10페이지 history에서 찾아 이미 수락된 글이면 기존 시각을 영수증으로 채택하며, 아직 due인 회원만 남깁니다. 비공개 관리 채널의 관리자 전용 수집 테스트도 저장된 공개 채널 시각과 같은 경로를 호출하고, 발급 메시지·당일·소유자에 묶인 일회성 record를 먼저 claim합니다. 버그 delivery와 24시간 만료는 팀별 전역 Durable Object alarm이 자기 팀으로 범위를 고정해 정확한 due·activity 시각을 잡습니다. reconciliation·만료·claim 중 한 단계라도 10건 batch를 채우면 backlog가 남을 수 있으므로 5분 alarm을 유지하고, 모두 batch 미만으로 내려간 뒤에만 한 시간 안전 검사로 돌아갑니다. Cron은 이 alarm을 다시 거는 backup/nudge이며 delivery SQL을 실행하지 않습니다. 최초 축하도 DB 판정과 목적 채널별 발송 기록을 구분합니다. 부가적인 AI 응원 실패가 먼저 실행된 축하를 막지 않게 합니다.
 
-외부 Slack API와 DB 사이의 완전한 분산 원자성은 보장하지 않습니다. 실패·응답 불확실 상태에는 운영 대조가 필요합니다. DB 계정 최소 권한 분리, 대규모 부하, 자동 백업·복구 SLO는 후속 과제입니다.
+welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_runtime` 역할은 최신 발행본 조회·가입 전달 claim/finish만, 발행 CLI의 `otl_guide_admin` 역할은 발행·명시적 대상 복구만 실행합니다. 두 역할은 테이블 직접 권한이 없고, DB 소유자 연결은 migration과 역할 부트스트랩에만 사용합니다. 외부 Slack API와 DB 사이의 완전한 분산 원자성은 보장하지 않습니다. 실패·응답 불확실 상태에는 운영 대조가 필요합니다. 대규모 부하와 자동 백업·복구 SLO는 후속 과제입니다.
 
 ## 버그 제보 경계 v0.0.54 구현 상태
 
@@ -94,7 +94,7 @@ erDiagram
 
 ## 확장 규칙
 
-새 기능은 공통 회원 키를 참조합니다. 자기소개 원문, 소개자 관계, 외부 연락처 동의를 한 프로필 필드로 합치지 않습니다. 소개자는 별도 권한이 아닌 관계 출처이며 Silo 소속 모델은 추가하지 않습니다. 핵심 관계는 열·키·외래키로 강제하고, JSONB는 스냅샷과 버전 있는 워크플로 payload에 사용합니다. 적용한 migration은 다시 고치지 않고 새 migration을 추가합니다.
+새 기능은 공통 회원 키를 참조합니다. 자기소개 원문, 소개자 관계, 외부 연락처 동의를 한 프로필 필드로 합치지 않습니다. 소개자는 별도 권한이 아닌 관계 출처입니다. 핵심 관계는 열·키·외래키로 강제하고, JSONB는 스냅샷과 버전 있는 워크플로 payload에 사용합니다. 적용한 migration은 다시 고치지 않고 새 migration을 추가합니다.
 
 자기소개 모달은 본인에게 바인딩합니다. 소개는 줄바꿈을 포함해 180자 이내이며, 선택적 LinkedIn은 `https://*.linkedin.com/in/...` 프로필 주소만 받고 쿼리와 fragment를 제거합니다. 웹사이트·GitHub·포트폴리오 같은 기타 공개 정보는 별도 한 줄 300자 이내로 저장합니다. `member_introductions`의 revision과 준비·확정 상태가 동시 수정을 막습니다. 최초 제출은 설정된 자기소개 채널에 게시하고 이후 수정은 저장된 `message_ts`를 사용해 같은 Slack 메시지를 갱신합니다. 전체 보기에는 확정된 현재 소개만 사용하며 이전 문장은 회원에게 노출하지 않습니다.
 
