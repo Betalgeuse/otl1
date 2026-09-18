@@ -142,10 +142,13 @@ const env = {
       intentCalls.push(request);
       const input = JSON.parse(request.messages.at(-1).content);
       const reflection = /일부 완료/.test(input.text);
+      const misleadingCompletion = /파이프라인 업데이트 완료/.test(input.text);
       return {
         response: JSON.stringify(
           reflection
             ? { intent: "reflection", outcome: "partial", goalText: null, hasReflection: true, needsConfirmation: false }
+            : misleadingCompletion
+              ? { intent: "completion", outcome: "complete", goalText: null, hasReflection: false, needsConfirmation: false }
             : { intent: "goal", outcome: "unknown", goalText: input.text, hasReflection: false, needsConfirmation: false },
         ),
       };
@@ -188,12 +191,34 @@ try {
   await send({ eventId: "E-PARTIAL", user: "UCASEC", ts: `${signedAt}.100004`, thread: reasonGoal.event.ts, text: "일부 완료했어요. 어제보다 범위를 줄이니 진도가 났어요." });
   await send({ eventId: "E-HISTORICAL", user: "UCASED", ts: `${signedAt}.100005`, text: "9월 16일 완료 처리" });
 
-  assert.equal(changes.length, 4, "three goals and one reflection are the only canonical changes");
+  const explicitText = "원씽: 파이프라인 업데이트 완료 (진짜)\n사유: 합성 검증 사유";
+  const beforeExplicitSlack = slackCalls.length;
+  const explicit = await send({ eventId: "E-EXPLICIT", user: "UCASEE", ts: `${signedAt}.100006`, text: explicitText });
+  const afterExplicitSlack = slackCalls.length;
+  const beforeRepeatPublished = published.length;
+  const repeated = await send({ eventId: "E-EXPLICIT-REPEAT", user: explicit.event.user, ts: `${signedAt}.100007`, text: explicitText });
+  assert.equal(published.length, beforeRepeatPublished, "exact explicit repeat publishes no new card");
+  assert.equal(slackCalls.length, afterExplicitSlack, "exact explicit repeat causes no Slack side effect");
+  assert.equal(changes.filter((change) => change.userId === "UCASEE").length, 1, "exact explicit repeat causes no new change");
+  assert.equal(records.has(recordKey({ teamId: "TQA", channelId: "CPUBLIC", userId: repeated.event.user, key: `pending:incoming:${repeated.event.ts}` })), false, "exact explicit repeat creates no pending outcome or edit");
+  assert.equal(changes.find((change) => change.userId === "UCASEE")?.text, "파이프라인 업데이트 완료 (진짜)");
+  assert.ok(afterExplicitSlack > beforeExplicitSlack, "first explicit goal follows normal apply path");
+
+  const beforeDifferent = changes.length;
+  const different = await send({ eventId: "E-EXPLICIT-DIFFERENT", user: explicit.event.user, ts: `${signedAt}.100008`, text: "목표: 다른 합성 목표" });
+  assert.equal(changes.length, beforeDifferent, "different explicit goal never overwrites existing goal");
+  assert.equal(slackCalls.at(-1)?.method, "chat.postEphemeral", "different explicit goal keeps edit confirmation");
+  assert.equal(records.get(recordKey({ teamId: "TQA", channelId: "CPUBLIC", userId: different.event.user, key: `pending:incoming:${different.event.ts}` }))?.body.action, "goal", "different explicit goal remains a goal edit confirmation");
+
+  await send({ eventId: "E-EXPLICIT-EDIT-WORD", user: "UCASEF", ts: `${signedAt}.100009`, text: "원씽: 코드 수정 완료\n사유: 합성 검증" });
+  assert.equal(changes.find((change) => change.userId === "UCASEF")?.text, "코드 수정 완료", "explicit marker outranks edit words inside the title");
+
+  assert.equal(changes.length, 6, "five goals and one reflection are the only canonical changes");
   assert.equal(changes.filter((change) => change.userId === "UCASEA").length, 1, "replay is idempotent");
-  assert.equal(changes.at(-1).action, "reflection");
-  assert.equal(changes.at(-1).outcome, "partial");
-  assert.equal(intentCalls.length, 4, "protected historical edit stops before Qwen");
-  assert.equal(published.length, 4);
+  const partial = changes.find((change) => change.userId === "UCASEC" && change.action === "reflection");
+  assert.equal(partial?.outcome, "partial");
+  assert.equal(intentCalls.length, 3, "explicit goals and protected historical edits stop before Qwen");
+  assert.equal(published.length, 6);
   assert.equal(slackCalls.some((call) => String(call.body.text ?? "").includes("날짜가 있는 수행 기록")), false);
   assert.equal(slackCalls.some((call) => String(call.body.text ?? "").includes("수정할 ONE THING이 없어요")), true);
   console.log("PASS signed Slack routing: incidental dates save once, partial reflection follows its thread, historical edit stays protected");

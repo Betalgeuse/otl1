@@ -3,6 +3,7 @@ import { continueBugReport, handleBugReportMessage } from "./community-bugs";
 import { groupCard, settingsCard } from "./community-controls";
 import { decideCommunityRecord } from "./community-decision";
 import { prepareRecordEdit } from "./community-edits";
+import { parseExplicitGoal, sameGoalText } from "./community-explicit-goal";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
@@ -61,6 +62,29 @@ export async function dispatchCommunityMessage(
     return;
   }
   if (await handleReflectionReport(context, text)) return;
+  const today = koreaDate(Date.now() / 1000);
+  const explicitGoal = parseExplicitGoal(text, context.date, today);
+  if (explicitGoal !== null) {
+    const day = await context.store.day({ ...context.scope, date: context.date });
+    if (day.goal) {
+      if (sameGoalText(day.goal, explicitGoal)) return;
+      await confirmChange(context, day, explicitGoal, "goal");
+      return;
+    }
+    if (context.date !== today) {
+      await confirmChange(context, day, explicitGoal, "goal");
+      return;
+    }
+    await applyChange(context, {
+      ...context.scope,
+      date: context.date,
+      key: `change:${context.key}`,
+      expectedRevision: day.revision,
+      action: "goal",
+      text: explicitGoal,
+    });
+    return;
+  }
   if (await prepareRecordEdit(context, text)) return;
   if (await answerCommunityQuestion(context, text, addressed)) return;
   const day = await context.store.day({ ...context.scope, date: context.date });
@@ -75,6 +99,13 @@ export async function dispatchCommunityMessage(
     );
     return;
   }
+  const target = targetDateContext(text, context.date, today);
+  const base = {
+    ...context.scope,
+    date: context.date,
+    key: `change:${context.key}`,
+    expectedRevision: day.revision,
+  };
   if (!context.env.AI) {
     await textReply(context, "자연어 연결을 사용할 수 없어요. 잠시 후 다시 알려주세요.");
     return;
@@ -86,8 +117,6 @@ export async function dispatchCommunityMessage(
     await textReply(context, "잠시 후 다시 알려주세요. 기록은 바꾸지 않았어요.");
     return;
   }
-  const today = koreaDate(Date.now() / 1000);
-  const target = targetDateContext(text, context.date, today);
   const intent = decideCommunityRecord(
     await classifyCommunityIntent(
       context.env.AI,
@@ -97,12 +126,6 @@ export async function dispatchCommunityMessage(
     text,
     target,
   );
-  const base = {
-    ...context.scope,
-    date: context.date,
-    key: `change:${context.key}`,
-    expectedRevision: day.revision,
-  };
   switch (intent.intent) {
     case "ignore":
       return;

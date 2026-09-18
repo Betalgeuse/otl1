@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { mock } from "bun:test";
 
 mock.module("cloudflare:workers", () => ({ DurableObject: class {} }));
+const fixtureDate = "2026-09-17";
+const staleDate = "2026-09-16";
+const fixtureNow = Date.parse(`${fixtureDate}T12:00:00+09:00`);
 const records = new Map();
 const claimed = new Set();
 const batchClaims = [];
@@ -43,7 +46,7 @@ const fakeStore = {
       leaseToken: input.leaseToken,
       attempt: 1,
       firstAttemptAt: input.now,
-      jobs: [{ ...input, userId: kind === "goal" ? "UONE" : "UTWO", key: `reminder:2026-09-17:${kind}`, date: "2026-09-17", kind }],
+      jobs: [{ ...input, userId: kind === "goal" ? "UONE" : "UTWO", key: `reminder:${fixtureDate}:${kind}`, date: fixtureDate, kind }],
     };
   },
   async finishReminderBatch() { return true; },
@@ -78,7 +81,9 @@ records.set(recordId({ ...adminScope, channelId: "CPUBLIC", key: "group-schedule
 });
 const calls = [];
 const originalFetch = globalThis.fetch;
+const originalNow = Date.now;
 try {
+  Date.now = () => fixtureNow;
   globalThis.fetch = async (url, options = {}) => {
     const parsed = new URL(url);
     if (parsed.pathname.endsWith("conversations.members"))
@@ -93,7 +98,7 @@ try {
     return Response.json({ ok: true, ts: `${calls.length}.000001`, message_ts: `${calls.length}.000001` });
   };
 
-  const context = { env, scope: adminScope, store: fakeStore, date: "2026-09-17", source: "1.000001", thread: "1.000001", key: "message:1" };
+  const context = { env, scope: adminScope, store: fakeStore, date: fixtureDate, source: "1.000001", thread: "1.000001", key: "message:1" };
   await groupCard(context);
   const card = calls.at(-1).body;
   const button = card.blocks.flatMap((block) => block.elements ?? []).find((element) => element.action_id === "community_test_public_collection");
@@ -106,7 +111,7 @@ try {
   assert.equal(reconciles.length, 2);
   assert.ok(reconciles.every((entry) => entry.scope.channelId === "CPUBLIC" && entry.snapshot.eligibleHumanIds.length === 2));
   assert.equal(batchClaims.length, 2);
-  assert.deepEqual(batchClaims.map((entry) => entry.now), ["2026-09-17T01:00:00.000Z", "2026-09-17T09:00:00.000Z"]);
+  assert.deepEqual(batchClaims.map((entry) => entry.now), [`${fixtureDate}T01:00:00.000Z`, `${fixtureDate}T09:00:00.000Z`]);
   assert.ok(batchClaims.every((entry) => entry.channelId === "CPUBLIC"));
   const batchPosts = calls.filter((call) => call.method === "chat.postMessage" && /알림 설정/.test(call.body.text));
   assert.equal(batchPosts.length, 2);
@@ -134,7 +139,7 @@ try {
   const staleKey = "admin-collection-test:stale";
   records.set(recordId({ ...adminScope, key: staleKey }), {
     ...adminScope, key: staleKey, kind: "admin_qa_action", status: "pending",
-    body: { date: "2026-09-16", source: "3.000001", thread: "3.000001", targetChannelId: "CPUBLIC" },
+    body: { date: staleDate, source: "3.000001", thread: "3.000001", targetChannelId: "CPUBLIC" },
   });
   const staleValue = JSON.stringify({ ownerId: "UADMIN", key: staleKey, source: "3.000001", thread: "3.000001" });
   const stalePending = [];
@@ -144,5 +149,6 @@ try {
   assert.equal(calls.filter((call) => call.body.channel === "CPUBLIC").length, stalePublicBefore);
   console.log("PASS admin collection QA action: owner-scoped current-member public triggers, one batch each, private count receipt and replay denial");
 } finally {
+  Date.now = originalNow;
   globalThis.fetch = originalFetch;
 }
