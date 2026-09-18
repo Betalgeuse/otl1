@@ -23,6 +23,10 @@ export type CommunityEnv = {
   readonly COMMUNITY_WELCOME_CHANNEL_ID?: string;
   readonly COMMUNITY_INTRO_CHANNEL_ID?: string;
   readonly COMMUNITY_GUIDE_SOURCE_TS?: string;
+  readonly COMMUNITY_GUIDE_SOURCE_EDITED_TS?: string;
+  readonly COMMUNITY_GUIDE_FILE_IDS?: string;
+  readonly COMMUNITY_GUIDE_VERSION?: string;
+  readonly COMMUNITY_GUIDE_CONTENT_HASH?: string;
   readonly AI?: IntentAI;
   readonly INTENT_RATE_LIMITER?: {
     limit(input: { readonly key: string }): Promise<{ readonly success: boolean }>;

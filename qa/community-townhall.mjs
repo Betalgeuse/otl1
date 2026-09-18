@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {adminCommand,captureFeedback,publishRelease,releasePreview} from '../src/community-admin.ts';
+import {RELEASES} from '../src/community-releases.ts';
 const records=new Map();const sent=[];let sequence=0;
 const identity=x=>JSON.stringify([x.teamId,x.channelId,x.userId,x.key]);
 const store={
@@ -14,6 +15,7 @@ const env={SLACK_TEAM_ID:'TQA',SLACK_BOT_TOKEN:'test',COMMUNITY_ADMIN_ID:'UADMIN
 const ctx={env,scope,store,date:'2026-09-11',thread:'1.000001',source:'2.000001',key:'qa'};
 const originalFetch=globalThis.fetch;globalThis.fetch=async(url,options)=>{assert.equal(url,'https://slack.com/api/chat.postMessage');sent.push(JSON.parse(options.body));return Response.json({ok:true,ts:`${++sequence}.000001`});};
 try{
+ const welcomeRelease=RELEASES.find(item=>item.version==='v0.0.55');assert.equal(welcomeRelease.text.match(/<!channel>/g)?.length,1,'latest welcome release announcement has one channel notification');
  await store.putRecord({...scope,key:'verified-release:v0.0.1',kind:'qa_approval',body:{verified:true}});
  await adminCommand(ctx,'업데이트 관리');
  for(const block of sent.at(-1).blocks??[]){if(block.type==='actions'){const ids=block.elements.map(e=>e.action_id);assert.equal(new Set(ids).size,ids.length,'Slack action IDs must be unique within each block');}}

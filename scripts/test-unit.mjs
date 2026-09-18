@@ -6,7 +6,7 @@ const suites = [
   'community-questions', 'private-controls', 'garden-publication', 'continuous-garden', 'garden-projection', 'garden-delivery', 'slash-retirement',
   'reminder-enrollment', 'weekend-hidden', 'community-edit-language', 'natural-edits',
   'current-garden', 'reflection-header', 'reflection-routing', 'durable-reflection-outcome', 'reflection-outcome-flow', 'slack-message-edit',
-  'community-guide', 'townhall-milestones', 'brand-copy', 'community-language-check',
+  'community-guide', 'community-guide-cli', 'community-guide-export', 'townhall-milestones', 'brand-copy', 'community-language-check',
   'community-language-variety', 'community-target-date', 'community-explicit-goal', 'community-target-date-routing', 'community-record-decision', 'community-social', 'community-townhall',
   'community-welcome', 'community-introduction', 'community-introduction-channel',
   'migration-maintenance', 'weekends', 'community-bugs', 'community-bug-dialogue',
