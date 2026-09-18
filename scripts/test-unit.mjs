@@ -49,6 +49,7 @@ const suites = [
   "community-bug-due-store",
   "community-bug-backlog",
   "community-admin-collection",
+  "admin-membership-observation",
   "community-current-members",
   "community-reminder-batch",
   "community-batched-reminders",

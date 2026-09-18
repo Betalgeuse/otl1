@@ -186,6 +186,10 @@ try {
         entry.scope.channelId === "CPUBLIC" && entry.snapshot.eligibleHumanIds.length === 2,
     ),
   );
+  assert.deepEqual(
+    reconciles.map((entry) => entry.snapshot.observedAt),
+    [new Date(fixtureNow).toISOString(), new Date(fixtureNow).toISOString()],
+  );
   assert.equal(batchClaims.length, 2);
   assert.deepEqual(
     batchClaims.map((entry) => entry.now),

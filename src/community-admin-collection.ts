@@ -1,7 +1,7 @@
 import type { CommunityChoice } from "./community-messages";
 import { requireCommunityAdmin } from "./community-permissions";
 import { type CommunityContext, ephemeral } from "./community-runtime";
-import { runCommunitySchedule } from "./community-scheduler";
+import { runCommunitySchedule, type ScheduleClock } from "./community-scheduler";
 import { InputError, object, string } from "./input";
 
 const ACTION_ID = "community_test_public_collection";
@@ -41,6 +41,7 @@ export async function preparePublicCollectionTest(
 export async function runPublicCollectionTest(
   context: CommunityContext,
   actionKey: string,
+  clock: ScheduleClock = { now: () => new Date(Date.now()) },
 ): Promise<void> {
   requireCommunityAdmin(context.scope, context.env);
   const target = context.env.COMMUNITY_PUBLIC_CHANNEL_ID;
@@ -76,6 +77,7 @@ export async function runPublicCollectionTest(
       },
       context.store,
       new Date(`${context.date}T${time}:00+09:00`),
+      clock,
     );
     people += result.personal;
     if (result.personal > 0) batches += 1;

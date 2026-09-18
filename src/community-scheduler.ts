@@ -15,6 +15,7 @@ export type CommunityScheduleEnv = {
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
   readonly COMMUNITY_BOT_USER_ID?: string;
 };
+export type ScheduleClock = { readonly now: () => Date };
 type ScheduleStore = Pick<
   CommunityStore,
   | "getRecord"
@@ -65,6 +66,7 @@ export async function runCommunitySchedule(
   env: CommunityScheduleEnv,
   store: ScheduleStore,
   nowDate: Date,
+  clock: ScheduleClock = { now: () => nowDate },
 ): Promise<{ readonly common: number; readonly personal: number }> {
   const scope = {
     teamId: env.SLACK_TEAM_ID,
@@ -72,6 +74,7 @@ export async function runCommunitySchedule(
     userId: env.COMMUNITY_ADMIN_ID,
   };
   const now = nowDate.toISOString();
+  const observedAt = clock.now().toISOString();
   const local = new Date(nowDate.getTime() + 9 * 60 * 60 * 1000).toISOString();
   const date = local.slice(0, 10);
   const minute = local.slice(11, 16);
@@ -97,7 +100,7 @@ export async function runCommunitySchedule(
       env.SLACK_BOT_TOKEN,
       scope.channelId,
       env.COMMUNITY_BOT_USER_ID ?? "",
-      now,
+      observedAt,
     );
     await store.reconcileChannelMembers(scope, snapshot);
   }

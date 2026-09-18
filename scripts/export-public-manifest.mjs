@@ -108,6 +108,7 @@ export const PUBLIC_QA_NAMES = [
   "community-bug-storage.mjs",
   "bug-storage-contract.sql",
   "community-admin-collection.mjs",
+  "admin-membership-observation.mjs",
   "community-current-members.mjs",
   "community-reminder-batch.mjs",
   "community-batched-reminders.mjs",
