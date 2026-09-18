@@ -1,7 +1,11 @@
-import { finishGardenPublication, type GardenPublication, postGarden } from "./community-garden";
+import {
+  finishGardenPublication,
+  type GardenPublication,
+  postPreparedGarden,
+  prepareGardenPublication,
+} from "./community-garden";
 import { type GardenDelivery, GardenDeliveryStore } from "./community-garden-store";
-import { statusMessage } from "./community-records";
-import type { CommunityContext, CommunityEnv } from "./community-runtime";
+import { type CommunityContext, type CommunityEnv, payloadRecord } from "./community-runtime";
 import { CommunitySlackError } from "./community-social";
 import { CommunityStore } from "./community-store";
 import { NeonStore } from "./store";
@@ -13,8 +17,24 @@ async function hexDigest(value: string): Promise<string> {
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function marker(deliveryKey: string): Promise<string> {
-  return `garden_${(await hexDigest(deliveryKey)).slice(0, 24)}`;
+export async function gardenMarker(
+  delivery: Pick<
+    GardenDelivery,
+    "teamId" | "channelId" | "userId" | "date" | "revision" | "thread" | "source"
+  >,
+  payloadDigest: string,
+): Promise<string> {
+  const identity = [
+    delivery.teamId,
+    delivery.channelId,
+    delivery.userId,
+    delivery.date,
+    String(delivery.revision),
+    delivery.thread,
+    delivery.source,
+    payloadDigest,
+  ].join("\u001f");
+  return `garden_${(await hexDigest(identity)).slice(0, 24)}`;
 }
 
 function contextFor(
@@ -47,12 +67,6 @@ function errorCode(error: unknown): string {
   return "internal_error";
 }
 
-async function payloadDigest(context: CommunityContext, delivery: GardenDelivery): Promise<string> {
-  const day = await context.store.day({ ...context.scope, date: delivery.date });
-  const message = await statusMessage(context, day, null);
-  return hexDigest(JSON.stringify(message));
-}
-
 async function deliverClaimed(
   context: CommunityContext,
   deliveries: GardenDeliveryStore,
@@ -62,16 +76,26 @@ async function deliverClaimed(
 ): Promise<{ readonly messageTs: string | null; readonly nextDue: number | null }> {
   let publication: GardenPublication | null = null;
   try {
-    const digest = await payloadDigest(context, claimed);
-    await deliveries.prepare({
+    const rendered = await prepareGardenPublication(context, claimed.date);
+    const digest = await hexDigest(JSON.stringify(rendered.message));
+    const prepared = await deliveries.prepare({
       teamId: claimed.teamId,
       channelId: claimed.channelId,
       userId: claimed.userId,
       deliveryKey: claimed.deliveryKey,
       leaseToken,
       payloadDigest: digest,
+      payload: rendered.message,
     });
-    publication = await postGarden(context, claimed.date, await marker(claimed.deliveryKey));
+    if (!prepared) return { messageTs: null, nextDue: null };
+    publication = await postPreparedGarden(
+      context,
+      claimed.date,
+      await gardenMarker(claimed, prepared.payloadDigest),
+      claimed.projectionKey,
+      claimed.revision,
+      { prior: rendered.prior, message: payloadRecord(prepared.payload) },
+    );
     await deliveries.finish({
       teamId: claimed.teamId,
       channelId: claimed.channelId,

@@ -61,7 +61,17 @@
 
 ## 잔디 게시 복구
 
-Migration 024는 날짜 변경과 잔디 게시 요청을 한 트랜잭션에 기록합니다. `community_garden_deliveries`에서 `pending`·`claimed`·`failed` 행을 확인하며, 시도는 세 번을 넘지 않습니다. `failed` 행의 `retry_after`, `error_code`, `attempts`로 다음 재시도를 판단합니다. Slack 게시가 수락됐지만 DB 완료 응답을 잃은 경우에는 같은 스레드의 안정적인 block marker를 대조하고 기존 메시지를 영수증으로 채택합니다. 새 delivery가 `sent`가 되기 전에는 이전 잔디 이미지를 제거하지 않습니다.
+Migration 024는 날짜 변경과 잔디 게시 요청을 한 트랜잭션에 기록하고, Migration 025는 이를 회원·날짜·스레드별 projection route로 한정합니다. `community_garden_deliveries`에서 `pending`·`claimed`·`failed` 행을 확인하며, 시도는 세 번을 넘지 않습니다. `failed` 행의 `retry_after`, `error_code`, `attempts`로 다음 재시도를 판단합니다. Slack 게시가 수락됐지만 DB 완료 응답을 잃은 경우에는 같은 스레드의 안정적인 block marker를 대조하고 기존 메시지를 영수증으로 채택합니다. 새 delivery가 `sent`가 되기 전에는 이전 잔디 이미지를 제거하지 않습니다.
+
+
+과거 누락 route는 먼저 dry run으로 확인합니다. 결과에는 원문이나 회원 ID 대신 route 수, fallback 수, 미복원 일수, profile 시작일 보정 수와 plan digest만 나옵니다.
+
+```bash
+npm run reconcile:garden -- --team T_REPLACE --channel C_REPLACE --through 2026-09-18 --from 2026-09-08 --limit 100 --dry-run
+npm run reconcile:garden -- --team T_REPLACE --channel C_REPLACE --through 2026-09-18 --from 2026-09-08 --limit 100 --apply garden-reconcile-20260918
+```
+
+실행은 `otl.community_execute('reconcile_garden_projections', ...)`만 호출합니다. 같은 reconciliation key 재실행은 route와 delivery를 추가하지 않습니다. 빈 revision 0 행은 제외하고, 실제 목표·후기·상태가 있는 revision 0 baseline만 projection 대상으로 허용합니다.
 
 ## 버그 제보 v0.0.54 구현 기준
 

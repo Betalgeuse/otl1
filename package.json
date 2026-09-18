@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "test:unit": "node scripts/test-unit.mjs",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "reconcile:garden": "node scripts/reconcile-garden-projections.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",

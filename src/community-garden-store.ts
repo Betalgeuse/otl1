@@ -16,6 +16,9 @@ export type GardenDelivery = {
   readonly leaseToken: string | null;
   readonly payloadDigest: string | null;
   readonly messageTs: string | null;
+  readonly projectionKey: string;
+  readonly routeKind: "interaction" | "goal_prompt" | "review_prompt";
+  readonly routeProvenance: "recorded" | "daily_prompt_fallback";
 };
 
 type Scope = { readonly teamId: string; readonly channelId: string };
@@ -24,16 +27,35 @@ function nullableString(value: unknown): string | null {
   return value === null ? null : string(value);
 }
 
+function json(value: unknown): Json {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  )
+    return value;
+  if (Array.isArray(value)) return value.map(json);
+  const item = object(value);
+  return Object.fromEntries(Object.entries(item).map(([key, nested]) => [key, json(nested)]));
+}
+
 function delivery(value: Json): GardenDelivery | null {
   if (value === null) return null;
   const item = object(value);
   const status = string(item.status);
+  const routeKind = string(item.routeKind);
+  const routeProvenance = string(item.routeProvenance);
   if (!["pending", "claimed", "sent", "failed", "cancelled"].includes(status))
     throw new InputError("Invalid garden delivery status");
   if (typeof item.revision !== "number" || !Number.isSafeInteger(item.revision))
     throw new InputError("Invalid garden revision");
   if (typeof item.attempts !== "number" || !Number.isSafeInteger(item.attempts))
     throw new InputError("Invalid garden attempts");
+  if (!["interaction", "goal_prompt", "review_prompt"].includes(routeKind))
+    throw new InputError("Invalid garden route kind");
+  if (!["recorded", "daily_prompt_fallback"].includes(routeProvenance))
+    throw new InputError("Invalid garden route provenance");
   return {
     teamId: string(item.teamId),
     channelId: string(item.channelId),
@@ -49,6 +71,9 @@ function delivery(value: Json): GardenDelivery | null {
     leaseToken: nullableString(item.leaseToken),
     payloadDigest: nullableString(item.payloadDigest),
     messageTs: nullableString(item.messageTs),
+    projectionKey: string(item.projectionKey),
+    routeKind: routeKind as GardenDelivery["routeKind"],
+    routeProvenance: routeProvenance as GardenDelivery["routeProvenance"],
   };
 }
 
@@ -79,9 +104,13 @@ export class GardenDeliveryStore {
       readonly deliveryKey: string;
       readonly leaseToken: string;
       readonly payloadDigest: string;
+      readonly payload: Json;
     },
-  ): Promise<boolean> {
-    return (await this.call("prepare_garden_delivery", input)) === true;
+  ): Promise<{ readonly payloadDigest: string; readonly payload: Json } | null> {
+    const value = await this.call("prepare_garden_delivery", input);
+    if (value === false) return null;
+    const prepared = object(value);
+    return { payloadDigest: string(prepared.payloadDigest), payload: json(prepared.payload) };
   }
 
   async finish(

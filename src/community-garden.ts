@@ -8,6 +8,11 @@ export type GardenPublication = {
   readonly sent: string;
   readonly prior: readonly { readonly body: unknown }[];
   readonly messageText: string;
+  readonly projectionKey: string;
+};
+export type PreparedGarden = {
+  readonly prior: readonly { readonly body: unknown }[];
+  readonly message: { readonly [key: string]: Json };
 };
 
 function markedBlocks(value: unknown, marker: string): readonly Json[] {
@@ -50,10 +55,39 @@ export async function postGarden(
   context: CommunityContext,
   forDate: string,
   marker: string,
+  projectionKey: string,
+  revision: number,
 ): Promise<GardenPublication> {
+  return postPreparedGarden(
+    context,
+    forDate,
+    marker,
+    projectionKey,
+    revision,
+    await prepareGardenPublication(context, forDate),
+  );
+}
+
+export async function prepareGardenPublication(
+  context: CommunityContext,
+  forDate: string,
+): Promise<PreparedGarden> {
   const day = await context.store.day({ ...context.scope, date: forDate });
-  const prior = await context.store.listRecords(context.scope, "card");
-  const message = payloadRecord(await statusMessage(context, day, null));
+  return {
+    prior: await context.store.listRecords(context.scope, "card"),
+    message: payloadRecord(await statusMessage(context, day, null)),
+  };
+}
+
+export async function postPreparedGarden(
+  context: CommunityContext,
+  forDate: string,
+  marker: string,
+  projectionKey: string,
+  revision: number,
+  prepared: PreparedGarden,
+): Promise<GardenPublication> {
+  const { message, prior } = prepared;
   const blocks = markedBlocks(message.blocks, marker);
   const reconciled = await findGardenMessage(context, marker);
   const sent = reconciled ?? (await post(context, { ...message, blocks }));
@@ -61,9 +95,17 @@ export async function postGarden(
     ...context.scope,
     key: `card:refresh:${sent}`,
     kind: "card",
-    body: { ts: sent, text: string(message.text), date: forDate },
+    body: {
+      ts: sent,
+      text: string(message.text),
+      date: forDate,
+      thread: context.thread,
+      source: context.source,
+      revision,
+      projectionKey,
+    },
   });
-  return { sent, prior, messageText: string(message.text) };
+  return { sent, prior, messageText: string(message.text), projectionKey };
 }
 
 export async function finishGardenPublication(
@@ -90,7 +132,15 @@ export async function publishGardenNow(
   forDate: string,
   undoKey: string | null,
 ): Promise<string> {
-  const publication = await postGarden(context, forDate, `garden_direct_${context.key}`);
+  const projectionKey = `direct:${context.scope.userId}:${forDate}:${context.thread}`;
+  const day = await context.store.day({ ...context.scope, date: forDate });
+  const publication = await postGarden(
+    context,
+    forDate,
+    `garden_direct_${context.key}`,
+    projectionKey,
+    day.revision,
+  );
   await finishGardenPublication(context, publication, forDate, undoKey);
   return publication.sent;
 }
@@ -102,6 +152,7 @@ export async function retireGardenCards(
   const { sent, prior } = publication;
   for (const record of prior) {
     const data = object(record.body);
+    if (data.projectionKey !== publication.projectionKey) continue;
     const ts = string(data.ts);
     if (
       ts === sent ||

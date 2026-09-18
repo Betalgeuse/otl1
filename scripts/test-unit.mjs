@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 // Explicit allowlist excludes scripts that load live credentials or require a disposable PostgreSQL migration.
 const suites = [
   'community-admin-access', 'community-clock', 'community-emoji', 'community-followup',
-  'community-questions', 'private-controls', 'garden-publication', 'continuous-garden', 'garden-delivery', 'slash-retirement',
+  'community-questions', 'private-controls', 'garden-publication', 'continuous-garden', 'garden-projection', 'garden-delivery', 'slash-retirement',
   'reminder-enrollment', 'weekend-hidden', 'community-edit-language', 'natural-edits',
   'current-garden', 'reflection-header', 'reflection-routing', 'durable-reflection-outcome', 'reflection-outcome-flow', 'slack-message-edit',
   'community-guide', 'townhall-milestones', 'brand-copy', 'community-language-check',

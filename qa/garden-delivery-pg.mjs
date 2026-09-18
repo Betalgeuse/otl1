@@ -72,6 +72,7 @@ try {
     "022_bug_private_read.sql",
     "023_current_channel_membership.sql",
     "024_durable_garden_publication.sql",
+    "025_garden_projection_consistency.sql",
   ])
     await psql(["-f", `migrations/${file}`]);
   const goal = {
@@ -83,7 +84,7 @@ try {
     delivery: route,
   };
   const changed = await call("change", goal);
-  assert.equal(changed.gardenDeliveryKey, "garden:2026-09-18:r1");
+  assert.match(changed.gardenDeliveryKey, /^garden:v2:2026-09-18:r1:/);
   assert.equal(changed.changed, true);
   const first = await call("claim_garden_delivery", {
     teamId: scope.teamId,
@@ -93,15 +94,14 @@ try {
     now: "2026-09-18T03:00:00Z",
   });
   assert.equal(first.attempts, 1);
-  assert.equal(
-    await call("prepare_garden_delivery", {
-      ...scope,
-      deliveryKey: first.deliveryKey,
-      leaseToken: "lease-1",
-      payloadDigest: "a".repeat(64),
-    }),
-    true,
-  );
+  const prepared = await call("prepare_garden_delivery", {
+    ...scope,
+    deliveryKey: first.deliveryKey,
+    leaseToken: "lease-1",
+    payloadDigest: "a".repeat(64),
+    payload: { text: "state-a" },
+  });
+  assert.equal(prepared.payloadDigest, "a".repeat(64));
   assert.equal(
     await call("finish_garden_delivery", {
       ...scope,
@@ -164,15 +164,14 @@ try {
     now: "2026-09-18T04:05:01Z",
   });
   assert.equal(reclaimed.attempts, 2);
-  assert.equal(
-    await call("prepare_garden_delivery", {
-      ...scope,
-      deliveryKey: complete.gardenDeliveryKey,
-      leaseToken: "reconcile",
-      payloadDigest: "b".repeat(64),
-    }),
-    true,
-  );
+  const preparedLost = await call("prepare_garden_delivery", {
+    ...scope,
+    deliveryKey: complete.gardenDeliveryKey,
+    leaseToken: "reconcile",
+    payloadDigest: "b".repeat(64),
+    payload: { text: "state-b" },
+  });
+  assert.equal(preparedLost.payloadDigest, "b".repeat(64));
   assert.equal(
     await call("finish_garden_delivery", {
       ...scope,
@@ -191,7 +190,7 @@ try {
   ]);
   assert.deepEqual(JSON.parse(stdout.trim()), { rows: 2, sent: 2, maxAttempts: 2 });
   console.log(
-    "PASS PostgreSQL 024 transactionally enqueues garden, retries failures, reclaims accepted-response loss, and suppresses replay duplicates",
+    "PASS PostgreSQL 025 transactionally enqueues garden, retries failures, reclaims accepted-response loss, and suppresses replay duplicates",
   );
 } finally {
   if (started)

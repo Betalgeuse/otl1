@@ -24,6 +24,9 @@ const delivery = {
   leaseToken: "lease",
   payloadDigest: null,
   messageTs: null,
+  projectionKey: "projection-a",
+  routeKind: "interaction",
+  routeProvenance: "recorded",
 };
 mock.module("../src/community-garden-store.ts", () => ({
   GardenDeliveryStore: class {
@@ -33,7 +36,8 @@ mock.module("../src/community-garden-store.ts", () => ({
     }
     async prepare(input) {
       prepared.push(input);
-      return true;
+      const first = prepared[0];
+      return { payloadDigest: first.payloadDigest, payload: first.payload };
     }
     async finish(input) {
       if (input.status === "sent" && loseAcceptedReceipt) {
@@ -61,7 +65,9 @@ mock.module("../src/community-store.ts", () => ({
       return { ...delivery, goal: "goal", outcome: "pending", reflection: "", resting: false };
     }
     async listRecords(_scope, kind) {
-      return kind === "card" ? [{ body: { ts: "0.9", text: "old" } }] : [];
+      return kind === "card"
+        ? [{ body: { ts: "0.9", text: "old", projectionKey: "projection-a" } }]
+        : [];
     }
     async getRecord() {
       return null;
