@@ -3,6 +3,10 @@ SLACK_TEAM_ID=
 SLACK_SIGNING_SECRET=
 SLACK_BOT_TOKEN=
 DATABASE_URL=
+# Least-privilege NOLOGIN-derived credentials created by bootstrap-guide-db-roles.mjs.
+GUIDE_DATABASE_URL=
+# Keep this admin credential outside the Worker; it is only for the publisher CLI.
+GUIDE_ADMIN_DATABASE_URL=
 BOARD_SIGNING_SECRET=
 PUBLIC_BASE_URL=
 INVITE_SIGNING_SECRET=

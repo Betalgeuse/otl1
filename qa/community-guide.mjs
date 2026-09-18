@@ -23,9 +23,9 @@ mock.module("../src/store.ts", () => ({
         }
         return payload.hash;
       }
-      if (op === "latest") return latest;
+      if (op === "latest" || op === "repair_latest") return latest;
       const key = `${payload.userId}:${payload.version}:${payload.hash}`;
-      if (op === "claim") {
+      if (op === "claim" || op === "repair_claim") {
         if (deliveries.has(key)) return false;
         deliveries.set(key, { status: "claimed", reason: payload.reason });
         return true;
@@ -92,6 +92,8 @@ async function releaseEnv(version = "v0.0.55") {
     SLACK_USER_TOKEN: "xoxp-admin-must-not-be-used",
     COMMUNITY_BOT_USER_ID: "UBOTPROFILE",
     DATABASE_URL: "fake",
+    GUIDE_DATABASE_URL: "fake",
+    GUIDE_ADMIN_DATABASE_URL: "fake",
     BOARD_SIGNING_SECRET: "unused",
     PUBLIC_BASE_URL: "unused",
     COMMUNITY_WELCOME_CHANNEL_ID: "CWELCOME",

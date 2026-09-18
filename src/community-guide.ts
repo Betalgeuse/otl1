@@ -20,6 +20,21 @@ type PublishedGuide = WelcomeGuideContent & {
   readonly version: string;
 };
 
+type GuideDeliveryEnv = Pick<
+  CommunityEnv,
+  | "SLACK_TEAM_ID"
+  | "SLACK_BOT_TOKEN"
+  | "GUIDE_DATABASE_URL"
+  | "COMMUNITY_WELCOME_CHANNEL_ID"
+  | "COMMUNITY_BOT_USER_ID"
+> & {
+  readonly GUIDE_ADMIN_DATABASE_URL?: string;
+};
+
+export type WelcomeGuideRepairEnv = Omit<GuideDeliveryEnv, "GUIDE_ADMIN_DATABASE_URL"> & {
+  readonly GUIDE_ADMIN_DATABASE_URL: string;
+};
+
 export type WelcomeGuideDelivery = {
   readonly delivered: boolean;
   readonly version: string;
@@ -46,7 +61,7 @@ function publishedGuide(value: unknown): PublishedGuide {
   };
 }
 
-async function isDeliverableMember(userId: string, env: CommunityEnv): Promise<boolean> {
+async function isDeliverableMember(userId: string, env: GuideDeliveryEnv): Promise<boolean> {
   const profile = object(
     (await callSlack(env.SLACK_BOT_TOKEN, "users.info", { user: userId })).user,
   );
@@ -61,24 +76,34 @@ async function isDeliverableMember(userId: string, env: CommunityEnv): Promise<b
 async function deliverPublishedGuide(
   userId: string,
   reason: "join" | "targeted_repair",
-  env: CommunityEnv,
+  env: GuideDeliveryEnv,
 ): Promise<WelcomeGuideDelivery> {
   const channelId = env.COMMUNITY_WELCOME_CHANNEL_ID;
   const botUserId = env.COMMUNITY_BOT_USER_ID;
   if (!channelId) throw new InputError("환영 안내 채널 설정이 필요합니다.");
   if (!botUserId || !/^U[A-Z0-9]+$/.test(botUserId))
     throw new InputError("OT1L 봇 게시자 설정이 필요합니다.");
-  const store = new NeonStore(env.DATABASE_URL);
+  const admin = reason === "targeted_repair";
+  const connectionString = admin ? env.GUIDE_ADMIN_DATABASE_URL : env.GUIDE_DATABASE_URL;
+  if (!connectionString)
+    throw new InputError(
+      admin ? "환영 안내 관리자 DB 설정이 필요합니다." : "환영 안내 DB 설정이 필요합니다.",
+    );
+  const store = new NeonStore(connectionString);
+  const executeFunction = admin ? "otl.guide_admin_execute" : "otl.guide_runtime_execute";
+  const latestOperation = admin ? "repair_latest" : "latest";
+  const claimOperation = admin ? "repair_claim" : "claim";
+  const finishOperation = admin ? "repair_finish" : "finish";
   const scope = { teamId: env.SLACK_TEAM_ID, channelId, userId };
   const guide = publishedGuide(
-    await store.queryJson("SELECT otl.guide_execute($1,$2::jsonb)", [
-      "latest",
+    await store.queryJson(`SELECT ${executeFunction}($1,$2::jsonb)`, [
+      latestOperation,
       JSON.stringify(scope),
     ]),
   );
   const identity = { ...scope, version: guide.version, hash: guide.hash, reason };
-  const claimed = await store.queryJson("SELECT otl.guide_execute($1,$2::jsonb)", [
-    "claim",
+  const claimed = await store.queryJson(`SELECT ${executeFunction}($1,$2::jsonb)`, [
+    claimOperation,
     JSON.stringify(identity),
   ]);
   if (claimed !== true)
@@ -96,15 +121,15 @@ async function deliverPublishedGuide(
     if (sentMessage.user !== botUserId || typeof sentMessage.bot_id !== "string")
       throw new InputError("OT1L 봇 게시자를 확인하지 못했습니다.");
   } catch (error) {
-    await store.queryJson("SELECT otl.guide_execute($1,$2::jsonb)", [
-      "finish",
+    await store.queryJson(`SELECT ${executeFunction}($1,$2::jsonb)`, [
+      finishOperation,
       JSON.stringify({ ...identity, status: "failed" }),
     ]);
     throw error;
   }
   const messageTs = string(sent.ts);
-  const finished = await store.queryJson("SELECT otl.guide_execute($1,$2::jsonb)", [
-    "finish",
+  const finished = await store.queryJson(`SELECT ${executeFunction}($1,$2::jsonb)`, [
+    finishOperation,
     JSON.stringify({ ...identity, status: "sent", messageTs }),
   ]);
   if (finished !== true) throw new InputError("환영 안내 전달 상태를 확정하지 못했습니다.");
@@ -113,7 +138,7 @@ async function deliverPublishedGuide(
 
 export async function replaceWelcomeGuideForUser(
   userId: string,
-  env: CommunityEnv,
+  env: WelcomeGuideRepairEnv,
 ): Promise<WelcomeGuideDelivery> {
   if (!/^[UW][A-Z0-9]+$/.test(userId)) throw new InputError("환영 안내 대상 회원을 확인해 주세요.");
   if (!(await isDeliverableMember(userId, env)))

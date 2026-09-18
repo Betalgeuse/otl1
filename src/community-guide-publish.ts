@@ -8,6 +8,21 @@ const GUIDE_VERSION = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 const CONTENT_HASH = /^[0-9a-f]{64}$/;
 const SLACK_TS = /^[0-9]+\.[0-9]+$/;
 
+export type WelcomeGuideAdminEnv = Pick<
+  CommunityEnv,
+  | "SLACK_TEAM_ID"
+  | "SLACK_BOT_TOKEN"
+  | "COMMUNITY_WELCOME_CHANNEL_ID"
+  | "COMMUNITY_ADMIN_ID"
+  | "COMMUNITY_GUIDE_SOURCE_TS"
+  | "COMMUNITY_GUIDE_SOURCE_EDITED_TS"
+  | "COMMUNITY_GUIDE_FILE_IDS"
+  | "COMMUNITY_GUIDE_VERSION"
+  | "COMMUNITY_GUIDE_CONTENT_HASH"
+> & {
+  readonly GUIDE_ADMIN_DATABASE_URL: string;
+};
+
 export type WelcomeGuideRelease = {
   readonly version: string;
   readonly hash: string;
@@ -29,7 +44,7 @@ export type WelcomeGuideCommandResult = {
   readonly contentHash: string;
 };
 
-function requiredReleaseConfig(env: CommunityEnv) {
+function requiredReleaseConfig(env: WelcomeGuideAdminEnv) {
   const version = env.COMMUNITY_GUIDE_VERSION;
   const channelId = env.COMMUNITY_WELCOME_CHANNEL_ID;
   const authorId = env.COMMUNITY_ADMIN_ID;
@@ -55,7 +70,7 @@ function requiredReleaseConfig(env: CommunityEnv) {
   };
 }
 
-async function readSlackSource(env: CommunityEnv, channelId: string, sourceTs: string) {
+async function readSlackSource(env: WelcomeGuideAdminEnv, channelId: string, sourceTs: string) {
   const url = new URL("https://slack.com/api/conversations.history");
   for (const [key, value] of Object.entries({
     channel: channelId,
@@ -75,7 +90,9 @@ async function readSlackSource(env: CommunityEnv, channelId: string, sourceTs: s
   return object(Array.isArray(result.messages) ? result.messages[0] : undefined);
 }
 
-export async function inspectWelcomeGuideSource(env: CommunityEnv): Promise<WelcomeGuideRelease> {
+export async function inspectWelcomeGuideSource(
+  env: WelcomeGuideAdminEnv,
+): Promise<WelcomeGuideRelease> {
   const config = requiredReleaseConfig(env);
   const source = await readSlackSource(env, config.channelId, config.sourceTs);
   if (
@@ -120,10 +137,13 @@ export async function inspectWelcomeGuideSource(env: CommunityEnv): Promise<Welc
   };
 }
 
-async function storePublishedGuide(env: CommunityEnv, guide: WelcomeGuideRelease): Promise<string> {
-  const store = new NeonStore(env.DATABASE_URL);
+async function storePublishedGuide(
+  env: WelcomeGuideAdminEnv,
+  guide: WelcomeGuideRelease,
+): Promise<string> {
+  const store = new NeonStore(env.GUIDE_ADMIN_DATABASE_URL);
   return string(
-    await store.queryJson("SELECT otl.guide_execute($1,$2::jsonb)", [
+    await store.queryJson("SELECT otl.guide_admin_execute($1,$2::jsonb)", [
       "publish",
       JSON.stringify({
         teamId: env.SLACK_TEAM_ID,
@@ -134,14 +154,14 @@ async function storePublishedGuide(env: CommunityEnv, guide: WelcomeGuideRelease
   );
 }
 
-export async function publishWelcomeGuide(env: CommunityEnv): Promise<string> {
+export async function publishWelcomeGuide(env: WelcomeGuideAdminEnv): Promise<string> {
   const guide = await inspectWelcomeGuideSource(env);
   return storePublishedGuide(env, guide);
 }
 
 export async function executeWelcomeGuideCommand(
   command: WelcomeGuideCommand,
-  env: CommunityEnv,
+  env: WelcomeGuideAdminEnv,
 ): Promise<WelcomeGuideCommandResult> {
   const guide = await inspectWelcomeGuideSource(env);
   if (command.apply) await storePublishedGuide(env, guide);

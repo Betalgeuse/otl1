@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 
 const run = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -36,10 +36,16 @@ try {
   assert.equal(config.vars.COMMUNITY_GUIDE_SOURCE_EDITED_TS, "0.000002");
   assert.equal(config.vars.COMMUNITY_GUIDE_FILE_IDS, "FREPLACELOGO,FREPLACEDAILY");
   assert.equal(config.vars.COMMUNITY_GUIDE_CONTENT_HASH, "0".repeat(64));
+  assert.equal(existsSync(join(destination, "migrations", "028_welcome_guide_roles.sql")), true);
+  assert.equal(existsSync(join(destination, "scripts", "bootstrap-guide-db-roles.mjs")), true);
   assert.equal(existsSync(join(destination, ".github", "workflows")), false);
-  const exportedText = textFiles(destination).map((path) => readFileSync(path, "utf8")).join("\n");
+  const exportedText = textFiles(destination)
+    .map((path) => readFileSync(path, "utf8"))
+    .join("\n");
   for (const value of privateValues) assert.doesNotMatch(exportedText, new RegExp(value));
-  console.log("PASS public welcome export uses placeholders, excludes private pins, and contains no GitHub Actions");
+  console.log(
+    "PASS public welcome export uses placeholders, excludes private pins, and contains no GitHub Actions",
+  );
 } finally {
   rmSync(destination, { recursive: true, force: true });
 }

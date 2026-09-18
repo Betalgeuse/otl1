@@ -9,6 +9,7 @@ export type CommunityEnv = {
   readonly SLACK_TEAM_ID: string;
   readonly SLACK_BOT_TOKEN: string;
   readonly DATABASE_URL: string;
+  readonly GUIDE_DATABASE_URL?: string;
   readonly BOARD_SIGNING_SECRET: string;
   readonly PUBLIC_BASE_URL: string;
   readonly COMMUNITY_ENABLED?: string;

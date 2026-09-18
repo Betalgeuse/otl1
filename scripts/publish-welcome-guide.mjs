@@ -1,12 +1,10 @@
-import {
-  executeWelcomeGuideCommand,
-  replaceWelcomeGuideForUser,
-} from "../src/community-guide.ts";
+import { createHash } from "node:crypto";
+import { executeWelcomeGuideCommand, replaceWelcomeGuideForUser } from "../src/community-guide.ts";
 
 const required = [
   "SLACK_TEAM_ID",
   "SLACK_BOT_TOKEN",
-  "DATABASE_URL",
+  "GUIDE_ADMIN_DATABASE_URL",
   "COMMUNITY_WELCOME_CHANNEL_ID",
   "COMMUNITY_BOT_USER_ID",
   "COMMUNITY_ADMIN_ID",
@@ -31,7 +29,7 @@ if (replaceUser && !/^[UW][A-Z0-9]+$/.test(replaceUser))
 const env = {
   SLACK_TEAM_ID: process.env.SLACK_TEAM_ID,
   SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
-  DATABASE_URL: process.env.DATABASE_URL,
+  GUIDE_ADMIN_DATABASE_URL: process.env.GUIDE_ADMIN_DATABASE_URL,
   COMMUNITY_WELCOME_CHANNEL_ID: process.env.COMMUNITY_WELCOME_CHANNEL_ID,
   COMMUNITY_BOT_USER_ID: process.env.COMMUNITY_BOT_USER_ID,
   COMMUNITY_ADMIN_ID: process.env.COMMUNITY_ADMIN_ID,
@@ -40,26 +38,37 @@ const env = {
   COMMUNITY_GUIDE_FILE_IDS: process.env.COMMUNITY_GUIDE_FILE_IDS,
   COMMUNITY_GUIDE_VERSION: process.env.COMMUNITY_GUIDE_VERSION,
   COMMUNITY_GUIDE_CONTENT_HASH: process.env.COMMUNITY_GUIDE_CONTENT_HASH,
-  BOARD_SIGNING_SECRET: "unused",
-  PUBLIC_BASE_URL: "unused",
 };
 
 const release = await executeWelcomeGuideCommand({ kind: "publish", apply }, env);
 if (!replaceUser || !apply) {
-  console.log(JSON.stringify({
-    mode: replaceUser ? "targeted-repair" : "publish",
-    ...release,
-    ...(replaceUser ? { userId: replaceUser } : {}),
-  }));
+  const targetDigest = replaceUser
+    ? createHash("sha256").update(`guide-target:${replaceUser}`).digest("hex")
+    : undefined;
+  console.log(
+    JSON.stringify({
+      mode: replaceUser ? "targeted-repair" : "publish",
+      version: release.version,
+      contentHash: release.contentHash,
+      ...(replaceUser
+        ? { targetDigest, deliveryCount: 0 }
+        : { publicationCount: release.applied ? 1 : 0 }),
+    }),
+  );
 } else {
   const delivery = await replaceWelcomeGuideForUser(replaceUser, env);
-  console.log(JSON.stringify({
-    mode: "targeted-repair",
-    applied: delivery.delivered,
-    version: delivery.version,
-    contentHash: delivery.contentHash,
-    userId: replaceUser,
-    ...(delivery.messageTs ? { messageTs: delivery.messageTs } : {}),
-    next: delivery.delivered ? "browser-verify-then-retire-stale-message" : "already-delivered",
-  }));
+  const targetDigest = createHash("sha256").update(`guide-target:${replaceUser}`).digest("hex");
+  const messageDigest = delivery.messageTs
+    ? createHash("sha256").update(`guide-message:${delivery.messageTs}`).digest("hex")
+    : undefined;
+  console.log(
+    JSON.stringify({
+      mode: "targeted-repair",
+      version: delivery.version,
+      contentHash: delivery.contentHash,
+      targetDigest,
+      ...(messageDigest ? { messageDigest } : {}),
+      deliveryCount: delivery.delivered ? 1 : 0,
+    }),
+  );
 }
