@@ -1,12 +1,33 @@
 import { applyChange, confirmChange } from "./community-records";
+import {
+  captureReflectionAwaitingOutcome,
+  resolveNaturalReflectionOutcome,
+} from "./community-reflection-outcome";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import { InputError, koreaDate } from "./input";
 import { parseReflectionHeader } from "./reflection-header";
+
+function hasReflectionSubstance(text: string): boolean {
+  const body = text
+    .replace(/^[\s*#>-]*(?:후기|회고)[\s*]*[:：\n]/u, "")
+    .trim()
+    .replace(
+      /^(?:완료하지\s*못했어요|완료(?:했어요|했습니다|했다|\s*예정(?:입니다)?)?|부분\s*완료|일부\s*완료|미완료|미완|못\s*했어요|안\s*했어요|휴식|쉬었어요)[\s.!。！,:：]*/u,
+      "",
+    )
+    .trim();
+  return (
+    !/[?？]/.test(text) &&
+    !/(?:완료|미완|못\s*했|안\s*했|휴식|쉬었)/u.test(text) &&
+    /[\p{L}\p{N}]/u.test(body)
+  );
+}
 
 export async function handleReflectionReport(
   context: CommunityContext,
   text: string,
 ): Promise<boolean> {
+  if (await resolveNaturalReflectionOutcome(context, text)) return true;
   const today = koreaDate(Date.now() / 1000);
   let report: ReturnType<typeof parseReflectionHeader>;
   try {
@@ -31,11 +52,27 @@ export async function handleReflectionReport(
       const target = (await context.store.history(context.scope)).find(
         (day) => day.date === context.date,
       );
-      if (target?.goal) await confirmChange(context, target, text, "reflection");
-      else
+      if (!target?.goal) {
         await ephemeral(context, {
           text: "후기 날짜와 등록된 목표를 먼저 확인해 주세요. 기록은 바꾸지 않았어요.",
         });
+        return true;
+      }
+      if (!hasReflectionSubstance(text)) {
+        await confirmChange(context, target, text, "reflection");
+        return true;
+      }
+      await applyChange(context, {
+        ...context.scope,
+        date: target.date,
+        key: `change:${context.key}`,
+        expectedRevision: target.revision,
+        action: "reflection",
+        text,
+      });
+      const stored = await context.store.day({ ...context.scope, date: target.date });
+      if (stored.reflection === text && stored.outcome === "pending")
+        await captureReflectionAwaitingOutcome(context, stored);
       return true;
     }
     return false;

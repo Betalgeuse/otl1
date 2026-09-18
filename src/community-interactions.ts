@@ -181,7 +181,7 @@ export async function communityInteraction(
     return new Response(null, { status: 200 });
   }
   waitUntil(
-    processRecordAction(context, id, key).catch(async (error: unknown) => {
+    processRecordAction(context, id, key, value).catch(async (error: unknown) => {
       console.error(
         JSON.stringify({
           event: "community.action.failed",

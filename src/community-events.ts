@@ -8,6 +8,7 @@ import { deliverWelcomeGuide } from "./community-guide";
 import { incomingMessageBody } from "./community-intake";
 import { handleIntroductionChannelMessage } from "./community-introduction-channel";
 import { dispatchCommunityMessage, dispatchFeedbackBugMessage } from "./community-message-router";
+import { replayReflectionOutcomeDelivery } from "./community-reflection-outcome";
 import { type CommunityEnv, textReply } from "./community-runtime";
 import { CommunityStore } from "./community-store";
 import { welcomeTownhallMember } from "./community-welcome";
@@ -103,6 +104,8 @@ export async function handleCommunityEvent(
   });
   if (!(await store.claimRecord({ ...scope, key }))) {
     await replayBugDelivery(context);
+    if (!isFeedbackChannel && !bugCandidate && textEntryState === "missing")
+      await replayReflectionOutcomeDelivery(context);
     return true;
   }
   try {

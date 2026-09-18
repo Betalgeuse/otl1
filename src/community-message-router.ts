@@ -9,6 +9,7 @@ import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
 import { applyChange, confirmChange, publishStatus } from "./community-records";
 import { handleReflectionReport } from "./community-reflection";
+import { captureReflectionAwaitingOutcome } from "./community-reflection-outcome";
 import {
   type CommunityContext,
   ephemeral,
@@ -162,6 +163,18 @@ export async function dispatchCommunityMessage(
     case "completion":
     case "reflection": {
       const reflectionText = intent.reflectionText;
+      if (
+        intent.intent === "reflection" &&
+        reflectionText &&
+        day.goal &&
+        intent.outcome === "unknown"
+      ) {
+        await applyChange(context, { ...base, action: "reflection", text: reflectionText });
+        const stored = await context.store.day({ ...context.scope, date: context.date });
+        if (stored.reflection === reflectionText && stored.outcome === "pending")
+          await captureReflectionAwaitingOutcome(context, stored);
+        return;
+      }
       if (
         intent.needsConfirmation ||
         !day.goal ||

@@ -4,6 +4,7 @@ import { stopSettings } from "./community-controls";
 import { enablePublicSchedule } from "./community-cutover";
 import { confirmedRecordEdit } from "./community-edits";
 import { applyChange, publishStatus, undoChange } from "./community-records";
+import { resolvePendingReflectionOutcome } from "./community-reflection-outcome";
 import { type CommunityContext, ephemeral, textReply } from "./community-runtime";
 import { runCommunitySchedule } from "./community-scheduler";
 import type { DayChange } from "./community-types";
@@ -13,6 +14,7 @@ export async function processRecordAction(
   context: CommunityContext,
   id: string,
   key: string,
+  binding?: Record<string, unknown>,
 ): Promise<void> {
   if (id === "community_test_public_collection") {
     await runPublicCollectionTest(context, key);
@@ -77,10 +79,33 @@ export async function processRecordAction(
     return;
   }
   const pending = await context.store.getRecord({ ...context.scope, key });
+  const selected = id.replace("community_", "");
+  if (pending?.kind === "reflection_outcome") {
+    const outcome =
+      selected === "complete" ||
+      selected === "partial" ||
+      selected === "not_done" ||
+      selected === "rest"
+        ? selected
+        : null;
+    const revision = Number(binding?.revision);
+    const targetDate = binding?.date;
+    if (
+      !outcome ||
+      binding?.outcome !== outcome ||
+      typeof targetDate !== "string" ||
+      !Number.isSafeInteger(revision) ||
+      !(await resolvePendingReflectionOutcome(context, key, outcome, true, {
+        date: targetDate,
+        revision,
+      }))
+    )
+      throw new InputError("이 결과 선택은 만료됐어요. 현재 상태를 확인해 주세요.");
+    return;
+  }
   if (pending?.kind !== "pending") throw new InputError("확인할 요청이 없어요.");
   const data = object(pending.body);
   const action = string(data.action);
-  const selected = id.replace("community_", "");
   if (!["confirm", "complete", "partial", "not_done", "rest", "reflection"].includes(selected))
     throw new InputError("지원하지 않는 동작입니다.");
   if (!(await context.store.claimRecord({ ...context.scope, key }))) {
