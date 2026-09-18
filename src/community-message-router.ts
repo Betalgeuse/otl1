@@ -164,6 +164,13 @@ export async function dispatchCommunityMessage(
     case "reflection": {
       const reflectionText = intent.reflectionText;
       if (
+        !reflectionText &&
+        intent.outcome !== "unknown" &&
+        day.outcome === intent.outcome &&
+        !day.resting
+      )
+        return;
+      if (
         intent.intent === "reflection" &&
         reflectionText &&
         day.goal &&

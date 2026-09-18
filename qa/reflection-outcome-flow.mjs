@@ -158,6 +158,21 @@ const staleChanges = changes.length;
 assert.equal(await resolveNaturalReflectionOutcome(staleContext, "완료"), true);
 assert.equal(changes.length, staleChanges, "stale natural answer fails closed without generic fallback");
 
+const idempotentStore = fakeStore({ ...day, outcome: "partial", revision: 3 });
+const idempotentContext = { ...context, store: idempotentStore, key: "incoming:idempotent" };
+const idempotentPending = await idempotentStore.putRecord({
+  ...scope,
+  key: "reflection-outcome:idempotent",
+  kind: "reflection_outcome",
+  body: { date: day.date, revision: 2, source: context.source, thread: context.thread },
+});
+const beforeIdempotentChanges = changes.length;
+const beforeIdempotentPosts = posts.length;
+assert.equal(await resolveNaturalReflectionOutcome(idempotentContext, "부분완료"), true);
+assert.equal(changes.length, beforeIdempotentChanges, "equal current outcome creates no event");
+assert.equal(posts.length, beforeIdempotentPosts, "equal current outcome creates no card or reply");
+assert.equal(idempotentPending.status, "sent", "equal current outcome closes pending idempotently");
+
 const secondStore = fakeStore(day);
 const secondContext = { ...context, store: secondStore, key: "incoming:second" };
 const postsBeforeFailure = posts.length;

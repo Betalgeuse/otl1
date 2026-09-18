@@ -7,17 +7,13 @@ import { type Json, koreaDate, object, string } from "./input";
 const DELIVERY_KIND = "reflection_outcome_delivery";
 const PENDING_KIND = "reflection_outcome";
 const MAX_DELIVERY_ATTEMPTS = 3;
-
 type ResolvedOutcome = Exclude<Outcome, "pending"> | "rest";
-
 function pendingKey(sourceKey: string): string {
   return `reflection-outcome:${sourceKey}`;
 }
-
 function marker(key: string): string {
   return `reflection_outcome_${key.replace(/[^a-zA-Z0-9]/g, "_").slice(-120)}`;
 }
-
 function questionMessage(context: CommunityContext, record: CommunityRecord): Json {
   const data = object(record.body);
   const targetDate = string(data.date);
@@ -181,6 +177,15 @@ export async function resolvePendingReflectionOutcome(
   )
     return false;
   const day = await context.store.day({ ...context.scope, date: targetDate });
+  const alreadyApplied =
+    Boolean(day.reflection) &&
+    day.revision >= expectedRevision &&
+    (outcome === "rest" ? day.resting : !day.resting && day.outcome === outcome);
+  if (alreadyApplied) {
+    if (!(await context.store.claimRecord({ ...context.scope, key }))) return false;
+    await context.store.finishRecord({ ...context.scope, key }, "sent");
+    return true;
+  }
   if (
     day.revision !== expectedRevision ||
     !day.reflection ||

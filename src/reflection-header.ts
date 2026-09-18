@@ -1,6 +1,10 @@
 import { InputError, date as parseDate } from "./input";
 
 type HeaderOutcome = "complete" | "partial" | "not_done" | "rest";
+export type ReflectionDraftHeader = {
+  readonly date: string | null;
+  readonly text: string;
+};
 export type ReflectionHeader = {
   readonly date: string | null;
   readonly outcome: HeaderOutcome;
@@ -27,6 +31,38 @@ function headerDate(token: string, today: string): string {
   );
   if (value > today) throw new InputError("후기 날짜는 오늘까지의 날짜로 알려주세요.");
   return value;
+}
+
+export function parseReflectionDraftHeader(
+  text: string,
+  today: string,
+): ReflectionDraftHeader | null {
+  const original = text.trim();
+  if (
+    !original ||
+    original.length > 1000 ||
+    /[>"“”「」`]|<@|친구가|동료가|[가-힣]+님이|인용|번역해|ignore|system|분류|출력|규칙.*무시/i.test(
+      original,
+    )
+  )
+    return null;
+  let rest = original
+    .replace(/\r\n?/g, "\n")
+    .replace(/^[-*]\s+/, "")
+    .replaceAll("**", "");
+  const before = DATE_PREFIX.exec(rest);
+  if (before) rest = rest.slice(before[0].length);
+  const marker = /^(?:후기|회고)[ \t]*(?:[:：][ \t]*|\n\s*)/.exec(rest);
+  if (!marker) return null;
+  rest = rest.slice(marker[0].length).trimStart();
+  const after = DATE_PREFIX.exec(rest);
+  if (after) rest = rest.slice(after[0].length);
+  if ((before && after) || EXTRA_DATE.test(rest))
+    throw new InputError("후기는 한 번에 한 날짜씩 남겨주세요.");
+  const dateToken = before?.[1] ?? before?.[2] ?? after?.[1] ?? after?.[2];
+  const date = dateToken ? headerDate(dateToken, today) : null;
+  const body = rest.trim();
+  return body ? { date, text: body } : null;
 }
 
 export function parseReflectionHeader(text: string, today: string): ReflectionHeader | null {

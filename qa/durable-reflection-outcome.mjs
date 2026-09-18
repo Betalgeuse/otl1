@@ -63,7 +63,28 @@ try {
   assert.equal(applied[0].change.expectedRevision, 1);
   assert.equal(confirmed.length, 0, "reflection storage must not require a button");
   assert.equal(questions.length, 1, "an optional public outcome question must follow storage");
-  console.log("PASS Yunsu historical reflection is stored before optional outcome clarification");
+
+  store.current = { ...day, revision: 1 };
+  const numericContext = {
+    ...context,
+    key: "incoming:1789541205.000001",
+    source: "1789541205.000001",
+  };
+  assert.equal(await handleReflectionReport(numericContext, "후기: 3시간 정리 ABC123"), true);
+  assert.equal(applied.at(-1).change.text, "3시간 정리 ABC123");
+  assert.equal(applied.at(-1).change.date, "2026-09-15");
+  assert.equal(confirmed.length, 0, "body digits do not become a target date warning");
+
+  store.current = { ...day, revision: 1 };
+  const reasonContext = {
+    ...context,
+    key: "incoming:1789541206.000001",
+    source: "1789541206.000001",
+  };
+  assert.equal(await handleReflectionReport(reasonContext, "후기: 어제보다 v2 정리를 2배 빠르게 했어요"), true);
+  assert.equal(applied.at(-1).change.text, "어제보다 v2 정리를 2배 빠르게 했어요");
+  assert.equal(applied.at(-1).change.date, "2026-09-15");
+  console.log("PASS historical, numeric and reason-word reflections store body-only");
 } finally {
   Date.now = originalNow;
 }

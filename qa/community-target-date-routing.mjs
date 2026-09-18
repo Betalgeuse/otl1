@@ -76,7 +76,7 @@ class FakeCommunityStore {
     let next;
     if (input.action === "goal") next = { ...previous, goal: input.text, revision: previous.revision + 1 };
     else if (input.action === "reflection")
-      next = { ...previous, reflection: input.text, outcome: input.outcome, revision: previous.revision + 1 };
+      next = { ...previous, reflection: input.text, outcome: input.outcome ?? previous.outcome, revision: previous.revision + 1 };
     else next = { ...previous, outcome: input.action, revision: previous.revision + 1 };
     days.set(key, next);
     changes.push(input);
@@ -142,11 +142,14 @@ const env = {
       intentCalls.push(request);
       const input = JSON.parse(request.messages.at(-1).content);
       const reflection = /일부 완료/.test(input.text);
+      const partialOnly = /^부분완료[.!。！\s]*$/u.test(input.text);
       const misleadingCompletion = /파이프라인 업데이트 완료/.test(input.text);
       return {
         response: JSON.stringify(
-          reflection
-            ? { intent: "reflection", outcome: "partial", goalText: null, hasReflection: true, needsConfirmation: false }
+          partialOnly
+            ? { intent: "completion", outcome: "partial", goalText: null, hasReflection: false, needsConfirmation: false }
+            : reflection
+              ? { intent: "reflection", outcome: "partial", goalText: null, hasReflection: true, needsConfirmation: false }
             : misleadingCompletion
               ? { intent: "completion", outcome: "complete", goalText: null, hasReflection: false, needsConfirmation: false }
             : { intent: "goal", outcome: "unknown", goalText: input.text, hasReflection: false, needsConfirmation: false },
@@ -217,8 +220,34 @@ try {
   assert.equal(changes.filter((change) => change.userId === "UCASEA").length, 1, "replay is idempotent");
   const partial = changes.find((change) => change.userId === "UCASEC" && change.action === "reflection");
   assert.equal(partial?.outcome, "partial");
-  assert.equal(intentCalls.length, 3, "explicit goals and protected historical edits stop before Qwen");
-  assert.equal(published.length, 6);
+  const beforeDuplicatePartial = { changes: changes.length, published: published.length, slack: slackCalls.length };
+  await send({ eventId: "E-PARTIAL-DUP", user: "UCASEC", ts: `${signedAt}.100010`, thread: reasonGoal.event.ts, text: "부분완료" });
+  assert.deepEqual(
+    { changes: changes.length, published: published.length, slack: slackCalls.length },
+    beforeDuplicatePartial,
+    "duplicate equal outcome creates no event, reaction, question or garden card",
+  );
+  assert.equal(
+    changes.filter((change) => change.userId === "UCASEC" && change.action === "reflection").length,
+    1,
+    "first partial reflection creates exactly one event",
+  );
+  assert.equal(
+    published.filter((item) => item.userId === "UCASEC").length,
+    2,
+    "goal and first partial each create one card; duplicate creates none",
+  );
+
+  const numericGoal = await send({ eventId: "E-NUMERIC-GOAL", user: "UCASEG", ts: `${signedAt}.100011`, text: "원씽: 숫자 후기 검증" });
+  const beforeNumeric = changes.length;
+  await send({ eventId: "E-NUMERIC-REVIEW", user: "UCASEG", ts: `${signedAt}.100012`, thread: numericGoal.event.ts, text: "후기: 3시간 정리 ABC123" });
+  const numericReview = changes.at(-1);
+  assert.equal(changes.length, beforeNumeric + 1);
+  assert.equal(numericReview.action, "reflection");
+  assert.equal(numericReview.text, "3시간 정리 ABC123");
+  assert.equal(numericReview.date, "2026-09-17");
+  assert.equal(intentCalls.length, 4, "explicit goals, numeric 후기 and protected historical edits avoid unnecessary Qwen calls");
+  assert.equal(published.length, 8);
   assert.equal(slackCalls.some((call) => String(call.body.text ?? "").includes("날짜가 있는 수행 기록")), false);
   assert.equal(slackCalls.some((call) => String(call.body.text ?? "").includes("수정할 ONE THING이 없어요")), true);
   console.log("PASS signed Slack routing: incidental dates save once, partial reflection follows its thread, historical edit stays protected");
