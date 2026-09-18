@@ -11,6 +11,12 @@ export type ReminderBatchStore = {
     readonly leaseToken: string;
   }): Promise<ReminderBatch | null>;
   finishReminderBatch(input: ReminderBatchFinish): Promise<boolean>;
+  pruneReminderBatch(input: {
+    readonly teamId: string;
+    readonly channelId: string;
+    readonly now: string;
+    readonly leaseToken: string;
+  }): Promise<ReminderBatch | null>;
 };
 
 function section(label: string, jobs: readonly ReminderJob[]): string {
@@ -34,12 +40,32 @@ export function renderReminderBatch(jobs: readonly ReminderJob[]): string | null
   return `${sections.join("\n\n")}\n\n개인 안내를 끄려면 “알림 설정”이라고 남겨주세요.`;
 }
 
-async function alreadyPosted(
+export function chunkReminderJobs(
+  jobs: readonly ReminderJob[],
+): readonly (readonly ReminderJob[])[] {
+  const ordered = [...new Map(jobs.map((job) => [`${job.kind}:${job.userId}`, job])).values()].sort(
+    (left, right) => `${left.kind}:${left.userId}`.localeCompare(`${right.kind}:${right.userId}`),
+  );
+  const chunks: ReminderJob[][] = [];
+  let current: ReminderJob[] = [];
+  for (const job of ordered) {
+    const candidate = [...current, job];
+    if (candidate.length > 100 || renderReminderBatch(candidate) === null) {
+      if (current.length === 0) throw new CommunitySlackError("invalid_member_id");
+      chunks.push(current);
+      current = [job];
+    } else current = candidate;
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
+export async function exactMessageTimestamp(
   token: string,
   channelId: string,
   text: string,
   firstAttemptAt: string,
-): Promise<boolean> {
+): Promise<string | null> {
   let cursor = "";
   for (let page = 0; page < 10; page += 1) {
     const response = object(
@@ -51,16 +77,28 @@ async function alreadyPosted(
         ...(cursor ? { cursor } : {}),
       }),
     );
-    if (list(response.messages).some((value) => object(value).text === text)) return true;
+    for (const value of list(response.messages)) {
+      const message = object(value);
+      if (message.text === text) return string(message.ts);
+    }
     const metadata =
       response.response_metadata === undefined ? {} : object(response.response_metadata);
     cursor = metadata.next_cursor === undefined ? "" : string(metadata.next_cursor);
-    if (!cursor) return false;
+    if (!cursor) return null;
   }
   throw new CommunitySlackError("history_incomplete");
 }
 
-function retryCode(error: CommunitySlackError): string {
+export async function exactMessageAlreadyPosted(
+  token: string,
+  channelId: string,
+  text: string,
+  firstAttemptAt: string,
+): Promise<boolean> {
+  return (await exactMessageTimestamp(token, channelId, text, firstAttemptAt)) !== null;
+}
+
+export function reminderRetryCode(error: CommunitySlackError): string {
   if (["rate_limited", "transport_error", "history_incomplete"].includes(error.code))
     return error.code;
   return /^http_5\d\d$/.test(error.code) ? "http_5xx" : "terminal_provider_error";
@@ -74,7 +112,7 @@ export async function sendReminderBatch(input: {
   readonly store: ReminderBatchStore;
 }): Promise<number> {
   const leaseToken = crypto.randomUUID();
-  const batch = await input.store.claimReminderBatch({
+  let batch = await input.store.claimReminderBatch({
     teamId: input.teamId,
     channelId: input.channelId,
     now: input.now,
@@ -82,12 +120,13 @@ export async function sendReminderBatch(input: {
     leaseToken,
   });
   if (!batch) return 0;
+  const claimedLeaseToken = batch.leaseToken;
   const text = renderReminderBatch(batch.jobs);
   if (!text) {
     await input.store.finishReminderBatch({
       teamId: input.teamId,
       channelId: input.channelId,
-      leaseToken: batch.leaseToken,
+      leaseToken: claimedLeaseToken,
       status: "failed",
       errorCode: "batch_too_large",
       retryAfterSeconds: 300,
@@ -97,7 +136,7 @@ export async function sendReminderBatch(input: {
   try {
     if (
       batch.attempt > 1 &&
-      (await alreadyPosted(input.token, input.channelId, text, batch.firstAttemptAt))
+      (await exactMessageAlreadyPosted(input.token, input.channelId, text, batch.firstAttemptAt))
     ) {
       await input.store.finishReminderBatch({
         teamId: input.teamId,
@@ -107,10 +146,21 @@ export async function sendReminderBatch(input: {
       });
       return batch.jobs.length;
     }
+    if (batch.attempt > 1) {
+      batch = await input.store.pruneReminderBatch({
+        teamId: input.teamId,
+        channelId: input.channelId,
+        now: input.now,
+        leaseToken: batch.leaseToken,
+      });
+      if (!batch) return 0;
+    }
+    const deliverableText = renderReminderBatch(batch.jobs);
+    if (!deliverableText) throw new CommunitySlackError("invalid_batch");
     await callSlack(input.token, "chat.postMessage", {
       channel: input.channelId,
-      text,
-      blocks: text
+      text: deliverableText,
+      blocks: deliverableText
         .split("\n\n")
         .filter((value) => value.includes("<@"))
         .map((value) => ({ type: "section", text: { type: "mrkdwn", text: value } })),
@@ -127,11 +177,27 @@ export async function sendReminderBatch(input: {
     await input.store.finishReminderBatch({
       teamId: input.teamId,
       channelId: input.channelId,
-      leaseToken: batch.leaseToken,
+      leaseToken: claimedLeaseToken,
       status: "failed",
-      errorCode: retryCode(error),
+      errorCode: reminderRetryCode(error),
       ...(error.retryAfterSeconds === null ? {} : { retryAfterSeconds: error.retryAfterSeconds }),
     });
     return 0;
   }
+}
+
+export async function sendReminderBatches(input: {
+  readonly token: string;
+  readonly teamId: string;
+  readonly channelId: string;
+  readonly now: string;
+  readonly store: ReminderBatchStore;
+}): Promise<number> {
+  let delivered = 0;
+  for (let batch = 0; batch < 10; batch += 1) {
+    const count = await sendReminderBatch(input);
+    if (count === 0) return delivered;
+    delivered += count;
+  }
+  return delivered;
 }

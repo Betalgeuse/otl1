@@ -8,6 +8,7 @@ const jobs = [
 ];
 const finished = [];
 let reconciled = 0;
+let reminderClaimed = false;
 const store = {
   async getRecord() { return null; },
   async putRecord() { throw new Error("unexpected put"); },
@@ -15,8 +16,11 @@ const store = {
   async finishRecord() { return false; },
   async reminderTriggerDue() { return true; },
   async reconcileChannelMembers(_scope, snapshot) { reconciled += 1; assert.equal(snapshot.members.length, 4); },
-  async claimReminderBatch() { return { leaseToken: "lease-1", attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", jobs }; },
+  async claimReminderBatch() { if (reminderClaimed) return null; reminderClaimed = true; return { leaseToken: "lease-1", attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", jobs }; },
+  async pruneReminderBatch() { throw new Error("unexpected prune"); },
   async finishReminderBatch(input) { finished.push(input); return true; },
+  async claimCommonDelivery() { return null; },
+  async finishCommonDelivery() { return false; },
 };
 const env = {
   SLACK_TEAM_ID: "TQA",

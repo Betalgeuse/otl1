@@ -1,4 +1,9 @@
-import type { ChannelMembershipSnapshot, ReminderBatch, ReminderJob } from "./community-types";
+import type {
+  ChannelMembershipSnapshot,
+  CommonDelivery,
+  ReminderBatch,
+  ReminderJob,
+} from "./community-types";
 import { date, InputError, list, object, string } from "./input";
 
 function reminderJob(value: unknown): ReminderJob {
@@ -30,6 +35,27 @@ export function reminderBatch(value: unknown): ReminderBatch | null {
   };
 }
 
+export function commonDelivery(value: unknown): CommonDelivery | null {
+  if (value === null) return null;
+  const input = object(value);
+  if (typeof input.attempt !== "number" || !Number.isSafeInteger(input.attempt))
+    throw new InputError("Invalid common delivery attempt");
+  const firstAttemptAt = string(input.firstAttemptAt);
+  if (!Number.isFinite(Date.parse(firstAttemptAt)))
+    throw new InputError("Invalid common delivery first attempt");
+  if (input.kind !== "goal" && input.kind !== "review")
+    throw new InputError("Invalid common delivery kind");
+  return {
+    leaseToken: string(input.leaseToken),
+    attempt: input.attempt,
+    firstAttemptAt,
+    key: string(input.key),
+    text: string(input.text),
+    date: date(input.date),
+    kind: input.kind,
+  };
+}
+
 export function snapshotPayload(
   snapshot: ChannelMembershipSnapshot,
 ): Readonly<Record<string, unknown>> {
@@ -38,6 +64,7 @@ export function snapshotPayload(
     complete: true,
     members: snapshot.members.map((member) => ({
       userId: member.userId,
+      displayName: member.displayName,
       isBot: member.isBot,
       isAppUser: member.isAppUser,
       deleted: member.deleted,

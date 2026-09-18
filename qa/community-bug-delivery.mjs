@@ -133,6 +133,7 @@ try {
     templateId: "question.expected.v1",
     fieldName: "expected",
     rendererVersion: "bug-question.v1",
+    notBefore: "2026-09-16T11:59:00Z",
   });
   assert.deepEqual(
     [parsed.status, parsed.attempts, parsed.retryAfter, parsed.lastErrorCode, parsed.messageTs],

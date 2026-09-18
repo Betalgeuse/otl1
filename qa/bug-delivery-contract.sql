@@ -139,7 +139,7 @@ BEGIN
 
  UPDATE otl.bug_reports SET question_count=5,needs_info_started_at='2026-09-15T00:00:00Z' WHERE bug_id='BUG-DELIVERY01';
  PERFORM otl.bug_transition(jsonb_build_object('bugId','BUG-DELIVERY01','toState','needs_info_exhausted','actors',jsonb_build_array('scheduler'),'guard',jsonb_build_object('exhausted',true),'evidence',jsonb_build_object('conversationDigest',repeat('8',64),'exhaustionReason','five'),'expectedRevision',2,'idempotencyKey','delivery-exhausted','now','2026-09-16T15:00:00Z'));
- PERFORM otl.bug_enqueue_delivery(jsonb_build_object('teamId','T-DELIVERY','bugId','BUG-DELIVERY01','reporterId','U-OWNER','deliveryKey','BUG-DELIVERY01:2:admin_handoff:admin_channel','deliveryKind','admin_handoff','packetRevision',2,'destination','admin_channel','templateId','admin_handoff.exhausted.v1','rendererVersion','bug-handoff.v1'));
+ PERFORM otl.bug_enqueue_delivery(jsonb_build_object('teamId','T-DELIVERY','bugId','BUG-DELIVERY01','reporterId','U-OWNER','deliveryKey','BUG-DELIVERY01:2:admin_handoff:admin_channel','deliveryKind','admin_handoff','packetRevision',2,'destination','admin_channel','templateId','admin_handoff.exhausted.v1','rendererVersion','bug-handoff.v1','notBefore','2026-09-17T11:59:00Z'));
 
  IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='otl' AND table_name='bug_deliveries' AND column_name IN ('payload','body','text','question_text','error_message')) THEN RAISE EXCEPTION 'raw delivery payload column exists'; END IF;
  INSERT INTO delivery_result VALUES('delivery_kinds',to_jsonb((SELECT count(DISTINCT delivery_kind) FROM otl.bug_deliveries)));

@@ -4,12 +4,18 @@ import { InputError, list, object, string } from "./input";
 
 const PROFILE_CONCURRENCY = 5;
 
-function memberProfile(value: unknown, expectedUserId: string): ChannelMember {
+export function parseChannelMember(value: unknown, expectedUserId: string): ChannelMember {
   const profile = object(object(value).user);
   const userId = string(profile.id);
   if (userId !== expectedUserId) throw new InputError("Slack member profile mismatch");
   return {
     userId,
+    displayName:
+      typeof profile.real_name === "string" && profile.real_name.trim()
+        ? profile.real_name.trim()
+        : typeof profile.name === "string" && profile.name.trim()
+          ? profile.name.trim()
+          : userId,
     isBot: profile.is_bot === true,
     isAppUser: profile.is_app_user === true,
     deleted: profile.deleted === true,
@@ -28,7 +34,7 @@ async function mapProfiles(
       next += 1;
       const userId = userIds[index];
       if (!userId) throw new InputError("Slack member index missing");
-      results[index] = memberProfile(
+      results[index] = parseChannelMember(
         await callSlack(token, "users.info", { user: userId }),
         userId,
       );

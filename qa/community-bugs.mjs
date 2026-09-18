@@ -215,9 +215,16 @@ globalThis.fetch = async (url, options) => {
       if (operation === "due") return Response.json({ rows: [["[]"]] });
       if (operation === "reminder_trigger_due") return Response.json({ rows: [["false"]] });
       if (operation === "claim_reminder_batch") return Response.json({ rows: [["null"]] });
+      if (operation === "prune_reminder_batch") return Response.json({ rows: [["null"]] });
+      if (operation === "claim_common_delivery") return Response.json({ rows: [["null"]] });
+      if (operation === "next_schedule_due") return Response.json({ rows: [["null"]] });
       if (operation === "claim_garden_delivery") return Response.json({ rows: [["null"]] });
       if (operation === "reminder_trigger_due") return Response.json({ rows: [["false"]] });
-      if (operation === "finish_reminder_batch" || operation === "reconcile_channel_members")
+      if (
+        operation === "finish_reminder_batch" ||
+        operation === "finish_common_delivery" ||
+        operation === "reconcile_channel_members"
+      )
         return Response.json({ rows: [["true"]] });
       throw new Error(`unexpected community operation: ${operation}`);
     }

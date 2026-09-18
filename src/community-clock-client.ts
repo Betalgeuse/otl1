@@ -16,6 +16,18 @@ export function nextAlarmTime(times: readonly string[], now: number): number | n
   return next;
 }
 
+export function nextCommunityAlarm(
+  times: readonly string[],
+  durableDue: string | null,
+  now: number,
+): number | null {
+  const scheduled = nextAlarmTime(times, now);
+  if (durableDue === null) return scheduled;
+  const parsed = Date.parse(durableDue);
+  if (!Number.isFinite(parsed)) throw new InputError("Invalid durable due time");
+  return scheduled === null ? parsed : Math.min(scheduled, parsed);
+}
+
 export async function armCommunityClock(
   env: CommunityEnv & { readonly COMMUNITY_CLOCK?: ClockBinding },
   channelId: string,

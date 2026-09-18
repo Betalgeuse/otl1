@@ -1,23 +1,15 @@
-import { reminderBatch, snapshotPayload } from "./community-reminder-store";
+import { CommunityScheduleStore, parseCommunityRecord } from "./community-schedule-store";
 import type {
   ChangeResult,
-  ChannelMembershipSnapshot,
   CommunityDay,
   CommunityRecord,
   CommunityScope,
   DayChange,
   DayScope,
-  GroupSchedule,
   MemberIntroduction,
   Outcome,
-  PreferencePatch,
-  RecordKey,
-  ReminderBatch,
-  ReminderBatchFinish,
-  SupportPreferences,
 } from "./community-types";
 import { date, InputError, type Json, list, object, string } from "./input";
-import type { NeonStore } from "./store";
 
 function bool(value: unknown): boolean {
   if (typeof value !== "boolean") throw new InputError("Boolean required");
@@ -52,30 +44,6 @@ function day(value: unknown): CommunityDay {
     revision: v.revision,
   };
 }
-function time(value: unknown): string {
-  const result = string(value);
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(result))
-    throw new InputError("시간은 HH:MM으로 입력해 주세요.");
-  return result;
-}
-function preferences(value: unknown): SupportPreferences {
-  const v = object(value);
-  if (v.timezone !== "Asia/Seoul") throw new InputError("Invalid timezone");
-  return {
-    ...scope(v),
-    enabled: bool(v.enabled),
-    goalTime: time(v.goalTime),
-    reviewTime: time(v.reviewTime),
-    timezone: v.timezone,
-  };
-}
-function record(value: Json): CommunityRecord | null {
-  if (value === null) return null;
-  const v = object(value);
-  const body = Object.entries(value).find(([key]) => key === "body")?.[1] ?? null;
-  return { ...scope(v), key: string(v.key), kind: string(v.kind), status: string(v.status), body };
-}
-
 function introduction(value: unknown): MemberIntroduction | null {
   if (value === null) return null;
   const v = object(value);
@@ -93,14 +61,7 @@ function introduction(value: unknown): MemberIntroduction | null {
   };
 }
 
-export class CommunityStore {
-  constructor(private readonly db: Pick<NeonStore, "queryJson">) {}
-  private call(operation: string, payload: Json): Promise<Json> {
-    return this.db.queryJson("SELECT otl.community_execute($1,$2::jsonb)", [
-      operation,
-      JSON.stringify(payload),
-    ]);
-  }
+export class CommunityStore extends CommunityScheduleStore {
   private introductionCall(operation: string, payload: Json): Promise<Json> {
     return this.db.queryJson("SELECT otl.introduction_execute($1,$2::jsonb)", [
       operation,
@@ -129,7 +90,7 @@ export class CommunityStore {
     const values = await this.call("list_records", { ...input, kind });
     if (!Array.isArray(values)) throw new InputError("Record list required");
     return values.map((value: Json) => {
-      const result = record(value);
+      const result = parseCommunityRecord(value);
       if (!result) throw new InputError("Record missing");
       return result;
     });
@@ -186,62 +147,5 @@ export class CommunityStore {
         ? { gardenDeliveryKey: v.gardenDeliveryKey }
         : {}),
     };
-  }
-  async enrollReminders(input: CommunityScope): Promise<SupportPreferences> {
-    return preferences(await this.call("enroll_reminders", input));
-  }
-  async preferences(
-    input: CommunityScope,
-    patch: PreferencePatch = {},
-  ): Promise<SupportPreferences> {
-    if (patch.goalTime !== undefined) time(patch.goalTime);
-    if (patch.reviewTime !== undefined) time(patch.reviewTime);
-    return preferences(await this.call("preferences", { ...input, ...patch }));
-  }
-  async putRecord(input: Omit<CommunityRecord, "status">): Promise<CommunityRecord> {
-    const result = record(await this.call("put_record", input));
-    if (!result) throw new InputError("Record missing");
-    return result;
-  }
-  async setGroupSchedule(input: CommunityScope, settings: GroupSchedule): Promise<CommunityRecord> {
-    time(settings.goalTime);
-    time(settings.reviewTime);
-    const result = record(await this.call("set_group_schedule", { ...input, ...settings }));
-    if (!result) throw new InputError("Schedule missing");
-    return result;
-  }
-  async getRecord(input: RecordKey): Promise<CommunityRecord | null> {
-    return record(await this.call("get_record", input));
-  }
-  async claimRecord(input: RecordKey): Promise<boolean> {
-    return bool(await this.call("claim_record", input));
-  }
-  async finishRecord(input: RecordKey, status: "sent" | "failed" | "cancelled"): Promise<boolean> {
-    return bool(await this.call("finish_record", { ...input, status }));
-  }
-  async reminderTriggerDue(teamId: string, channelId: string, now: string): Promise<boolean> {
-    if (!Number.isFinite(Date.parse(now))) throw new InputError("Invalid time");
-    return bool(await this.call("reminder_trigger_due", { teamId, channelId, now }));
-  }
-  async reconcileChannelMembers(
-    input: CommunityScope,
-    snapshot: ChannelMembershipSnapshot,
-  ): Promise<boolean> {
-    return bool(
-      await this.call("reconcile_channel_members", { ...input, ...snapshotPayload(snapshot) }),
-    );
-  }
-  async claimReminderBatch(input: {
-    readonly teamId: string;
-    readonly channelId: string;
-    readonly now: string;
-    readonly workerId: string;
-    readonly leaseToken: string;
-  }): Promise<ReminderBatch | null> {
-    if (!Number.isFinite(Date.parse(input.now))) throw new InputError("Invalid time");
-    return reminderBatch(await this.call("claim_reminder_batch", input));
-  }
-  async finishReminderBatch(input: ReminderBatchFinish): Promise<boolean> {
-    return bool(await this.call("finish_reminder_batch", input));
   }
 }

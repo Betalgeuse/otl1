@@ -12,7 +12,7 @@ import {
   readBugClockState,
   runBugDeliveryClockAlarm,
 } from "./community-clock-bug";
-import { nextAlarmTime } from "./community-clock-client";
+import { nextCommunityAlarm } from "./community-clock-client";
 import { publishGardenRequest } from "./community-clock-garden";
 import { runDueGardenDeliveries } from "./community-garden-delivery";
 import type { CommunityEnv } from "./community-runtime";
@@ -117,14 +117,17 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
       channelId,
       userId: this.env.COMMUNITY_ADMIN_ID,
     };
-    const [settings, members] = await Promise.all([
+    const observedNow = Date.now();
+    const [settings, members, deliveryDue] = await Promise.all([
       store.getRecord({ ...scope, key: "group-schedule" }),
       store.members(scope.teamId, channelId),
+      store.nextScheduleDue(scope.teamId, channelId, new Date(observedNow).toISOString()),
     ]);
     const times: string[] = [];
     if (settings) {
       const body = object(settings.body);
-      if (body.enabled === true) times.push(string(body.goalTime), string(body.reviewTime));
+      if (body.enabled === true)
+        times.push("10:00", string(body.goalTime), string(body.reviewTime));
     }
     for (let start = 0; start < members.length; start += 10) {
       const preferences = await Promise.all(
@@ -139,7 +142,7 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
           );
       }
     }
-    const next = nextAlarmTime(times, Date.now());
+    const next = nextCommunityAlarm(times, deliveryDue, observedNow);
     if (next === null) await this.ctx.storage.deleteAlarm();
     else await this.ctx.storage.setAlarm(next);
     return { next };

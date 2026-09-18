@@ -26,7 +26,10 @@ let bugRun = async (_env, scheduledTime) => {
   return maintenanceResult();
 };
 const scheduleRuns = [];
-let scheduleRun = async (...args) => { scheduleRuns.push(args); return { common: 0, personal: 0 }; };
+let scheduleRun = async (...args) => {
+  scheduleRuns.push(args);
+  return { common: 0, personal: 0 };
+};
 
 mock.module("cloudflare:workers", () => ({
   DurableObject: class {
@@ -57,6 +60,7 @@ const {
   bugDeliveryClockName,
   nextAlarmTime,
 } = await import("../src/community-clock.ts");
+const { nextCommunityAlarm } = await import("../src/community-clock-client.ts");
 
 class FakeStorage {
   values = new Map();
@@ -113,6 +117,15 @@ assert.equal(
   Date.parse("2026-09-11T15:05:00Z"),
 );
 assert.throws(() => nextAlarmTime(["24:00"], now));
+assert.equal(
+  nextCommunityAlarm(["20:00"], "2026-09-11T01:17:00.000Z", now),
+  Date.parse("2026-09-11T01:17:00.000Z"),
+);
+assert.equal(
+  nextCommunityAlarm([], "2026-09-11T01:17:00.000Z", now),
+  Date.parse("2026-09-11T01:17:00.000Z"),
+);
+assert.throws(() => nextCommunityAlarm([], "not-a-time", now));
 
 assert.deepEqual(await armCommunityClock({}, "admin"), { next: null });
 let routed = "";
@@ -332,10 +345,15 @@ try {
   limitedStorage.values.set("role", "community_schedule");
   limitedStorage.values.set("channel", "CPUBLIC");
   limitedStorage.alarm = now;
-  scheduleRun = async () => { throw new CommunitySlackError("rate_limited", 17); };
+  scheduleRun = async () => {
+    throw new CommunitySlackError("rate_limited", 17);
+  };
   await clock(limitedStorage, { DATABASE_URL: "postgresql://u:p@x.neon.tech/db" }).alarm();
   assert.equal(limitedStorage.alarm, now + 17_000);
-  scheduleRun = async (...args) => { scheduleRuns.push(args); return { common: 0, personal: 0 }; };
+  scheduleRun = async (...args) => {
+    scheduleRuns.push(args);
+    return { common: 0, personal: 0 };
+  };
 } finally {
   Date.now = originalNow;
 }
