@@ -119,6 +119,8 @@ flowchart LR
 
 referral·lifecycle의 DB 함수와 비공개 객체 참조는 항상 workspace/team 범위에서 조회·변경합니다. site 서명은 site-to-core 요청을 인증할 뿐 다른 workspace의 신청·lifecycle·admin 카드에 대한 권한을 만들지 않습니다. runtime scheduler도 같은 DB/store 범위 안에서 만료·정리만 실행합니다.
 
+lifecycle 정정은 일반 Worker `DATABASE_URL`에서 분리한 `LIFECYCLE_ADMIN_DATABASE_URL`로만 실행합니다. 035의 `otl_lifecycle_admin_login`은 Neon 호환 제한 로그인 역할이며, 직접 테이블 접근과 일반 lifecycle runtime·소개·guide 함수는 받지 않습니다. 후보 범위 읽기와 audit가 남는 `restore_error`만 허용합니다. 이 연결을 쓰는 Slack 입력은 서명 검증 뒤 설정된 workspace, 지정 관리자, 공개 채널과 다른 비공개 admin 채널을 모두 확인하므로 site 서명이나 scheduler가 lifecycle 관리자 권한을 얻을 수 없습니다.
+
 사이트의 Turnstile 검증은 서버에서 hostname·action·single-use token을 확인한 뒤에만 신청을 core에 전달합니다. nonce와 timestamp는 재사용을 거절하고 사용 후 정리합니다. core는 애플리케이션 승인과 Slack 초대를 분리합니다. `approved`는 내부 검토 결과일 뿐이고, `mark-invited`는 관리자가 Free Slack UI에서 수동으로 보낸 초대의 관찰 기록일 뿐 배달·가입 증명은 아닙니다. 검증된 이메일과 `team_join`을 대조한 뒤에만 소개 출처를 회원 관계로 기록합니다.
 
-활성 플래그는 모두 기본 꺼짐이며 서로 독립적입니다. `LIFECYCLE_MODE=disabled|shadow|enforce`, `REVIEW_THREAD_V2`, `GARDEN_RECONCILIATION`, `REFERRALS_ENABLED`, `PUBLIC_APPLICATIONS_ENABLED` 중 하나가 없거나 잘못되면 새 경로는 닫힙니다. migration 029–034는 028 뒤에 추가로만 적용합니다. `034_referral_runtime_retention.sql`은 runtime scheduler가 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하게 하며, runtime role에는 approve·reject·mark-invited 권한을 주지 않습니다.
+활성 플래그는 모두 기본 꺼짐이며 서로 독립적입니다. `LIFECYCLE_MODE=disabled|shadow|enforce`, `REVIEW_THREAD_V2`, `GARDEN_RECONCILIATION`, `REFERRALS_ENABLED`, `PUBLIC_APPLICATIONS_ENABLED` 중 하나가 없거나 잘못되면 새 경로는 닫힙니다. migration 029–035는 028 뒤에 추가로만 적용합니다. `034_referral_runtime_retention.sql`은 runtime scheduler가 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하게 하며, runtime role에는 approve·reject·mark-invited 권한을 주지 않습니다. 035의 전용 lifecycle 관리자 로그인은 이 runtime role을 확장하지 않습니다.

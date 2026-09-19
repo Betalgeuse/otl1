@@ -21,11 +21,23 @@ assert.equal(PUBLIC_COPY_PATHS.includes("migrations/028_welcome_guide_roles.sql"
 assert.equal(PUBLIC_COPY_PATHS.includes("site"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("migrations/029_member_lifecycle.sql"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("migrations/033_dormant_return.sql"), true);
-assert.deepEqual(PUBLIC_RUNTIME_MIGRATION_PATHS, ["migrations/034_referral_runtime_retention.sql"]);
+assert.deepEqual(PUBLIC_RUNTIME_MIGRATION_PATHS, [
+  "migrations/034_referral_runtime_retention.sql",
+  "migrations/035_lifecycle_admin_login.sql",
+]);
+assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-lifecycle-admin-db-role.mjs"), true);
 assert.doesNotThrow(() => assertRequiredPublicExportSources(PUBLIC_RUNTIME_MIGRATION_PATHS, () => true));
 assert.throws(
   () => assertRequiredPublicExportSources(PUBLIC_RUNTIME_MIGRATION_PATHS, () => false),
   /Missing required public export source: migrations\/034_referral_runtime_retention\.sql/,
+);
+assert.throws(
+  () =>
+    assertRequiredPublicExportSources(
+      ["migrations/035_lifecycle_admin_login.sql", "scripts/bootstrap-lifecycle-admin-db-role.mjs"],
+      () => false,
+    ),
+  /Missing required public export source: migrations\/035_lifecycle_admin_login\.sql/,
 );
 assert.equal(PUBLIC_QA_NAMES.includes("community-guide-security-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("version-map.mjs"), true);
@@ -37,7 +49,10 @@ assert.doesNotThrow(() => assertPublicExportPaths(["site/dist/index.html", "site
 const sourceConfig = {
   account_id: "private-account",
   name: "private-name",
-  vars: { COMMUNITY_ADMIN_ID: "private-user" },
+  vars: {
+    COMMUNITY_ADMIN_ID: "private-user",
+    LIFECYCLE_ADMIN_DATABASE_URL: "postgresql://private-lifecycle-admin",
+  },
   r2_buckets: [{ binding: "BUG_PRIVATE_OBJECTS", bucket_name: "private-bucket" }],
   compatibility_date: "2026-08-14",
 };
@@ -51,6 +66,7 @@ assert.equal(publicConfig.vars.REVIEW_THREAD_V2, "false");
 assert.equal(publicConfig.vars.GARDEN_RECONCILIATION, "false");
 assert.equal(publicConfig.vars.REFERRALS_ENABLED, "false");
 assert.equal(publicConfig.vars.PUBLIC_APPLICATIONS_ENABLED, "false");
+assert.equal(publicConfig.vars.LIFECYCLE_ADMIN_DATABASE_URL, undefined);
 assert.deepEqual(publicConfig.r2_buckets, [
   { binding: "BUG_PRIVATE_OBJECTS", bucket_name: "replace-with-private-bucket" },
   { binding: "INVITE_PRIVATE_OBJECTS", bucket_name: "replace-with-invite-private-bucket" },

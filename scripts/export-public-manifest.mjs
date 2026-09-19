@@ -47,10 +47,12 @@ export const PUBLIC_COPY_PATHS = [
   "scripts/reconcile-garden-projections.mjs",
   "scripts/publish-welcome-guide.mjs",
   "scripts/bootstrap-guide-db-roles.mjs",
+  "scripts/bootstrap-lifecycle-admin-db-role.mjs",
 ];
 
 export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/034_referral_runtime_retention.sql",
+  "migrations/035_lifecycle_admin_login.sql",
 ];
 
 export function assertRequiredPublicExportSources(paths, exists) {

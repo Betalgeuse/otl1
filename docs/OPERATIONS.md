@@ -122,7 +122,7 @@ DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 �
 
 이 절은 v0.0.56–v0.0.64를 배포하기 전의 runbook입니다. 현재 운영 설정을 바꾸거나 기능이 출시되었다고 선언하지 않습니다.
 
-1. exact clean SHA와 `schema_migrations` 028을 readback하고, `029_member_lifecycle.sql`, `030_referral_applications.sql`, `031_review_thread_gardens.sql`, `032_lifecycle_runtime_delivery.sql`, `033_dormant_return.sql`, `034_referral_runtime_retention.sql`을 정확한 순서로 release receipt에 적습니다. 034의 runtime role은 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하며, 승인·거절·수동 초대 표시는 지정 관리자 경로에 남깁니다. 이미 적용한 migration을 고치거나 002–004의 retired invitation 경로를 되살리지 않습니다.
+1. exact clean SHA와 `schema_migrations` 028을 readback하고, `029_member_lifecycle.sql`, `030_referral_applications.sql`, `031_review_thread_gardens.sql`, `032_lifecycle_runtime_delivery.sql`, `033_dormant_return.sql`, `034_referral_runtime_retention.sql`, `035_lifecycle_admin_login.sql`을 정확한 순서로 release receipt에 적습니다. 034의 runtime role은 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하며, 승인·거절·수동 초대 표시는 지정 관리자 경로에 남깁니다. 이미 적용한 migration을 고치거나 002–004의 retired invitation 경로를 되살리지 않습니다.
 2. 유지보수를 켠 뒤 core Worker를 먼저 배포하고, `SITE_CORE_HMAC_SECRET`, `INVITE_EMAIL_PEPPER`, `INVITE_PRIVATE_KEK`, `INVITE_PRIVATE_KEK_VERSION`, 전용 `INVITE_PRIVATE_OBJECTS`를 값 없이 이름만 확인합니다. site Worker에는 core Service Binding과 Turnstile public site key만 둡니다. Slack·Neon·R2 비밀을 site asset이나 공개 vars에 넣지 않습니다.
 3. site preview에서 Turnstile 성공·실패, nonce 재사용 거절, HMAC 거절, 신청·철회, 축소 모션·키보드·320/375/768/1440 폭을 브라우저로 확인합니다. preview가 통과한 뒤에만 DNS와 `otl1.hyuk.me` custom domain의 기존 레코드·binding 충돌을 read-only로 확인하고 연결합니다.
 4. Slack manifest를 생성해 checked-in `slack-manifest.json`과 byte-for-byte 비교합니다. `im:write`, `users:read.email`, `team_join`은 Slack 앱 재설치와 event subscription readback이 필요한 변경입니다. `message.im`은 추가하지 않습니다. 그 밖의 기존 scope는 유지합니다.
@@ -133,3 +133,13 @@ DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 �
 보존과 정리는 신청 상태별로 실행합니다. pending/approved payload는 30일, rejected/withdrawn payload는 24시간, joined payload는 가입 뒤 7일 안에 R2에서 정리합니다. 비민감 decision/security audit는 12개월만 보존합니다. 암호문·nonce·digest·객체 경로·email·Turnstile token·Slack payload는 운영 로그와 공개 export에 쓰지 않습니다. purge 실패는 재시도 가능한 outbox 상태로 남기고, 삭제가 확인될 때까지 성공으로 쓰지 않습니다.
 
 장애가 나면 먼저 feature flag를 닫고, 같은 버전의 core/site 이전 배포로 되돌릴 수 있는지와 schema의 forward repair 필요성을 분리합니다. migration은 운영 DB에서 자동 down하지 않습니다. 잘못 분류된 lifecycle은 근거가 있는 관리자 correction만 같은 시즌을 복원할 수 있고, 과거 기록을 지우지 않습니다. canonical 잔디 교체는 새 review-thread 게시를 Slack Web에서 확인한 뒤에만 옛 봇 이미지를 그 메시지의 저장된 payload로 복구하거나 forward repair 합니다. 어떤 복구도 Slack 강퇴·계정 비활성화·공개 초대 링크 발급을 포함하지 않습니다.
+
+### 계획된 lifecycle 관리자 자격증명
+
+035은 Neon 호환 PostgreSQL에서 `otl_lifecycle_admin_login` 로그인 역할을 만들며, superuser·DB 생성·역할 생성 권한이 없고 `otl_lifecycle_admin`만 상속합니다. 이 로그인에는 직접 테이블 권한이나 일반 lifecycle runtime·소개·guide 함수 권한이 없습니다. 허용된 경로는 workspace/channel/member 범위의 후보 읽기와 `restore_error` 정정뿐입니다.
+
+`DATABASE_URL`은 migration과 자격증명 설치에만 쓰는 DB 소유자 연결입니다. Worker의 일반 `DATABASE_URL`에는 lifecycle 정정 권한을 주지 않습니다. 035 적용 뒤 소유자 연결을 로컬 환경으로만 넣고 `scripts/bootstrap-lifecycle-admin-db-role.mjs`를 실행합니다. 이 스크립트는 새 비밀번호를 만들고 지정한 stdin secret sink로만 전용 연결 문자열을 전달합니다. sink는 `LIFECYCLE_ADMIN_DATABASE_URL`을 Core Worker의 별도 비밀로 설치해야 하며 stdout·stderr·명령 인자·공개 export·운영 로그에는 연결 문자열을 쓰지 않습니다. 정기 교체와 담당자 변경 때도 같은 스크립트를 다시 실행해 새 값만 sink로 설치합니다.
+
+전용 연결은 Slack 서명이 검증되고, 설정된 workspace·공개 채널과 다른 비공개 admin 채널·지정 관리자 ID가 모두 일치한 `생애주기` 명령에서만 사용합니다. 운영자는 후보를 읽거나 dormant 상태와 revision 및 근거 키가 일치할 때만 `restore_error`를 기록할 수 있습니다. 범용 runtime 관리자 권한, 다른 회원·채널·workspace 조회, 임의 상태 전환 권한은 만들지 않습니다.
+
+롤백은 먼저 lifecycle feature flag와 전용 `LIFECYCLE_ADMIN_DATABASE_URL` 비밀을 닫아 새 관리 호출을 멈춥니다. migration 029–035은 운영 DB에서 down하지 않으며, 필요한 복구는 audit를 보존한 forward repair로만 합니다. 다시 열기 전에는 새 자격증명을 설치하고 비공개 Slack 관리자 gate와 후보·정정 경로를 재검증합니다. 이 절은 v0.0.56–v0.0.64의 미출시 runbook이며, 자격증명 설치만으로 출시를 선언하지 않습니다.
