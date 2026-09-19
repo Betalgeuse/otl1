@@ -66,8 +66,10 @@ try {
   await psql("postgres", ["-f", "migrations/029_member_lifecycle.sql"]);
   const contract = await psql("postgres", ["-Atq", "-f", "qa/member-lifecycle-contract.sql"]);
   const edgeMatch = contract.stdout.match(/EDGE_COUNT=(\d+)/);
+  const joinOnlyMatch = contract.stdout.match(/JOIN_ONLY_ELIGIBLE=(\w+)/);
   assert.ok(edgeMatch);
-  assert.equal(Number(edgeMatch[1]), 39);
+  assert.equal(Number(edgeMatch[1]), 30);
+  assert.equal(joinOnlyMatch?.[1], "false");
 
   const lifecycleStore = new CommunityLifecycleStore({
     queryJson: async (_query, params) => {
@@ -145,7 +147,7 @@ try {
   );
 
   console.log(
-    `PASS lifecycle storage: ${edgeMatch[1]} machine-counted edges; fresh+upgrade 001-029; KST closure/weekends/evidence; rollout; active/grace/extension/dormant/return; stale/duplicate/concurrent/cross-scope denial; immutable audit; rollback=0`,
+    `PASS lifecycle storage: ${edgeMatch[1]} state-backed checks; JOIN_ONLY_ELIGIBLE=${joinOnlyMatch?.[1]}; fresh+upgrade 001-029; KST closure/weekends/evidence; rollout; active/grace/extension/dormant/return; stale/duplicate/concurrent/cross-scope denial; immutable audit; rollback=0`,
   );
 } finally {
   if (started) await run(join(pgBin, "pg_ctl"), ["-D", data, "-m", "fast", "-w", "stop"]);

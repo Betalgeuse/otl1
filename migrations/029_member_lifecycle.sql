@@ -3,6 +3,8 @@ SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
 SELECT pg_advisory_xact_lock(hashtextextended('otl:member-lifecycle:029',0));
 
+ALTER TABLE otl.workspace_channels ADD COLUMN complete_membership_observed_at timestamptz;
+
 CREATE TABLE otl.member_lifecycles (
   team_id text NOT NULL,
   channel_id text NOT NULL,
@@ -144,7 +146,25 @@ INSERT INTO otl.member_lifecycle_events(
 SELECT l.team_id,l.channel_id,l.user_id,'rollout-seed','rollout_seeded',NULL,'active',l.rollout_at,0,
   md5(jsonb_build_object('rolloutAt',l.rollout_at)::text),
   jsonb_build_object('state','active','revision',0,'retroactiveCandidate',false)
-FROM otl.member_lifecycles l JOIN seasons s USING(team_id,user_id);
+FROM seeded l JOIN seasons s USING(team_id,user_id);
+
+ALTER FUNCTION otl.community_execute(text,jsonb) RENAME TO community_execute_before_lifecycle_snapshot;
+REVOKE EXECUTE ON FUNCTION otl.community_execute_before_lifecycle_snapshot(text,jsonb) FROM PUBLIC;
+CREATE FUNCTION otl.community_execute(op text,p jsonb) RETURNS jsonb
+LANGUAGE plpgsql SET search_path=pg_catalog,otl AS $$
+DECLARE result jsonb; observed timestamptz;
+BEGIN
+  result:=otl.community_execute_before_lifecycle_snapshot(op,p);
+  IF op='reconcile_channel_members' AND result='true'::jsonb THEN
+    observed:=(p->>'observedAt')::timestamptz;
+    UPDATE otl.workspace_channels SET complete_membership_observed_at=observed
+      WHERE team_id=p->>'teamId' AND channel_id=p->>'channelId'
+        AND membership_observed_at=observed
+        AND (complete_membership_observed_at IS NULL OR complete_membership_observed_at<observed);
+  END IF;
+  RETURN result;
+END $$;
+REVOKE ALL ON FUNCTION otl.community_execute(text,jsonb) FROM PUBLIC;
 
 CREATE FUNCTION otl.lifecycle_member_json(l otl.member_lifecycles) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path=pg_catalog,otl AS $$
@@ -194,7 +214,7 @@ BEGIN
     SELECT max(updated_at) INTO prompt_sent FROM otl.community_records
       WHERE team_id=t AND channel_id=c AND kind='dispatch' AND status='sent'
         AND body->>'date'=target_day::text AND body->>'kind'='goal' AND updated_at<=clock;
-    SELECT membership_observed_at INTO snapshot_at FROM otl.workspace_channels
+    SELECT complete_membership_observed_at INTO snapshot_at FROM otl.workspace_channels
       WHERE team_id=t AND channel_id=c;
     IF extract(isodow FROM target_day)>=6 THEN reason:='weekend';
     ELSIF prompt_sent IS NULL THEN reason:='goal_prompt_missing';

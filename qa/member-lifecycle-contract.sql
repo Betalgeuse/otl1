@@ -2,6 +2,23 @@
 
 CREATE FUNCTION pg_temp.lifecycle_call(operation text,payload jsonb) RETURNS jsonb
 LANGUAGE sql AS $$ SELECT otl.lifecycle_execute(operation,payload) $$;
+CREATE FUNCTION pg_temp.complete_snapshot(observed timestamptz) RETURNS jsonb
+LANGUAGE sql AS $$
+  SELECT otl.community_execute('reconcile_channel_members',jsonb_build_object(
+    'teamId','TLIFE','channelId','CLIFE','userId','UACTIVE','observedAt',observed,'complete',true,
+    'members',jsonb_build_array(
+      jsonb_build_object('userId','UACTIVE','displayName','Active','isBot',false,'isAppUser',false,'deleted',false),
+      jsonb_build_object('userId','UCONCURRENT','displayName','Concurrent','isBot',false,'isAppUser',false,'deleted',false),
+      jsonb_build_object('userId','UGOAL','displayName','Goal','isBot',false,'isAppUser',false,'deleted',false),
+      jsonb_build_object('userId','UOUTCOME','displayName','Outcome','isBot',false,'isAppUser',false,'deleted',false),
+      jsonb_build_object('userId','UREFLECTION','displayName','Reflection','isBot',false,'isAppUser',false,'deleted',false),
+      jsonb_build_object('userId','UREST','displayName','Rest','isBot',false,'isAppUser',false,'deleted',false),
+      jsonb_build_object('userId','UBOT','displayName','Bot','isBot',true,'isAppUser',false,'deleted',false),
+      jsonb_build_object('userId','UDELETED','displayName','Deleted','isBot',false,'isAppUser',false,'deleted',true),
+      jsonb_build_object('userId','UJOINONLY','displayName','Join Only','isBot',false,'isAppUser',false,'deleted',false)
+    )
+  ))
+$$;
 
 DO $$
 BEGIN
@@ -54,14 +71,31 @@ END $$;
 
 SELECT pg_temp.lifecycle_call('close_day',
   '{"teamId":"TLIFE","channelId":"CLIFE","date":"2026-09-20","now":"2026-09-20T15:00:00Z"}');
-UPDATE otl.workspace_channels SET membership_observed_at='2026-09-21T09:00:00Z'
-  WHERE team_id='TLIFE' AND channel_id='CLIFE';
+SELECT pg_temp.complete_snapshot('2026-09-21T09:00:00Z');
+DO $$ BEGIN
+  IF pg_temp.complete_snapshot('2026-09-20T09:00:00Z')<>'false'::jsonb OR
+    (SELECT complete_membership_observed_at FROM otl.workspace_channels
+      WHERE team_id='TLIFE' AND channel_id='CLIFE')<>'2026-09-21T09:00:00Z'
+  THEN RAISE EXCEPTION 'stale complete snapshot changed evidence'; END IF;
+END $$;
 SELECT pg_temp.lifecycle_call('close_day',
   '{"teamId":"TLIFE","channelId":"CLIFE","date":"2026-09-21","now":"2026-09-21T15:00:00Z"}');
 
 INSERT INTO otl.community_records(team_id,channel_id,user_id,record_key,kind,body,status,updated_at)
 VALUES('TLIFE','CLIFE','UACTIVE','common:2026-09-22:goal','dispatch',
   '{"date":"2026-09-22","kind":"goal"}','sent','2026-09-22T10:00:00Z');
+SELECT otl.community_execute('observe_member_join','{
+  "teamId":"TLIFE","channelId":"CLIFE","userId":"UACTIVE",
+  "observedAt":"2026-09-22T09:00:00Z",
+  "member":{"userId":"UJOINONLY","displayName":"Join Only","isBot":false,"isAppUser":false,"deleted":false}
+}');
+DO $$ BEGIN
+  IF (SELECT membership_observed_at FROM otl.workspace_channels
+      WHERE team_id='TLIFE' AND channel_id='CLIFE')<>'2026-09-22T09:00:00Z' OR
+    (SELECT complete_membership_observed_at FROM otl.workspace_channels
+      WHERE team_id='TLIFE' AND channel_id='CLIFE')<>'2026-09-21T09:00:00Z'
+  THEN RAISE EXCEPTION 'join observation changed complete snapshot evidence'; END IF;
+END $$;
 SELECT pg_temp.lifecycle_call('close_day',
   '{"teamId":"TLIFE","channelId":"CLIFE","date":"2026-09-22","now":"2026-09-22T15:00:00Z"}');
 
@@ -69,8 +103,7 @@ DO $$
 DECLARE day date;
 BEGIN
   FOREACH day IN ARRAY ARRAY['2026-09-23','2026-09-24','2026-09-25','2026-09-28','2026-09-29','2026-09-30','2026-10-01']::date[] LOOP
-    UPDATE otl.workspace_channels SET membership_observed_at=((day::timestamp+'18 hours') AT TIME ZONE 'Asia/Seoul')
-      WHERE team_id='TLIFE' AND channel_id='CLIFE';
+    PERFORM pg_temp.complete_snapshot((day::timestamp+'18 hours') AT TIME ZONE 'Asia/Seoul');
     INSERT INTO otl.community_records(team_id,channel_id,user_id,record_key,kind,body,status,updated_at)
     VALUES('TLIFE','CLIFE','UACTIVE','common:'||day||':goal','dispatch',
       jsonb_build_object('date',day,'kind','goal'),'sent',day::timestamp AT TIME ZONE 'Asia/Seoul');
@@ -228,12 +261,53 @@ DO $$ BEGIN
   END;
 END $$;
 
-SELECT 'EDGE_COUNT='||cardinality(ARRAY[
-  'rollout-humans','rollout-active','rollout-season','history-preserved','cross-team','unknown-user',
-  'kst-open-denied','weekend','prompt-outage','snapshot-outage','eligible-weekdays','seven-opens-grace',
-  'grace-calendar-deadline','grace-events','close-replay','goal-signal','outcome-signal',
-  'reflection-signal','rest-signal','season-preserved','extension','extension-replay','second-extension',
-  'stale-clock','stale-revision','rollback-events','rollback-state','expiry','season-close','dormant-rest',
-  'backdated-goal','current-goal-return','one-open-season','event-immutable','inviter-immutable',
-  'malformed-date','missing-clock','idempotency-collision','early-expiry'
-]::text[]);
+CREATE TEMP TABLE qa_lifecycle_checks AS
+SELECT * FROM (VALUES
+  ('rollout-events',(SELECT count(*)=6 FROM otl.member_lifecycle_events
+    WHERE team_id='TLIFE' AND event_type='rollout_seeded')),
+  ('rollout-no-retro',(SELECT count(*)=6 FROM otl.member_lifecycle_events
+    WHERE team_id='TLIFE' AND event_type='rollout_seeded' AND result->>'retroactiveCandidate'='false')),
+  ('rollout-seasons',(SELECT count(*)=6 FROM otl.grass_seasons WHERE opened_reason='rollout')),
+  ('preserved-day',(SELECT count(*)=1 FROM otl.community_days
+    WHERE user_id='UACTIVE' AND day='2026-09-18' AND goal='preserved goal')),
+  ('preserved-event',(SELECT count(*)=1 FROM otl.community_events WHERE event_key='preserved-event')),
+  ('weekend-excluded',(SELECT exclusion_reason='weekend' FROM otl.lifecycle_service_days WHERE service_date='2026-09-20')),
+  ('prompt-outage-excluded',(SELECT exclusion_reason='goal_prompt_missing' FROM otl.lifecycle_service_days WHERE service_date='2026-09-21')),
+  ('join-only-excluded',(SELECT NOT eligible AND exclusion_reason='snapshot_missing'
+    FROM otl.lifecycle_service_days WHERE service_date='2026-09-22')),
+  ('join-only-used-prior-complete',(SELECT membership_observed_at='2026-09-21T09:00:00Z'
+    FROM otl.lifecycle_service_days WHERE service_date='2026-09-22')),
+  ('eligible-service-days',(SELECT count(*)=7 FROM otl.lifecycle_service_days WHERE eligible)),
+  ('eligible-member-days',(SELECT count(*)=42 FROM otl.member_lifecycle_days WHERE eligible)),
+  ('grace-events',(SELECT count(*)=6 FROM otl.member_lifecycle_events WHERE event_type='grace_started')),
+  ('grace-deadline',(SELECT grace_deadline='2026-10-09' FROM otl.member_lifecycles WHERE user_id='UCONCURRENT')),
+  ('service-replay',(SELECT count(*)=1 FROM otl.lifecycle_service_days WHERE service_date='2026-10-01')),
+  ('grace-signals',(SELECT count(*)=4 FROM otl.member_lifecycle_events WHERE event_type='grace_cancelled')),
+  ('signal-season-preserved',(SELECT count(*)=4 FROM otl.grass_seasons
+    WHERE user_id IN ('UGOAL','UOUTCOME','UREFLECTION','UREST'))),
+  ('extension-event',(SELECT count(*)=1 FROM otl.member_lifecycle_events WHERE event_type='grace_extended')),
+  ('denied-events-absent',(SELECT count(*)=0 FROM otl.member_lifecycle_events
+    WHERE event_key IN ('extension-2','early-expiry','stale-clock','stale-revision','rolled-back'))),
+  ('expiry-event',(SELECT count(*)=1 FROM otl.member_lifecycle_events WHERE event_type='season_closed')),
+  ('season-closed',(SELECT count(*)=1 FROM otl.grass_seasons WHERE user_id='UACTIVE' AND closed_reason='grace_expired')),
+  ('dormant-rest-absent',(SELECT count(*)=0 FROM otl.member_lifecycle_events WHERE event_key='dormant-rest')),
+  ('backdated-goal-absent',(SELECT count(*)=0 FROM otl.member_lifecycle_events WHERE event_key='backdated-goal')),
+  ('reactivated',(SELECT count(*)=1 FROM otl.member_lifecycle_events WHERE event_type='reactivated')),
+  ('one-open-return-season',(SELECT count(*)=1 FROM otl.grass_seasons WHERE user_id='UACTIVE' AND closed_at IS NULL)),
+  ('immutable-event-intact',(SELECT count(*)>0 FROM otl.member_lifecycle_events
+    WHERE user_id='UACTIVE' AND result<>'{}'::jsonb)),
+  ('inviter-intact',(SELECT origin_inviter_user_id IS NULL FROM otl.member_lifecycles WHERE user_id='UACTIVE')),
+  ('complete-snapshot-monotonic',(SELECT complete_membership_observed_at='2026-10-01T09:00:00Z'
+    FROM otl.workspace_channels WHERE team_id='TLIFE' AND channel_id='CLIFE')),
+  ('join-only-not-seeded',(SELECT count(*)=0 FROM otl.member_lifecycles WHERE user_id='UJOINONLY')),
+  ('service-day-count',(SELECT count(*)=10 FROM otl.lifecycle_service_days)),
+  ('member-day-count',(SELECT count(*)=60 FROM otl.member_lifecycle_days))
+) checks(name,passed);
+DO $$ BEGIN
+  IF EXISTS(SELECT 1 FROM qa_lifecycle_checks WHERE NOT coalesce(passed,false)) THEN
+    RAISE EXCEPTION 'lifecycle state check failed: %',(
+      SELECT string_agg(name,',' ORDER BY name) FROM qa_lifecycle_checks WHERE NOT coalesce(passed,false));
+  END IF;
+END $$;
+SELECT 'JOIN_ONLY_ELIGIBLE='||eligible FROM otl.lifecycle_service_days WHERE service_date='2026-09-22';
+SELECT 'EDGE_COUNT='||count(*) FROM qa_lifecycle_checks WHERE passed;

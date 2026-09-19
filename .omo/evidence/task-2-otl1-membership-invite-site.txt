@@ -101,3 +101,46 @@ WORKTREE_BLOB=35496ed7ddb848e53012a949fed90182bf61183e
 HEAD_BLOB=35496ed7ddb848e53012a949fed90182bf61183e
 git fsck --no-dangling --no-reflogs printed no errors; git diff --check from exact base printed no errors.
 Judgment: the evidence artifact was non-empty, byte-identical to the blob committed at verified HEAD, and backed by a clean repository plus zero disposable PostgreSQL leftovers.
+
+VERIFIER REJECTION AND PRODUCT FIX - COMPLETE SNAPSHOT PROVENANCE
+Supersession: all earlier "39 machine-counted edges" lines above are historical command output from a rejected tautological literal counter. They are not completion evidence. The state-backed checks below replace them.
+
+Failing-first scenario on pre-fix HEAD 1f81b7f6c9afc59edf7b822db13575064a944f89:
+Invocation: bun qa/member-lifecycle-pg.mjs
+Binary observable: exit 1
+Exact decisive output before migration 029 changed:
+{"date": "2026-09-22", "reason": null, "changed": true, "eligible": true}
+ERROR: grace is not seven calendar days
+Judgment: observe_member_join advanced workspace_channels.membership_observed_at, migration 029 accepted that single-member observation as the day's complete snapshot, and the false eligible day opened grace one day early.
+
+Product correction and validation order:
+1. Migration 029 adds workspace_channels.complete_membership_observed_at with no historical backfill, so unknown pre-rollout provenance fails closed.
+2. Its community_execute wrapper delegates to migration 027 first. Malformed input raises and stale/equal observations return false before lifecycle evidence can change.
+3. Only a successful reconcile_channel_members result records the complete snapshot timestamp. observe_member_join continues to advance membership_observed_at but cannot change complete membership evidence.
+4. close_day reads only complete_membership_observed_at, then applies KST-date, prompt-sent, and clock bounds. Backdated member edits remain outside this path and stay transition-inert.
+5. Replacing the literal counter with database-state queries exposed that rollout_seeded events were absent because the main query could not see rows inserted by its data-modifying CTE. Selecting from the seeded CTE fixed that required immutable rollout lineage.
+
+Green focused scenario:
+Invocation: bun qa/member-lifecycle-pg.mjs
+Binary observable: exit 0
+Exact output:
+PASS lifecycle storage: 30 state-backed checks; JOIN_ONLY_ELIGIBLE=false; fresh+upgrade 001-029; KST closure/weekends/evidence; rollout; active/grace/extension/dormant/return; stale/duplicate/concurrent/cross-scope denial; immutable audit; rollback=0
+State-backed counter source: qa_lifecycle_checks contains 30 named rows whose booleans come from live PostgreSQL queries. The contract raises with the failing names before printing EDGE_COUNT; it no longer counts a literal name array.
+
+Preserved contracts:
+Invocation: bun qa/membership-reminder-audit-pg.mjs && bun qa/community-current-members.mjs
+Binary observable: exit 0
+Exact output:
+PASS migration 027: monotonic/empty/atomic membership, opt-out preserving rejoin, 201-member chunks, per-peer retry pruning, ambiguity-before-prune, durable common retry
+PASS current member snapshot: paginated, deduplicated, bounded human classification and partial failure closed
+
+Full repository gate:
+Invocation: bun run check
+Binary observable: exit 0
+Exact summary: Biome checked 113 source files; tsc passed; 54 isolated synthetic suites passed; Wrangler deploy --dry-run exited normally.
+
+Integrity and cleanup before the product-fix commit:
+git diff --check: exit 0, no output
+merge base: d2ce4812158557b0c6735f44f5a93f4a299fd596
+disposable PostgreSQL/temp cleanup: CLEANUP_ROWS=0
+Migration size note: migrations/029_member_lifecycle.sql is 334 nonblank/noncomment lines. It remains one serialized migration because splitting a not-yet-deployed schema transition would weaken atomic installation ordering; no runtime, scheduler, router, site, docs, or deployment files changed.
