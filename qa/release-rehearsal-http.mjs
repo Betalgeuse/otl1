@@ -33,13 +33,19 @@ try {
   const home = await ready(siteUrl, site);
   assert.equal(home.status, 200);
   assert.ok(home.headers.get("content-security-policy"));
+  const homeText = await home.text();
+  assert.match(homeText, /참여 문의 준비 중/);
+  const interest = await fetch(`${siteUrl}/interest`, { signal: AbortSignal.timeout(5000) });
+  assert.equal(interest.status, 503);
+  const interestSubmit = await fetch(`${siteUrl}/interest`, { method: "POST", body: new FormData(), signal: AbortSignal.timeout(5000) });
+  assert.equal(interestSubmit.status, 503);
   const referral = await fetch(`${siteUrl}/r/${"A".repeat(32)}`, { signal: AbortSignal.timeout(5000) });
   assert.equal(referral.status, 200);
   const invalid = await fetch(`${siteUrl}/r/invalid`, { signal: AbortSignal.timeout(5000) });
   assert.equal(invalid.status, 404);
   const stats = await (await fetch(`${coreUrl}/__qa/stats`, { signal: AbortSignal.timeout(5000) })).json();
   assert.ok(stats.resolveCalls >= 1, "site did not reach CORE service binding");
-  console.log(JSON.stringify({ status: "passed", http: [home.status, referral.status, invalid.status], coreResolveCalls: stats.resolveCalls }));
+  console.log(JSON.stringify({ status: "passed", http: [home.status, interest.status, interestSubmit.status, referral.status, invalid.status], coreResolveCalls: stats.resolveCalls }));
 } finally {
   for (const child of processes) child.kill("SIGTERM");
   await Promise.all(processes.map((child) => new Promise((done) => child.exitCode === null ? child.once("exit", done) : done())));

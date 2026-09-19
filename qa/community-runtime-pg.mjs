@@ -179,7 +179,7 @@ try {
   await run(join(pgBin, "initdb"), ["-D", data, "--no-locale", "--encoding=UTF8", "--auth=trust"]);
   await run(join(pgBin, "pg_ctl"), ["-D", data, "-o", `-F -k ${socket} -p ${port}`, "-l", join(temp, "postgres.log"), "-w", "start"]);
   started = true;
-  for (const migration of migrations.filter((name) => Number(name.slice(0, 3)) <= 34)) {
+  for (const migration of migrations.filter((name) => Number(name.slice(0, 3)) <= 37)) {
     if (migration.startsWith("006_"))
       await run(join(pgBin, "psql"), ["-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", `migrations/${migration}`, "-f", "migrations/007_normalized_legacy.sql"]);
     else if (!migration.startsWith("007_"))
@@ -204,7 +204,7 @@ try {
   assert.equal(slackEffects.filter((effect) => effect.method === "chat.postEphemeral").length, 1);
   const linkEffect = slackEffects.find((effect) => effect.method === "chat.postEphemeral");
   assert.ok(linkEffect);
-  const token = new URL(linkEffect.payload.text).pathname.split("/").at(-1);
+  const token = new URL(linkEffect.payload.text.split("\n")[0]).pathname.split("/").at(-1);
   assert.equal(token.length, 32);
   const application = JSON.stringify({ referralToken: token, submissionKey: "submission-0001",
     consentVersion: "invite-consent-v1", consentedAt: new Date().toISOString(),
