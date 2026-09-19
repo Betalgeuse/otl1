@@ -19,6 +19,13 @@ const protectedTables = [
   "bug_report_revisions", "bug_artifacts", "bug_private_objects",
   "workspace_channel_memberships", "community_reminder_audit",
 ];
+const additiveTables = [
+  "referral_capacity_defaults", "referral_capacity_members", "referral_capacity_events",
+  "interest_requests", "interest_consents", "interest_attachment_consents",
+  "interest_private_payloads", "interest_submission_receipts", "interest_introduction_evidence",
+  "interest_referral_bridges", "interest_events", "interest_outbox", "interest_service_nonces",
+  "interest_introduction_prompts",
+];
 const focusedQa = [
   "release-rehearsal-http", "release-rehearsal-leak", "member-lifecycle-pg", "lifecycle-delivery-pg", "lifecycle-admin-security",
   "referral-storage-pg", "referral-retention-pg", "community-runtime-pg",
@@ -108,14 +115,34 @@ async function apply(database, names) {
     await psql(database, args);
   }
 }
-async function digest(database) {
+async function digest(database, tables = protectedTables) {
   const result = {};
-  for (const name of protectedTables) {
+  for (const name of tables) {
     if (await scalar(database, `SELECT to_regclass('otl.${name}') IS NULL`) === "t") continue;
     const value = await scalar(database, `SELECT count(*)||':'||md5(coalesce(string_agg(md5(to_jsonb(t)::text),',' ORDER BY md5(to_jsonb(t)::text)),'') ) FROM otl.${name} t`);
     result[name] = value;
   }
   return result;
+}
+async function seedAdditive(database) {
+  await psql(database, ["-c", "INSERT INTO otl.referral_admins(team_id,user_id) VALUES('TLIFE','UACTIVE') ON CONFLICT DO NOTHING"]);
+  const capacity = { teamId: "TLIFE", adminId: "UACTIVE", maximum: 2, expectedRevision: 0,
+    key: "rehearsal_default", now: "2026-09-20T00:00:00Z" };
+  const interest = { teamId: "TLIFE", interestId: "IREQ-REHEARSAL1", receiptId: "INT-REHEARSAL1",
+    emailDigest: "a".repeat(64), contentDigest: "b".repeat(64), withdrawalDigest: "c".repeat(64),
+    consentVersion: "interest-consent-v1", consentedAt: "2026-09-20T00:00:00Z",
+    inviteConsentAccepted: true, inviteConsentedAt: "2026-09-20T00:00:00Z",
+    shareNameEmailWithIntroducer: false, key: "rehearsal_interest", now: "2026-09-20T00:00:00Z",
+    opaqueRef: "interest-private/IREQ-REHEARSAL1/revision-0-12345678-1234-1234-1234-123456789abc.enc",
+    objectDigest: "d".repeat(64), envelopeDek: "synthetic.envelope", nonce: "synthetic-nonce",
+    keyVersion: "synthetic-kek", schemaVersion: "interest-application.v1" };
+  await scalar(database, `SELECT otl.referral_capacity_admin_execute('set_default','${JSON.stringify(capacity)}'::jsonb)`);
+  await scalar(database, `SELECT otl.interest_runtime_execute('submit','${JSON.stringify(interest)}'::jsonb)`);
+  assert.equal(await scalar(database, "SELECT count(*) FROM otl.interest_requests"), "1");
+  assert.equal(await scalar(database, "SELECT count(*) FROM otl.interest_consents"), "1");
+  assert.equal(await scalar(database, "SELECT count(*) FROM otl.interest_attachment_consents"), "1");
+  assert.equal(await scalar(database, "SELECT count(*) FROM otl.referral_capacity_events"), "1");
+  return digest(database, additiveTables);
 }
 async function expectFailure(name, action) {
   let failed = false;
@@ -255,6 +282,8 @@ try {
   const after = await digest(primaryDb);
   assert.deepEqual(after, before, "protected rows changed during upgrade");
   receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "037", protected: before };
+  if (injection === "missing-role")
+    await psql(primaryDb, ["-c", "REVOKE otl_interest_member FROM otl_interest_member_login"]);
   await expectFailure("migration-conflict", () => psql(primaryDb, ["-f", "migrations/037_interest_requests.sql"]));
   await expectFailure("wrong-role", () => scalarAs(primaryDb, "otl_interest_member_login", "SELECT otl.interest_admin_execute('context','{}'::jsonb)"));
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_referral_runtime','otl.issue_invite(text,text,text,text,text)','EXECUTE')"), "f");
@@ -263,6 +292,8 @@ try {
   assert.equal(await scalar(primaryDb, "SELECT has_table_privilege('otl_referral_admin_login','otl.referral_capacity_members','UPDATE')"), "f");
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_member_login','otl.interest_admin_execute(text,jsonb)','EXECUTE')"), "f");
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_referral_runtime','otl.interest_admin_execute(text,jsonb)','EXECUTE')"), "f");
+  assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_member_login','otl.interest_member_confirm(jsonb)','EXECUTE')"), "t", "interest member role binding missing");
+  assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_referral_admin_login','otl.referral_capacity_admin_execute(text,jsonb)','EXECUTE')"), "t", "referral admin role binding missing");
   receipt.checks.roleMatrix = { exit: 0, observed: "direct interest/quota table grants and admin execute denied" };
   assert.equal(await scalarAs(primaryDb, "otl_interest_member_login", "SELECT current_user"), "otl_interest_member_login");
   assert.equal(await scalarAs(primaryDb, "otl_referral_admin_login", "SELECT current_user"), "otl_referral_admin_login");
@@ -277,6 +308,8 @@ try {
     await psql(primaryDb, ["-c", "GRANT SELECT ON otl.interest_requests TO otl_interest_member_login"]);
     assert.equal(await scalar(primaryDb, "SELECT has_table_privilege('otl_interest_member_login','otl.interest_requests','SELECT')"), "f", "direct interest table grant detected");
   }
+  const additiveBefore = await seedAdditive(primaryDb);
+  receipt.checks.additiveRows = { exit: 0, tables: additiveBefore };
   await check("restore-035", join(pgBin, "pg_restore"), ["--no-owner", "--no-acl", "--exit-on-error", "-d", rollbackDb, join(temp, "snapshot.dump")], { env: pgEnv });
   assert.equal(await scalar(rollbackDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '035-%'"), "1");
   if (injection === "rollback-mismatch") await psql(rollbackDb, ["-c", "UPDATE otl.community_days SET reflection='changed' WHERE user_id='UACTIVE'"]);
@@ -287,6 +320,7 @@ try {
   await psql(rollbackDb, ["-c", "DROP TABLE otl.referral_capacity_defaults"]);
   await apply(rollbackDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
   assert.deepEqual(await digest(rollbackDb), before, "forward repair changed protected rows");
+  assert.deepEqual(await seedAdditive(rollbackDb), additiveBefore, "forward repair changed additive row contract");
   receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "037" };
   await apply(freshDb, migrations);
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '037-%'"), "1");
