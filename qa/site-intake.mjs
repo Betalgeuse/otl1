@@ -68,9 +68,30 @@ const env = {
 
 const originalFetch = globalThis.fetch;
 let verifyMode = "ok";
+const siteverifyTrace = [];
+const issuedAt = new Map([
+  ["synthetic-expired-token", Date.now() - 301_000],
+  ["synthetic-one-time-token", Date.now()],
+]);
+const consumedTokens = new Set();
 globalThis.fetch = async (url, init) => {
   assert.equal(String(url), "https://challenges.cloudflare.com/turnstile/v0/siteverify");
   assert.equal(init.method, "POST");
+  const siteverifyForm = new URLSearchParams(init.body);
+  assert.equal(siteverifyForm.get("secret"), turnstileSecret);
+  const token = siteverifyForm.get("response");
+  const tokenTime = issuedAt.get(token);
+  if (tokenTime !== undefined) {
+    const expired = Date.now() - tokenTime > 300_000;
+    const reused = consumedTokens.has(token);
+    const scenario = expired ? "expired" : reused ? "reused" : "first-use";
+    const response = expired || reused
+      ? { success: false, "error-codes": ["timeout-or-duplicate"] }
+      : { success: true, hostname: "example.com" };
+    if (!expired && !reused) consumedTokens.add(token);
+    siteverifyTrace.push({ scenario, response });
+    return Response.json(response);
+  }
   if (verifyMode === "timeout") throw new DOMException("timed out", "TimeoutError");
   if (verifyMode === "invalid") return Response.json({ success: false, "error-codes": ["timeout-or-duplicate"] });
   return Response.json({ success: true, hostname: "example.com" });
@@ -150,6 +171,40 @@ try {
   }
   assert.equal(new Set(genericBodies).size, 1);
   assert.doesNotMatch(genericBodies[0], /paused|outage|example\.com|referral/i);
+
+  const applyCountBeforeTurnstile = coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length;
+  const expiredTurnstile = await call(`/r/${referralToken}/apply`, {
+    method: "POST",
+    body: form({ "cf-turnstile-response": "synthetic-expired-token", submissionKey: "expired-turnstile-key-1234" }),
+  });
+  assert.equal(expiredTurnstile.status, 422);
+  const expiredFeedback = await expiredTurnstile.text();
+  assert.match(expiredFeedback, /요청을 지금 처리할 수 없어요/);
+  assert.doesNotMatch(expiredFeedback, /synthetic-expired-token|person@example.com/);
+  assert.equal(coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length, applyCountBeforeTurnstile);
+
+  const oneTimeToken = "synthetic-one-time-token";
+  const firstTokenUse = await call(`/r/${referralToken}/apply`, {
+    method: "POST",
+    body: form({ "cf-turnstile-response": oneTimeToken, submissionKey: "turnstile-first-use-1234" }),
+  });
+  assert.equal(firstTokenUse.status, 303);
+  const applyCountAfterFirstUse = coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length;
+  assert.equal(applyCountAfterFirstUse, applyCountBeforeTurnstile + 1);
+  const reusedTurnstile = await call(`/r/${referralToken}/apply`, {
+    method: "POST",
+    body: form({ "cf-turnstile-response": oneTimeToken, submissionKey: "turnstile-reused-1234" }),
+  });
+  assert.equal(reusedTurnstile.status, 422);
+  const reusedFeedback = await reusedTurnstile.text();
+  assert.equal(reusedFeedback, expiredFeedback);
+  assert.equal(coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length, applyCountAfterFirstUse);
+  assert.deepEqual(siteverifyTrace, [
+    { scenario: "expired", response: { success: false, "error-codes": ["timeout-or-duplicate"] } },
+    { scenario: "first-use", response: { success: true, hostname: "example.com" } },
+    { scenario: "reused", response: { success: false, "error-codes": ["timeout-or-duplicate"] } },
+  ]);
+  console.log(`SITEVERIFY_NEGATIVE_OBSERVABLES=${JSON.stringify({ expiredStatus: expiredTurnstile.status, firstUseStatus: firstTokenUse.status, reusedStatus: reusedTurnstile.status, safeFeedback: expiredFeedback === reusedFeedback && expiredFeedback.includes("요청을 지금 처리할 수 없어요"), coreApplyDelta: applyCountAfterFirstUse - applyCountBeforeTurnstile, rejectedCoreApplyDelta: coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length - applyCountAfterFirstUse, trace: siteverifyTrace })}`);
 
   verifyMode = "invalid";
   const invalidTurnstile = await call(`/r/${referralToken}/apply`, { method: "POST", body: form() });

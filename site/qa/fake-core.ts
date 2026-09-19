@@ -1,5 +1,6 @@
 type Env = { readonly SITE_CORE_HMAC_SECRET: string };
 const receipts = new Map<string, { readonly receiptId: string; readonly withdrawalToken: string; withdrawn: boolean }>();
+let resolveCalls = 0;
 let applyCalls = 0;
 let created = 0;
 let withdrawals = 0;
@@ -17,11 +18,12 @@ function opaque(prefix: string): string { return `${prefix}-${crypto.randomUUID(
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/__qa/stats") return Response.json({ applyCalls, created, withdrawals, receipts: receipts.size });
+    if (request.method === "GET" && url.pathname === "/__qa/stats") return Response.json({ resolveCalls, applyCalls, created, withdrawals, receipts: receipts.size });
     const body = await request.text();
     if (request.headers.get("x-otl-signature") !== await signature(env.SITE_CORE_HMAC_SECRET, request, body)) return new Response("Unauthorized", { status: 401 });
     const input = JSON.parse(body) as Record<string, string>;
     if (url.pathname === "/internal/referrals/resolve") {
+      resolveCalls += 1;
       return Response.json({ available: input.referralToken === "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" });
     }
     if (url.pathname === "/internal/referrals/apply") {
