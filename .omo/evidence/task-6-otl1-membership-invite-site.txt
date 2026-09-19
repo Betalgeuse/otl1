@@ -1,0 +1,50 @@
+TASK 6 EVIDENCE - lifecycle runtime evaluation and private notice delivery
+Base: 365493ac82962cf6d48c17911066b4e1ddbd4887
+Worktree: /Users/zayden/Documents/otl1-worktrees/membership-lifecycle-runtime
+Date: 2026-09-19 Asia/Seoul
+
+SCENARIO failing-first runtime contract
+Invocation: bun qa/member-lifecycle.mjs
+Binary observable: exit 1 before durable evaluator/delivery implementation
+Captured output: error: EXPECTED_LIFECYCLE_RED: durable evaluator and delivery store are not implemented
+Artifact: .omo/evidence/task-6-otl1-membership-invite-site.txt
+
+SCENARIO typed evaluator, signed Block Kit actions, fake clock, and executable fake Slack HTTP
+Invocation: bun qa/member-lifecycle.mjs
+Binary observable: exit 0
+Captured output: PASS lifecycle runtime: modes, typed reminder suppression, signed owner/admin actions, no continue, DM dedupe/retry/scope, maintenance and health fail-closed, bounded backlog
+Exact observables: disabled/shadow/enforce parsing; grace/dormant ordinary-reminder ineligibility independent of policy notices; HMAC tamper, stale-owner, cross-user, and admin-only action rejection; action allowlist contains lifecycle_extend/lifecycle_review/lifecycle_stop and no continue; required DM scope is exactly im:write; a Bun HTTP fake accepts one deterministic client_msg_id, loses its response, then observes one Slack effect after retry; 429/5xx retry and missing im:write dead-letter; maintenance, incomplete common-delivery health, and DB outage cause zero Slack calls; a restarted fake clock drains the batch after a saturated run; result/log corpus contains counts/error codes and no IDs, message text, or payload.
+Artifact: qa/member-lifecycle.mjs
+
+SCENARIO real disposable PostgreSQL lifecycle runtime and durable outbox
+Invocation: bun qa/lifecycle-delivery-pg.mjs
+Binary observable: exit 0
+Captured output: PASS lifecycle PG: fresh+upgrade 001-032; shadow zero-effect; bounded fairness; enforce outbox; exact revision; 429 retry; role isolation
+Exact observables: migrations 001-032 apply on upgrade-shaped and fresh databases; shadow records the seven-day explanation/counted dates with zero lifecycle transition and zero outbox rows; fixed limit=1 reports possiblyMore until the next member is processed; enforce transitions active to grace and creates exactly start, deadline-3d, and deadline-24h rows at KST boundaries; only a stored current goal cancels grace and both future notices; replay is idempotent; stale revision rolls back with revision and action-row count unchanged; extension reschedules notices once; review persists an inspectable request; stop closes the season; admin restore reopens the same season with evidence; automatic deadline expiry emits closure; a new stored goal emits return; policy-notice claims do not read reminder preferences; concurrent claim has one winner; retry is gated by retry_at; attempt 3 becomes dead; runtime role cannot read tables or call admin restore; fresh DB records migration 032 once; PostgreSQL stops and its unique temp directory is recursively removed in finally.
+Artifact: qa/lifecycle-delivery-pg.mjs
+
+SCENARIO preserved migration and delivery contracts
+Invocation: bun qa/member-lifecycle-pg.mjs && bun qa/referral-storage-pg.mjs && bun qa/review-thread-topology-pg.mjs && bun qa/garden-delivery-pg.mjs
+Binary observable: every command exits 0
+Captured outputs:
+PASS lifecycle storage: 30 state-backed checks; JOIN_ONLY_ELIGIBLE=false; fresh+upgrade 001-029; KST closure/weekends/evidence; rollout; active/grace/extension/dormant/return; stale/duplicate/concurrent/cross-scope denial; immutable audit; rollback=0
+PASS referral storage: fresh+upgrade=001-030 checks=61 concurrent-open=1 concurrent-decision=1 pii-rows=0 roles=isolated rollback=clean legacy=disabled
+PASS review topology 031: baseline fan-out/top-level, exact review root, held replies, review-only gardens, idempotent concurrency, replacement-before-retirement, reversible payload, tenant isolation, fresh+upgrade
+PASS PostgreSQL 025 transactionally enqueues garden, retries failures, reclaims accepted-response loss, and suppresses replay duplicates
+Artifacts: qa/member-lifecycle-pg.mjs, qa/referral-storage-pg.mjs, qa/review-thread-topology-pg.mjs, qa/garden-delivery-pg.mjs
+
+SCENARIO TypeScript strictness and repository gate
+Invocations:
+bun /Users/zayden/.codex/plugins/cache/sisyphuslabs/omo/4.19.4/skills/programming/scripts/typescript/check-no-excuse-rules.ts src/community-lifecycle-delivery.ts src/community-lifecycle-evaluator.ts src/community-lifecycle-interactions.ts src/community-lifecycle-runtime-store.ts src/community-lifecycle-runtime-types.ts src/community-lifecycle-runtime.ts
+bunx biome check src/community-lifecycle-*.ts qa/member-lifecycle.mjs qa/lifecycle-delivery-pg.mjs
+bun run typecheck
+bun run check
+Binary observable: every command exits 0
+Captured output: No violations in 6 file(s); Biome clean; tsc --noEmit clean; full check lint/typecheck/54 isolated suites/Wrangler dry-run pass.
+Artifact: .omo/evidence/task-6-otl1-membership-invite-site.txt
+
+SCENARIO scope, integrity, and cleanup
+Invocation: git diff --check; git status --short; find ${TMPDIR:-/tmp} -maxdepth 1 -name 'otl-lifecycle-delivery-*' -print
+Binary observable: diff check exits 0; only Todo 6 migration/runtime/QA/evidence paths are changed; cleanup find prints zero paths.
+Boundary: central community-clock/index/worker-entry/event/router/manifest/wrangler/garden/referral/site files are unchanged. Todo 11 owns wiring migration 032 and these modules into the canonical clock/router and installing the declared im:write scope.
+Artifact: .omo/evidence/task-6-otl1-membership-invite-site.txt
