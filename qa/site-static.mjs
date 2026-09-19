@@ -11,6 +11,7 @@ const worker = await read("site/src/index.ts");
 const page = await read("site/dist/index.html");
 const css = await read("site/dist/styles.css");
 const script = await read("site/dist/app.js");
+const observations = JSON.parse(await read(".omo/evidence/task-5-browser-observations.json"));
 const documentText = page.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 await Promise.all([
@@ -51,7 +52,7 @@ for (const fragment of [
 
 assert.match(css, /prefers-reduced-motion:\s*reduce/);
 assert.match(css, /:focus-visible/);
-assert.match(css, /overflow-x:\s*clip/);
+assert.doesNotMatch(css, /overflow-x:\s*clip/);
 assert.match(script, /IntersectionObserver/);
 assert.match(script, /classList\.add\("has-js"\)/);
 assert.match(css, /\.has-js \.site-links/);
@@ -60,6 +61,16 @@ assert.doesNotMatch(page, /thread-scene"[^>]*role="img"/);
 assert.doesNotMatch(css, /animation:\s*[^;]*infinite/);
 assert.match(css, /#home-title \{ font-size:2\.45rem; word-break:keep-all/);
 assert.match(css, /body \{[^}]*word-break:keep-all/);
+
+const mobile = observations.viewports?.["320"];
+assert.ok(mobile, "missing real 320px browser observation contract");
+assert.equal(mobile.viewportWidth, 320);
+for (const [name, measurement] of Object.entries(mobile.components ?? {})) {
+  assert.ok(measurement.clientWidth >= measurement.scrollWidth, `${name} has intrinsic horizontal overflow`);
+  assert.ok(measurement.left >= 0, `${name} extends left of the viewport`);
+  assert.ok(measurement.right <= mobile.viewportWidth, `${name} extends right of the viewport`);
+}
+assert.deepEqual(mobile.visibleOverflow, [], "visible descendants exceed the 320px viewport");
 
 for (const contents of [JSON.stringify(config), worker, page, css, script]) {
   assert.doesNotMatch(contents, /ineffable/i);

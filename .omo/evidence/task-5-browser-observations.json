@@ -1,18 +1,305 @@
 {
+  "viewports": {
+    "320": {
+      "viewportWidth": 320,
+      "document": {
+        "clientWidth": 320,
+        "scrollWidth": 320,
+        "left": 0,
+        "right": 320,
+        "width": 320
+      },
+      "body": {
+        "clientWidth": 320,
+        "scrollWidth": 320,
+        "left": 0,
+        "right": 320,
+        "width": 320
+      },
+      "components": {
+        "hero": {
+          "clientWidth": 288,
+          "scrollWidth": 288,
+          "left": 16,
+          "right": 304,
+          "width": 288
+        },
+        "thread": {
+          "clientWidth": 288,
+          "scrollWidth": 288,
+          "left": 16,
+          "right": 304,
+          "width": 288
+        },
+        "peer": {
+          "clientWidth": 238,
+          "scrollWidth": 238,
+          "left": 62.078125,
+          "right": 303.984375,
+          "width": 241.90625
+        },
+        "home": {
+          "clientWidth": 320,
+          "scrollWidth": 320,
+          "left": 0,
+          "right": 320,
+          "width": 320
+        }
+      },
+      "visibleOverflow": [],
+      "firstFocus": {
+        "tag": "A",
+        "outline": "3px"
+      },
+      "secondFocus": {
+        "tag": "BUTTON",
+        "outline": "3px"
+      },
+      "menuOpen": {
+        "expanded": "true",
+        "display": "grid"
+      }
+    },
+    "375": {
+      "viewportWidth": 375,
+      "document": {
+        "clientWidth": 375,
+        "scrollWidth": 375,
+        "left": 0,
+        "right": 375,
+        "width": 375
+      },
+      "body": {
+        "clientWidth": 375,
+        "scrollWidth": 375,
+        "left": 0,
+        "right": 375,
+        "width": 375
+      },
+      "components": {
+        "hero": {
+          "clientWidth": 343,
+          "scrollWidth": 343,
+          "left": 16,
+          "right": 359,
+          "width": 343
+        },
+        "thread": {
+          "clientWidth": 343,
+          "scrollWidth": 343,
+          "left": 16,
+          "right": 359,
+          "width": 343
+        },
+        "peer": {
+          "clientWidth": 264,
+          "scrollWidth": 264,
+          "left": 70.875,
+          "right": 338.40625,
+          "width": 267.53125
+        },
+        "home": {
+          "clientWidth": 375,
+          "scrollWidth": 375,
+          "left": 0,
+          "right": 375,
+          "width": 375
+        }
+      },
+      "visibleOverflow": []
+    },
+    "1440": {
+      "viewportWidth": 1440,
+      "document": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "left": 0,
+        "right": 1440,
+        "width": 1440
+      },
+      "body": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "left": 0,
+        "right": 1440,
+        "width": 1440
+      },
+      "components": {
+        "hero": {
+          "clientWidth": 700,
+          "scrollWidth": 700,
+          "left": 689.59375,
+          "right": 1389.59375,
+          "width": 700
+        },
+        "thread": {
+          "clientWidth": 1240,
+          "scrollWidth": 1240,
+          "left": 100,
+          "right": 1340,
+          "width": 1240
+        },
+        "peer": {
+          "clientWidth": 296,
+          "scrollWidth": 296,
+          "left": 534,
+          "right": 834,
+          "width": 300
+        },
+        "home": {
+          "clientWidth": 1440,
+          "scrollWidth": 1440,
+          "left": 0,
+          "right": 1440,
+          "width": 1440
+        }
+      },
+      "visibleOverflow": []
+    }
+  },
   "desktop": {
-    "scrollWidth": 1440,
-    "clientWidth": 1440,
-    "hiddenReveals": 0
+    "viewportWidth": 1440,
+    "document": {
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "left": 0,
+      "right": 1440,
+      "width": 1440
+    },
+    "body": {
+      "clientWidth": 1440,
+      "scrollWidth": 1440,
+      "left": 0,
+      "right": 1440,
+      "width": 1440
+    },
+    "components": {
+      "hero": {
+        "clientWidth": 700,
+        "scrollWidth": 700,
+        "left": 689.59375,
+        "right": 1389.59375,
+        "width": 700
+      },
+      "thread": {
+        "clientWidth": 1240,
+        "scrollWidth": 1240,
+        "left": 100,
+        "right": 1340,
+        "width": 1240
+      },
+      "peer": {
+        "clientWidth": 296,
+        "scrollWidth": 296,
+        "left": 534,
+        "right": 834,
+        "width": 300
+      },
+      "home": {
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "left": 0,
+        "right": 1440,
+        "width": 1440
+      }
+    },
+    "visibleOverflow": []
   },
   "mobile": {
-    "scrollWidth": 375,
-    "clientWidth": 375,
-    "hiddenReveals": 1
+    "viewportWidth": 375,
+    "document": {
+      "clientWidth": 375,
+      "scrollWidth": 375,
+      "left": 0,
+      "right": 375,
+      "width": 375
+    },
+    "body": {
+      "clientWidth": 375,
+      "scrollWidth": 375,
+      "left": 0,
+      "right": 375,
+      "width": 375
+    },
+    "components": {
+      "hero": {
+        "clientWidth": 343,
+        "scrollWidth": 343,
+        "left": 16,
+        "right": 359,
+        "width": 343
+      },
+      "thread": {
+        "clientWidth": 343,
+        "scrollWidth": 343,
+        "left": 16,
+        "right": 359,
+        "width": 343
+      },
+      "peer": {
+        "clientWidth": 264,
+        "scrollWidth": 264,
+        "left": 70.875,
+        "right": 338.40625,
+        "width": 267.53125
+      },
+      "home": {
+        "clientWidth": 375,
+        "scrollWidth": 375,
+        "left": 0,
+        "right": 375,
+        "width": 375
+      }
+    },
+    "visibleOverflow": []
   },
   "small": {
-    "scrollWidth": 320,
-    "clientWidth": 320,
-    "hiddenReveals": 1,
+    "viewportWidth": 320,
+    "document": {
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "left": 0,
+      "right": 320,
+      "width": 320
+    },
+    "body": {
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "left": 0,
+      "right": 320,
+      "width": 320
+    },
+    "components": {
+      "hero": {
+        "clientWidth": 288,
+        "scrollWidth": 288,
+        "left": 16,
+        "right": 304,
+        "width": 288
+      },
+      "thread": {
+        "clientWidth": 288,
+        "scrollWidth": 288,
+        "left": 16,
+        "right": 304,
+        "width": 288
+      },
+      "peer": {
+        "clientWidth": 238,
+        "scrollWidth": 238,
+        "left": 62.078125,
+        "right": 303.984375,
+        "width": 241.90625
+      },
+      "home": {
+        "clientWidth": 320,
+        "scrollWidth": 320,
+        "left": 0,
+        "right": 320,
+        "width": 320
+      }
+    },
+    "visibleOverflow": [],
     "firstFocus": {
       "tag": "A",
       "outline": "3px"
@@ -26,9 +313,23 @@
       "display": "grid"
     }
   },
+  "focusFirst": {
+    "tag": "A",
+    "outline": "3px"
+  },
+  "focusSecond": {
+    "tag": "BUTTON",
+    "outline": "3px"
+  },
+  "menuOpen": {
+    "expanded": "true",
+    "display": "grid"
+  },
   "longKorean": {
     "scrollWidth": 320,
     "clientWidth": 320,
+    "bodyScrollWidth": 320,
+    "bodyClientWidth": 320,
     "overflow": false,
     "targetVisible": true
   },
@@ -36,7 +337,9 @@
     "story": true,
     "linksDisplay": "grid",
     "scrollWidth": 375,
-    "clientWidth": 375
+    "clientWidth": 375,
+    "bodyScrollWidth": 375,
+    "bodyClientWidth": 375
   },
   "reducedMotion": {
     "media": true,

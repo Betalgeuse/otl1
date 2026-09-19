@@ -1,0 +1,60 @@
+{
+  "viewportWidth": 320,
+  "document": {
+    "clientWidth": 320,
+    "scrollWidth": 320,
+    "left": 0,
+    "right": 320,
+    "width": 320
+  },
+  "body": {
+    "clientWidth": 320,
+    "scrollWidth": 320,
+    "left": 0,
+    "right": 320,
+    "width": 320
+  },
+  "components": {
+    "hero": {
+      "clientWidth": 288,
+      "scrollWidth": 288,
+      "left": 16,
+      "right": 304,
+      "width": 288
+    },
+    "thread": {
+      "clientWidth": 288,
+      "scrollWidth": 288,
+      "left": 16,
+      "right": 304,
+      "width": 288
+    },
+    "peer": {
+      "clientWidth": 238,
+      "scrollWidth": 238,
+      "left": 62.078125,
+      "right": 303.984375,
+      "width": 241.90625
+    },
+    "home": {
+      "clientWidth": 320,
+      "scrollWidth": 320,
+      "left": 0,
+      "right": 320,
+      "width": 320
+    }
+  },
+  "visibleOverflow": [],
+  "firstFocus": {
+    "tag": "A",
+    "outline": "3px"
+  },
+  "secondFocus": {
+    "tag": "BUTTON",
+    "outline": "3px"
+  },
+  "menuOpen": {
+    "expanded": "true",
+    "display": "grid"
+  }
+}

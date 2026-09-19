@@ -1,0 +1,119 @@
+{
+  "viewport": 320,
+  "document": {
+    "clientWidth": 320,
+    "scrollWidth": 320
+  },
+  "body": {
+    "clientWidth": 320,
+    "scrollWidth": 370
+  },
+  "hero": {
+    "selector": ".hero-illustration",
+    "clientWidth": 331,
+    "scrollWidth": 331,
+    "left": 39.046875,
+    "right": 370.234375,
+    "width": 331.1875
+  },
+  "thread": {
+    "selector": ".thread-scene",
+    "clientWidth": 288,
+    "scrollWidth": 300,
+    "left": 16,
+    "right": 304,
+    "width": 288
+  },
+  "overflowing": [
+    {
+      "tag": "SPAN",
+      "className": "sr-only",
+      "left": 282,
+      "right": 283,
+      "width": 1,
+      "clientWidth": 1,
+      "scrollWidth": 60
+    },
+    {
+      "tag": "MAIN",
+      "className": "",
+      "left": 0,
+      "right": 320,
+      "width": 320,
+      "clientWidth": 320,
+      "scrollWidth": 370
+    },
+    {
+      "tag": "SECTION",
+      "className": "chapter chapter--paper",
+      "left": 0,
+      "right": 320,
+      "width": 320,
+      "clientWidth": 320,
+      "scrollWidth": 370
+    },
+    {
+      "tag": "DIV",
+      "className": "chapter-inner",
+      "left": 16,
+      "right": 304,
+      "width": 288,
+      "clientWidth": 288,
+      "scrollWidth": 354
+    },
+    {
+      "tag": "svg",
+      "className": "hero-illustration",
+      "left": 39.046875,
+      "right": 370.234375,
+      "width": 331.1875,
+      "clientWidth": 331,
+      "scrollWidth": 331
+    },
+    {
+      "tag": "path",
+      "className": "ink-stroke",
+      "left": 59.503196716308594,
+      "right": 348.8039779663086,
+      "width": 289.30078125,
+      "clientWidth": 0,
+      "scrollWidth": 0
+    },
+    {
+      "tag": "path",
+      "className": "ink-stroke thin",
+      "left": 59.503196716308594,
+      "right": 348.8039779663086,
+      "width": 289.30078125,
+      "clientWidth": 0,
+      "scrollWidth": 0
+    },
+    {
+      "tag": "DIV",
+      "className": "chapter-inner",
+      "left": 16,
+      "right": 304,
+      "width": 288,
+      "clientWidth": 288,
+      "scrollWidth": 300
+    },
+    {
+      "tag": "DIV",
+      "className": "thread-scene",
+      "left": 16,
+      "right": 304,
+      "width": 288,
+      "clientWidth": 288,
+      "scrollWidth": 300
+    },
+    {
+      "tag": "H3",
+      "className": "sr-only",
+      "left": 16,
+      "right": 17,
+      "width": 1,
+      "clientWidth": 1,
+      "scrollWidth": 333
+    }
+  ]
+}

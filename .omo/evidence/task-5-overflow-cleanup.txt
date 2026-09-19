@@ -1,0 +1,1 @@
+cleanup: local Wrangler server stopped; debug journal removed; no inspector or trace artifacts created.
