@@ -99,3 +99,24 @@ welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_r
 자기소개 모달은 본인에게 바인딩합니다. 소개는 줄바꿈을 포함해 180자 이내이며, 선택적 LinkedIn은 `https://*.linkedin.com/in/...` 프로필 주소만 받고 쿼리와 fragment를 제거합니다. 웹사이트·GitHub·포트폴리오 같은 기타 공개 정보는 별도 한 줄 300자 이내로 저장합니다. `member_introductions`의 revision과 준비·확정 상태가 동시 수정을 막습니다. 최초 제출은 설정된 자기소개 채널에 게시하고 이후 수정은 저장된 `message_ts`를 사용해 같은 Slack 메시지를 갱신합니다. 전체 보기에는 확정된 현재 소개만 사용하며 이전 문장은 회원에게 노출하지 않습니다.
 
 구체적인 설정·실행 명령은 [개발 가이드](DEVELOPMENT.md)에서만 관리합니다.
+
+## 계획된 membership·site 경계
+
+다음 구조는 v0.0.56–v0.0.64의 미출시 경계입니다. core Worker는 Slack 서명, lifecycle·소개 신청 저장, R2 비공개 객체와 Slack 효과를 맡고, 공개 site Worker는 서비스 바인딩 `CORE`로만 core에 요청합니다. site Worker에는 Slack·Neon 자격증명을 두지 않습니다.
+
+```mermaid
+flowchart LR
+  Visitor[공개 방문자] --> Turnstile[Turnstile 서버 검증]
+  Turnstile --> Site[site Worker]
+  Site -->|HMAC timestamp nonce| Core[core Worker]
+  Core --> DB[(Neon: 상태 감사 digest)]
+  Core --> InviteR2[(INVITE_PRIVATE_OBJECTS: 암호문)]
+  Core --> Slack[Slack private admin card / DM]
+  Slack -->|team_join| Core
+```
+
+신청 본문·이메일·철회 capability는 R2의 전용 `INVITE_PRIVATE_OBJECTS`에 versioned AEAD 암호문으로 둡니다. 관계형 DB에는 opaque reference, digest, 동의·상태·revision·최소 감사 값만 남깁니다. `SITE_CORE_HMAC_SECRET`은 site와 core의 요청 인증에, `INVITE_EMAIL_PEPPER`는 정규화 이메일 equality digest에, `INVITE_PRIVATE_KEK`과 `INVITE_PRIVATE_KEK_VERSION`은 신청 비공개 객체에만 사용합니다. 이 값은 공개 구성·브라우저·로그·export에 넣지 않습니다.
+
+사이트의 Turnstile 검증은 서버에서 hostname·action·single-use token을 확인한 뒤에만 신청을 core에 전달합니다. nonce와 timestamp는 재사용을 거절하고 사용 후 정리합니다. core는 애플리케이션 승인과 Slack 초대를 분리합니다. `approved`는 내부 검토 결과일 뿐이고, `mark-invited`는 관리자가 Free Slack UI에서 수동으로 보낸 초대의 관찰 기록일 뿐 배달·가입 증명은 아닙니다. 검증된 이메일과 `team_join`을 대조한 뒤에만 소개 출처를 회원 관계로 기록합니다.
+
+활성 플래그는 모두 기본 꺼짐이며 서로 독립적입니다. `LIFECYCLE_MODE=disabled|shadow|enforce`, `REVIEW_THREAD_V2`, `GARDEN_RECONCILIATION`, `REFERRALS_ENABLED`, `PUBLIC_APPLICATIONS_ENABLED` 중 하나가 없거나 잘못되면 새 경로는 닫힙니다. migration 029–034는 028 뒤에 추가로만 적용합니다. `034_referral_runtime_retention.sql`은 runtime scheduler가 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하게 하며, runtime role에는 approve·reject·mark-invited 권한을 주지 않습니다.

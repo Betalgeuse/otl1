@@ -10,8 +10,19 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { sanitizePackageMetadata, sanitizeWranglerConfig } from "./export-public-config.mjs";
-import { PUBLIC_COPY_PATHS, PUBLIC_DOC_NAMES, PUBLIC_QA_NAMES } from "./export-public-manifest.mjs";
+import {
+  assertSanitizedCoreConfig,
+  sanitizePackageMetadata,
+  sanitizeSiteWranglerConfig,
+  sanitizeWranglerConfig,
+} from "./export-public-config.mjs";
+import {
+  assertPublicExportPaths,
+  PUBLIC_COPY_PATHS,
+  PUBLIC_DOC_NAMES,
+  PUBLIC_QA_NAMES,
+  PUBLIC_RUNTIME_MIGRATION_PATHS,
+} from "./export-public-manifest.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const destination = resolve(process.argv[2] ?? "/tmp/otl1-public");
@@ -29,11 +40,18 @@ const write = (path, text) => {
   mkdirSync(dirname(join(destination, path)), { recursive: true });
   writeFileSync(join(destination, path), text);
 };
+const pathsBelow = (directory, prefix = "") =>
+  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+    return entry.isDirectory() ? pathsBelow(join(directory, entry.name), path) : [path];
+  });
 const copy = (path) => {
   mkdirSync(dirname(join(destination, path)), { recursive: true });
   cpSync(join(root, path), join(destination, path), { recursive: true });
 };
 for (const path of PUBLIC_COPY_PATHS) copy(path);
+for (const path of PUBLIC_RUNTIME_MIGRATION_PATHS)
+  if (existsSync(join(root, path))) copy(path);
 for (const name of PUBLIC_QA_NAMES) copy(`qa/${name}`);
 for (const name of PUBLIC_DOC_NAMES) copy("docs/" + name);
 copy("README.md");
@@ -61,7 +79,12 @@ write(".gitignore", readFileSync(join(root, ".gitignore"), "utf8") + "\n.public-
 const config = sanitizeWranglerConfig(
   JSON.parse(readFileSync(join(root, "wrangler.jsonc"), "utf8")),
 );
+assertSanitizedCoreConfig(config);
 write("wrangler.jsonc", JSON.stringify(config, null, 2) + "\n");
+const siteConfig = sanitizeSiteWranglerConfig(
+  JSON.parse(readFileSync(join(root, "site/wrangler.jsonc"), "utf8")),
+);
+write("site/wrangler.jsonc", JSON.stringify(siteConfig, null, 2) + "\n");
 const packageMetadata = sanitizePackageMetadata(
   JSON.parse(readFileSync(join(root, "package.json"), "utf8")),
 );
@@ -73,6 +96,7 @@ write(
     "",
   ),
 );
+assertPublicExportPaths(pathsBelow(destination));
 execFileSync("bun", ["install"], { cwd: destination, stdio: "pipe" });
 
 write(

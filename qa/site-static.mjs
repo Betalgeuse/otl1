@@ -75,7 +75,7 @@ assert.deepEqual(mobile.visibleOverflow, [], "visible descendants exceed the 320
 for (const contents of [JSON.stringify(config), worker, page, css, script]) {
   assert.doesNotMatch(contents, /ineffable/i);
   assert.doesNotMatch(contents, /(?:xox[baprs]-|postgres(?:ql)?:\/\/|neon\.tech|\bC[A-Z0-9]{8,}\b|\bU[A-Z0-9]{8,}\b)/);
-  assert.doesNotMatch(contents, /1216831373fd0ae2b3e7c2b6641bee46/);
+  assert.doesNotMatch(contents, /\b[0-9a-f]{32}\b/);
 }
 
 console.log("PASS site static: semantic story, isolation, motion fallback, and secret guards");

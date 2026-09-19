@@ -17,17 +17,46 @@ const PUBLIC_VARS = Object.freeze({
   COMMUNITY_RELEASE_CHANNEL_ID: "C_REPLACE_TOWNHALL",
   COMMUNITY_FEEDBACK_CHANNEL_ID: "C_REPLACE_FEEDBACK",
   COMMUNITY_PUBLIC_CHANNEL_ID: "C_REPLACE_DAILY",
+  LIFECYCLE_MODE: "disabled",
+  REVIEW_THREAD_V2: "false",
+  GARDEN_RECONCILIATION: "false",
+  REFERRALS_ENABLED: "false",
+  PUBLIC_APPLICATIONS_ENABLED: "false",
 });
+
+const PUBLIC_R2_BUCKETS = Object.freeze([
+  { binding: "BUG_PRIVATE_OBJECTS", bucket_name: "replace-with-private-bucket" },
+  { binding: "INVITE_PRIVATE_OBJECTS", bucket_name: "replace-with-invite-private-bucket" },
+]);
 
 export function sanitizeWranglerConfig(source) {
   const config = structuredClone(source);
   delete config.account_id;
   config.name = "onething-community";
   config.vars = { ...PUBLIC_VARS };
-  config.r2_buckets = [
-    { binding: "BUG_PRIVATE_OBJECTS", bucket_name: "replace-with-private-bucket" },
+  config.r2_buckets = structuredClone(PUBLIC_R2_BUCKETS);
+  return config;
+}
+
+export function sanitizeSiteWranglerConfig(source) {
+  const config = structuredClone(source);
+  delete config.account_id;
+  config.name = "onething-site";
+  config.services = [{ binding: "CORE", service: "replace-with-core-worker" }];
+  config.vars = { TURNSTILE_SITE_KEY: "replace-with-turnstile-site-key" };
+  config.ratelimits = [
+    { name: "RATE_LIMITER", namespace_id: "1001", simple: { limit: 20, period: 60 } },
   ];
   return config;
+}
+
+export function assertSanitizedCoreConfig(config) {
+  if (config.account_id || config.name !== "onething-community")
+    throw Error("Public core config contains private identity.");
+  if (JSON.stringify(config.vars) !== JSON.stringify(PUBLIC_VARS))
+    throw Error("Public core config must use canonical placeholders.");
+  if (JSON.stringify(config.r2_buckets) !== JSON.stringify(PUBLIC_R2_BUCKETS))
+    throw Error("Public core config must use private-bucket placeholders.");
 }
 
 export function sanitizePackageMetadata(source) {
@@ -36,6 +65,7 @@ export function sanitizePackageMetadata(source) {
     "@biomejs/biome": "2.5.6",
     typescript: "7.1.0-dev.20260809.1",
     wrangler: "4.62.0",
+    zod: "4.4.3",
   };
   packageMetadata.scripts.typecheck = "tsc --noEmit";
   return packageMetadata;

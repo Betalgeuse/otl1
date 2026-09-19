@@ -14,6 +14,9 @@ const scopes = manifest.oauth_config.scopes.bot;
 assert.equal(new Set(scopes).size, scopes.length);
 assert.ok(scopes.includes("users:read"));
 assert.ok(scopes.includes("users:read.email"));
+assert.ok(scopes.includes("im:write"));
+assert.equal(scopes.includes("message.im"), false);
+assert.ok(manifest.settings.event_subscriptions.bot_events.includes("team_join"));
 
 const originalFetch = globalThis.fetch;
 try {

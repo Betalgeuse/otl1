@@ -1,5 +1,6 @@
 export const PUBLIC_COPY_PATHS = [
   "src",
+  "site",
   ".gitignore",
   ".dev.vars.example",
   "biome.json",
@@ -31,13 +32,25 @@ export const PUBLIC_COPY_PATHS = [
   "migrations/026_welcome_guide_images.sql",
   "migrations/027_membership_reminder_audit.sql",
   "migrations/028_welcome_guide_roles.sql",
+  "migrations/029_member_lifecycle.sql",
+  "migrations/030_referral_applications.sql",
+  "migrations/031_review_thread_gardens.sql",
+  "migrations/032_lifecycle_runtime_delivery.sql",
+  "migrations/033_dormant_return.sql",
   "scripts/slack-manifest.mjs",
+  "scripts/export-public.mjs",
+  "scripts/export-public-config.mjs",
+  "scripts/export-public-manifest.mjs",
   "scripts/test-unit.mjs",
   "scripts/check.mjs",
   "scripts/maintainer-dry-run.mjs",
   "scripts/reconcile-garden-projections.mjs",
   "scripts/publish-welcome-guide.mjs",
   "scripts/bootstrap-guide-db-roles.mjs",
+];
+
+export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
+  "migrations/034_referral_runtime_retention.sql",
 ];
 
 export const PUBLIC_QA_NAMES = [
@@ -113,6 +126,14 @@ export const PUBLIC_QA_NAMES = [
   "community-reminder-batch.mjs",
   "community-batched-reminders.mjs",
   "community-reminder-audit.mjs",
+  "member-lifecycle.mjs",
+  "referral-flow.mjs",
+  "referral-security.mjs",
+  "review-thread-topology-pg.mjs",
+  "site-intake.mjs",
+  "dormant-shoutout.mjs",
+  "docs-links.mjs",
+  "version-map.mjs",
   "community-common-delivery.mjs",
   "community-schedule-overlap.mjs",
   "membership-reminder-audit-pg.mjs",
@@ -142,3 +163,12 @@ export const PUBLIC_DOC_NAMES = [
   "ROADMAP.md",
   "UPDATE_HISTORY.md",
 ];
+
+export function assertPublicExportPaths(paths) {
+  const listed = new Set(paths);
+  for (const required of ["site/dist/index.html", "site/dist/app.js", "site/dist/styles.css", "src/index.ts"])
+    if (!listed.has(required)) throw Error(`Public export is missing ${required}.`);
+  for (const path of listed)
+    if (path === ".omo" || path.startsWith(".omo/") || path === ".github" || path.startsWith(".github/workflows/"))
+      throw Error(`Public export forbids ${path}.`);
+}
