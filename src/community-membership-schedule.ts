@@ -176,6 +176,7 @@ export async function runMembershipDue(
   await attempt("interest_reconcile", async () => {
     const result = await reconcileInterestIntake(env, now, interestCursor);
     possiblyMore ||= result.possiblyMore;
+    failed ||= result.retryNeeded;
     interestNextCursor = result.nextCursor;
   });
   const retention = await runRetentionQueues(db, env.SLACK_TEAM_ID, now);

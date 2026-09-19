@@ -83,6 +83,8 @@ globalThis.fetch = async (url, init) => {
   }
   if (target.hostname === 'slack.com') {
     const payload = JSON.parse(init.body);
+    if (target.pathname === '/api/conversations.history')
+      return Response.json({ ok: true, messages: [], has_more: false });
     messages.push({ method: target.pathname, ...payload });
     return Response.json({ ok: true, ts: String(Date.now()/1000) });
   }
@@ -338,13 +340,41 @@ try {
   assert.equal(await sql("SELECT purge_status FROM otl.interest_private_payloads WHERE opaque_ref='" + firstObjectRef + "'"), 'purged');
   assert.equal(messages.length, messagesAtRollback);
   assert.ok(closedTick.nextDue !== null && closedTick.nextDue <= purgeAt+5*60_000+1000);
+  const deadId = 'IREQ-DEAD-PG-01';
+  const deadRef = `interest-private/${deadId}/revision-0-local.enc`;
+  const deadMarker = JSON.stringify({ interestId: deadId, submissionKeyDigest: 'c'.repeat(64),
+    objectDigest: 'd'.repeat(64), opaqueRef: deadRef,
+    createdAt: new Date(purgeAt).toISOString(), status: 'dead' });
+  const deadKey = `interest-private-reconcile/v1/${await digest(new TextEncoder().encode('TREF'))}/${deadId}.json`;
+  objects.set(deadRef, new Uint8Array([41, 42]).buffer);
+  objects.set(deadKey, new TextEncoder().encode(JSON.stringify({ marker: deadMarker,
+    signature: await sign(deadMarker, secret) })).buffer);
+  privateAdminChannel = false;
+  const deadRetryAt = purgeAt+7*60_000;
+  const deadRetry = await runMembershipDue(closedEnv, new NeonStore(closedEnv.DATABASE_URL),
+    'CREF', deadRetryAt);
+  assert.equal(messages.length, messagesAtRollback);
+  assert.ok(deadRetry.nextDue !== null && deadRetry.nextDue <= deadRetryAt+60_000);
+  privateAdminChannel = true;
+  const deadTick = await runMembershipDue(closedEnv, new NeonStore(closedEnv.DATABASE_URL),
+    'CREF', deadRetryAt+60_000);
+  assert.equal(messages.length, messagesAtRollback+1);
+  assert.equal(messages.at(-1).channel, 'CADMIN');
+  assert.ok(!JSON.stringify(messages.at(-1)).includes(deadRef));
+  assert.equal(objects.has(deadRef), true);
+  assert.equal(objects.has(deadKey), true);
+  assert.equal(JSON.parse(JSON.parse(new TextDecoder().decode(objects.get(deadKey))).marker).alertStatus, 'alerted');
+  await runMembershipDue(closedEnv, new NeonStore(closedEnv.DATABASE_URL), 'CREF', deadRetryAt+120_000);
+  assert.equal(messages.length, messagesAtRollback+1);
+  assert.ok(deadTick.nextDue !== null);
+  const messagesAfterDead = messages.length;
   const pendingAt30Days = await runInterestDue(closedEnv, Date.now()+31*24*60*60_000);
   assert.equal(await sql(`SELECT state FROM otl.interest_requests WHERE interest_id='${falseInterestId}'`), 'expired');
   assert.equal(pendingAt30Days.processed, 0);
   await runInterestDue(closedEnv, Date.now()+370*24*60*60_000);
   assert.equal(await sql("SELECT count(*) FROM otl.interest_requests WHERE team_id='TREF'"), '0');
   assert.equal(await sql("SELECT count(*) FROM otl.interest_service_nonces WHERE team_id='TREF'"), '0');
-  assert.equal(messages.length, messagesAtRollback);
+  assert.equal(messages.length, messagesAfterDead);
 
   const dump = (await run('pg_dump', ['--data-only', '--schema=otl', database])).stdout;
   assert.ok(!dump.includes('interest-e2e@example.com') && !dump.includes('<@UVICTIM>')
@@ -352,7 +382,7 @@ try {
   assert.ok(messages.every((entry) => entry.method === '/api/chat.postMessage'));
   console.log(JSON.stringify({ scenario: 'replay-consent-quota-recovery', replay: true, duplicateNoCapability: true,
     falseShareBlocked: true, reservationAfterApproval: 1, releasedAfterWithdrawal: true,
-    recoveredCapability: true, r2MarkerAdopted: true, sqlPiiAbsent: true, r2FailureNoRow: true, retentionObjectPurged: true, rollbackExpiryAndAudit: true, referralRollbackPurged: true, r2RetryAndOrphanReconciled: true, missingBindingRetries: true, defaultOff: true, publicAdminChannelRejected: true }));
+    recoveredCapability: true, r2MarkerAdopted: true, sqlPiiAbsent: true, r2FailureNoRow: true, retentionObjectPurged: true, rollbackExpiryAndAudit: true, referralRollbackPurged: true, r2RetryAndOrphanReconciled: true, deadMarkerPrivateAlert: true, missingBindingRetries: true, defaultOff: true, publicAdminChannelRejected: true }));
   console.log(JSON.stringify({ scenario: 'signed-private-introduction-attach-withdraw', prompt: 1, bridge: 1, pending: true, withdrawn: true, adminChannel: 'CADMIN' }));
   console.log('INTEREST_LOCAL_E2E=PASS');
 } finally {

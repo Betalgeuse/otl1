@@ -1,6 +1,7 @@
+import { alertDeadMarker, type Marker, updateMarker } from "./community-interest-dead-alert";
 import { CommunityInterestStore } from "./community-interest-store";
 import type { CommunityEnv } from "./community-runtime";
-import { sign, verify } from "./signing";
+import { verify } from "./signing";
 import { NeonStore } from "./store";
 
 const shaBytes = async (bytes: BufferSource): Promise<string> =>
@@ -8,15 +9,6 @@ const shaBytes = async (bytes: BufferSource): Promise<string> =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
 const sha = async (text: string): Promise<string> => shaBytes(new TextEncoder().encode(text));
-
-type Marker = {
-  readonly interestId: string;
-  readonly submissionKeyDigest: string;
-  readonly objectDigest: string;
-  readonly opaqueRef: string;
-  readonly createdAt: string;
-  readonly status: "pending" | "dead";
-};
 
 function marker(value: unknown): Marker | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
@@ -32,7 +24,18 @@ function marker(value: unknown): Marker | null {
     !row.opaqueRef.startsWith(`interest-private/${row.interestId}/revision-0-`) ||
     typeof row.createdAt !== "string" ||
     !Number.isFinite(Date.parse(row.createdAt)) ||
-    (row.status !== "pending" && row.status !== "dead")
+    (row.status !== "pending" && row.status !== "dead") ||
+    (row.alertStatus !== undefined &&
+      row.alertStatus !== "alert_pending" &&
+      row.alertStatus !== "alerted") ||
+    (row.alertStartedAt !== undefined &&
+      (typeof row.alertStartedAt !== "string" ||
+        !Number.isFinite(Date.parse(row.alertStartedAt)))) ||
+    (row.alertLeaseUntil !== undefined &&
+      (typeof row.alertLeaseUntil !== "string" ||
+        !Number.isFinite(Date.parse(row.alertLeaseUntil)))) ||
+    (row.alertedAt !== undefined &&
+      (typeof row.alertedAt !== "string" || !Number.isFinite(Date.parse(row.alertedAt))))
   )
     return null;
   return {
@@ -42,6 +45,10 @@ function marker(value: unknown): Marker | null {
     opaqueRef: row.opaqueRef,
     createdAt: row.createdAt,
     status: row.status,
+    ...(row.alertStatus === undefined ? {} : { alertStatus: row.alertStatus }),
+    ...(row.alertStartedAt === undefined ? {} : { alertStartedAt: row.alertStartedAt }),
+    ...(row.alertLeaseUntil === undefined ? {} : { alertLeaseUntil: row.alertLeaseUntil }),
+    ...(row.alertedAt === undefined ? {} : { alertedAt: row.alertedAt }),
   };
 }
 
@@ -53,9 +60,10 @@ export async function reconcileInterestIntake(
   readonly processed: number;
   readonly possiblyMore: boolean;
   readonly nextCursor: string | null;
+  readonly retryNeeded: boolean;
 }> {
   if (env.DATABASE_MAINTENANCE === "true")
-    return { processed: 0, possiblyMore: false, nextCursor: null };
+    return { processed: 0, possiblyMore: false, nextCursor: null, retryNeeded: false };
   if (
     !env.INVITE_PRIVATE_OBJECTS ||
     !env.INTEREST_RUNTIME_DATABASE_URL ||
@@ -66,11 +74,13 @@ export async function reconcileInterestIntake(
   const bucket = env.INVITE_PRIVATE_OBJECTS;
   const prefix = `interest-private-reconcile/v1/${await sha(env.SLACK_TEAM_ID)}/`;
   let processed = 0;
+  let retryNeeded = false;
   let cursor: string | undefined = startCursor;
   for (let page = 0; page < 5; page += 1) {
-    const list = await bucket.list({ prefix, limit: 50, ...(cursor ? { cursor } : {}) });
+    const list = await bucket.list({ prefix, limit: 2, ...(cursor ? { cursor } : {}) });
     for (const entry of list.objects) {
-      if (processed >= 2) return { processed, possiblyMore: true, nextCursor: null };
+      if (processed >= 2)
+        return { processed, possiblyMore: true, nextCursor: cursor ?? null, retryNeeded };
       const stored = await bucket.get(entry.key);
       if (!stored) continue;
       let wrapper: unknown;
@@ -96,24 +106,59 @@ export async function reconcileInterestIntake(
         throw error;
       }
       const value = marker(decoded);
-      if (!value || entry.key !== `${prefix}${value.interestId}.json` || value.status === "dead")
-        continue;
-      const deadLetter = async (): Promise<void> => {
-        const dead = JSON.stringify({ ...value, status: "dead" });
-        await bucket.put(
-          entry.key,
-          new TextEncoder().encode(
+      if (!value || entry.key !== `${prefix}${value.interestId}.json`) continue;
+      if (value.status === "dead") {
+        if (value.alertStatus === "alerted") continue;
+        try {
+          const alertRetry = await alertDeadMarker(env, bucket, entry.key, stored, value, now);
+          retryNeeded ||= alertRetry;
+        } catch (error) {
+          if (!(error instanceof Error)) throw error;
+          retryNeeded = true;
+          console.error(
             JSON.stringify({
-              marker: dead,
-              signature: await sign(dead, env.SITE_CORE_HMAC_SECRET ?? ""),
+              event: "interest.reconcile.alert.failed",
+              interestId: value.interestId,
+              errorType: error.name,
             }),
-          ).buffer,
-          { onlyIf: { etagMatches: stored.etag } },
+          );
+        }
+        processed += 1;
+        continue;
+      }
+      const deadLetter = async (): Promise<void> => {
+        const dead: Marker = {
+          ...value,
+          status: "dead",
+          alertStatus: "alert_pending",
+          alertStartedAt: new Date(now).toISOString(),
+        };
+        const changed = await updateMarker(
+          bucket,
+          entry.key,
+          stored.etag,
+          dead,
+          env.SITE_CORE_HMAC_SECRET ?? "",
         );
+        if (!changed) return;
         console.error(
           JSON.stringify({ event: "interest.reconcile.dead", interestId: value.interestId }),
         );
         processed += 1;
+        try {
+          const alertRetry = await alertDeadMarker(env, bucket, entry.key, changed, dead, now);
+          retryNeeded ||= alertRetry;
+        } catch (error) {
+          if (!(error instanceof Error)) throw error;
+          retryNeeded = true;
+          console.error(
+            JSON.stringify({
+              event: "interest.reconcile.alert.failed",
+              interestId: value.interestId,
+              errorType: error.name,
+            }),
+          );
+        }
       };
       const state = await store.findPrivateIntake(
         env.SLACK_TEAM_ID,
@@ -136,9 +181,10 @@ export async function reconcileInterestIntake(
         processed += 1;
       }
     }
-    if (!list.truncated) return { processed, possiblyMore: false, nextCursor: null };
+    if (!list.truncated) return { processed, possiblyMore: false, nextCursor: null, retryNeeded };
     if (!list.cursor) throw new Error("Interest reconciliation cursor unavailable");
     cursor = list.cursor;
+    if (processed >= 2) return { processed, possiblyMore: true, nextCursor: cursor, retryNeeded };
   }
-  return { processed, possiblyMore: true, nextCursor: cursor ?? null };
+  return { processed, possiblyMore: true, nextCursor: cursor ?? null, retryNeeded };
 }
