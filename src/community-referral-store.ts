@@ -193,14 +193,14 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
       await this.db.queryJson(
         `WITH due AS (
           SELECT o.outbox_id FROM otl.referral_outbox o
-          WHERE o.effect_type='admin_review'
+          WHERE o.team_id=$2 AND o.effect_type='admin_review'
             AND (o.status IN ('pending','failed') OR (o.status='claimed' AND o.available_at<=$1::timestamptz))
             AND o.available_at<=$1::timestamptz
           ORDER BY o.available_at,o.outbox_id FOR UPDATE SKIP LOCKED LIMIT 1),
         claimed AS (
           UPDATE otl.referral_outbox o SET status='claimed',attempts=attempts+1,
             available_at=$1::timestamptz+interval '5 minutes'
-          FROM due WHERE o.outbox_id=due.outbox_id RETURNING o.*)
+          FROM due WHERE o.outbox_id=due.outbox_id AND o.team_id=$2 RETURNING o.*)
         SELECT CASE WHEN c.outbox_id IS NULL THEN NULL ELSE jsonb_build_object(
           'outboxId',c.outbox_id,'effectKey',c.effect_key,'requestId',c.request_id,
           'revision',r.revision,'opaqueRef',p.opaque_ref,'objectDigest',p.object_digest,
@@ -208,7 +208,7 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
         FROM (SELECT 1) seed LEFT JOIN claimed c ON true
         LEFT JOIN otl.referral_requests r USING(team_id,request_id)
         LEFT JOIN otl.referral_private_payloads p USING(team_id,request_id)`,
-        [now],
+        [now, this.nonceScope.teamId],
       ),
     );
   }
@@ -223,9 +223,9 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
         `WITH changed AS (
           UPDATE otl.referral_outbox SET status=$2,
             available_at=CASE WHEN $2='failed' THEN $3::timestamptz+interval '5 minutes' ELSE available_at END
-          WHERE outbox_id=$1 AND status='claimed' RETURNING 1)
+          WHERE outbox_id=$1 AND team_id=$4 AND status='claimed' RETURNING 1)
         SELECT to_jsonb(EXISTS(SELECT 1 FROM changed))`,
-        [String(input.outboxId), input.status, input.now],
+        [String(input.outboxId), input.status, input.now, this.nonceScope.teamId],
       ),
     );
   }

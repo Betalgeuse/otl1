@@ -188,7 +188,7 @@ export class CommunityStore extends CommunityScheduleStore {
       throw new InputError("ONE THING은 1~200자로 적어 주세요.");
     if (input.action === "reflection" && (!input.text?.trim() || [...input.text].length > 2000))
       throw new InputError("후기는 1~2000자로 적어 주세요.");
-    const { delivery, ...change } = input;
+    const { delivery, reviewThreadV2, ...change } = input;
     const v = object(await this.call("change", change));
     let returnTransition: ChangeResult["returnTransition"];
     if (v.returnTransition !== undefined) {
@@ -224,6 +224,7 @@ export class CommunityStore extends CommunityScheduleStore {
       !result.changed ||
       result.conflict ||
       delivery === undefined ||
+      reviewThreadV2 !== true ||
       (result.day.outcome === "pending" && result.day.reflection === "")
     )
       return result;

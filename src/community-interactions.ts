@@ -4,10 +4,15 @@ import { armCommunityClock } from "./community-clock";
 import { openSettings, openShoutout, readSettings } from "./community-controls";
 import { introductionModal, parseIntroduction, submitIntroduction } from "./community-introduction";
 import { showIntroductionDirectory } from "./community-introduction-channel";
+import { handleInviteAdminAction } from "./community-invite-admin";
+import { parseLifecycleAction } from "./community-lifecycle-interactions";
+import { CommunityLifecycleRuntimeStore } from "./community-lifecycle-runtime-store";
 import { escapeSlackText } from "./community-messages";
 import { openCommunityPalette, submitCommunityPalette } from "./community-palette";
 import { authorizeCommunityAction } from "./community-permissions";
 import { processRecordAction } from "./community-record-interactions";
+import { referralSlackPort } from "./community-referral-slack";
+import { CommunityReferralStore } from "./community-referral-store";
 import {
   actionIdentity,
   type CommunityContext,
@@ -29,6 +34,66 @@ export async function communityInteraction(
   const action = actions[0] ? object(actions[0]) : null;
   const view = data.view ? object(data.view) : null;
   const id = string(action?.action_id ?? view?.callback_id ?? "");
+  if (data.type === "block_actions" && action && id.startsWith("community_invite_")) {
+    if (env.REFERRALS_ENABLED !== "true") throw new InputError("지금은 신청을 처리할 수 없습니다.");
+    const teamId = string(object(data.team).id);
+    const userId = string(object(data.user).id);
+    const dmChannelId = string(object(data.container).channel_id);
+    if (!/^D[A-Z0-9]+$/.test(dmChannelId))
+      throw new InputError("비공개 관리자 카드에서 처리해 주세요.");
+    const store = new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+      teamId: env.SLACK_TEAM_ID,
+      channelId: env.COMMUNITY_PUBLIC_CHANNEL_ID ?? "",
+      userId: env.COMMUNITY_ADMIN_ID ?? "",
+    });
+    await handleInviteAdminAction(
+      {
+        teamId,
+        userId,
+        actionId: id,
+        value: string(action.value),
+        actionTs: string(action.action_ts),
+      },
+      env,
+      store,
+      referralSlackPort(env),
+    );
+    if (env.COMMUNITY_PUBLIC_CHANNEL_ID)
+      waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+    return new Response(null, { status: 200 });
+  }
+  if (data.type === "block_actions" && action && id.startsWith("lifecycle_")) {
+    if (env.LIFECYCLE_MODE !== "enforce" || !env.LIFECYCLE_ACTION_SECRET)
+      throw new InputError("지금은 생애주기 동작을 처리할 수 없습니다.");
+    const teamId = string(object(data.team).id);
+    const actorId = string(object(data.user).id);
+    const dmChannelId = string(object(data.container).channel_id);
+    if (!/^D[A-Z0-9]+$/.test(dmChannelId))
+      throw new InputError("비공개 생애주기 안내에서 처리해 주세요.");
+    const binding = await parseLifecycleAction(
+      string(action.value),
+      actorId,
+      env.COMMUNITY_ADMIN_ID,
+      env.LIFECYCLE_ACTION_SECRET,
+    );
+    if (
+      binding.actionId !== id ||
+      binding.teamId !== teamId ||
+      teamId !== env.SLACK_TEAM_ID ||
+      ![env.COMMUNITY_PUBLIC_CHANNEL_ID, env.COMMUNITY_CHANNEL_ID].includes(binding.channelId)
+    )
+      throw new InputError("이 동작은 사용할 수 없습니다.");
+    if (binding.actionId === "lifecycle_restore_error")
+      throw new InputError("증거가 있는 관리자 정정 요청이 필요합니다.");
+    const actionTs = string(action.action_ts);
+    if (!/^\d{10}\.\d{1,6}$/.test(actionTs))
+      throw new InputError("동작 시각을 확인할 수 없습니다.");
+    await new CommunityLifecycleRuntimeStore(new NeonStore(env.DATABASE_URL)).action(
+      binding,
+      new Date(Number(actionTs) * 1_000).toISOString(),
+    );
+    return new Response(null, { status: 200 });
+  }
   if (!id.startsWith("community_")) return null;
   const bugAnswerAction = parseBugAnswerActionId(id);
   if (!bugAnswerAction && (id === "community_bug_answer" || id.startsWith("community_bug_answer:")))

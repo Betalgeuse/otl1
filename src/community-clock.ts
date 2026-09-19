@@ -12,14 +12,15 @@ import {
   readBugClockState,
   runBugDeliveryClockAlarm,
 } from "./community-clock-bug";
-import { nextCommunityAlarm } from "./community-clock-client";
 import { publishGardenRequest } from "./community-clock-garden";
+import { refreshCommunitySchedule } from "./community-clock-schedule";
 import { runDueGardenDeliveries } from "./community-garden-delivery";
+import { runMembershipDue } from "./community-membership-schedule";
 import type { CommunityEnv } from "./community-runtime";
 import { runCommunitySchedule } from "./community-scheduler";
 import { CommunitySlackError } from "./community-social";
 import { CommunityStore } from "./community-store";
-import { InputError, object, string } from "./input";
+import { InputError } from "./input";
 import { NeonStore } from "./store";
 
 export { armBugDeliveryClock, bugDeliveryClockName } from "./community-bug-clock-client";
@@ -44,6 +45,26 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
 
   refresh(channelId: string): Promise<{ readonly next: number | null }> {
     return this.serialize(() => this.refreshSchedule(channelId));
+  }
+
+  armMembershipScan(channelId: string, cursor: string): Promise<void> {
+    return this.serialize(async () => {
+      if (channelId !== this.env.COMMUNITY_PUBLIC_CHANNEL_ID || !cursor)
+        throw new InputError("Invalid membership scan scope");
+      const role = await this.ctx.storage.get<string>("role");
+      const bound = await this.ctx.storage.get<string>("channel");
+      if (role && role !== COMMUNITY_SCHEDULE_CLOCK_ROLE)
+        throw new InputError("Clock role cannot change");
+      if (bound && bound !== channelId) throw new InputError("Clock channel cannot change");
+      await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
+      await this.ctx.storage.put("channel", channelId);
+      if (!(await this.ctx.storage.get<string>("referralReconcileCursor")))
+        await this.ctx.storage.put("referralReconcileCursor", cursor);
+      const due = Date.now() + 1_000;
+      const previous = await this.ctx.storage.getAlarm();
+      if (previous === null || previous < Date.now() || due < previous)
+        await this.ctx.storage.setAlarm(due);
+    });
   }
 
   armBugDelivery(input: BugDeliveryArm): Promise<BugDeliveryArmResult> {
@@ -90,62 +111,8 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
     });
   }
 
-  private async refreshSchedule(channelId: string): Promise<{ readonly next: number | null }> {
-    if (this.env.DATABASE_MAINTENANCE === "true") throw new InputError("Database maintenance");
-    if (
-      ![this.env.COMMUNITY_CHANNEL_ID, this.env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) ||
-      !channelId
-    )
-      throw new InputError("Channel is outside clock scope");
-    const [role, previousChannel] = await Promise.all([
-      this.ctx.storage.get<string>("role"),
-      this.ctx.storage.get<string>("channel"),
-    ]);
-    if (role && role !== COMMUNITY_SCHEDULE_CLOCK_ROLE)
-      throw new InputError("Clock role cannot change");
-    if (previousChannel && previousChannel !== channelId)
-      throw new InputError("Clock channel cannot change");
-    await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
-    await this.ctx.storage.put("channel", channelId);
-    if (this.env.COMMUNITY_ENABLED !== "true" || !this.env.COMMUNITY_ADMIN_ID) {
-      await this.ctx.storage.deleteAlarm();
-      return { next: null };
-    }
-    const store = new CommunityStore(new NeonStore(this.env.DATABASE_URL));
-    const scope = {
-      teamId: this.env.SLACK_TEAM_ID,
-      channelId,
-      userId: this.env.COMMUNITY_ADMIN_ID,
-    };
-    const observedNow = Date.now();
-    const [settings, members, deliveryDue] = await Promise.all([
-      store.getRecord({ ...scope, key: "group-schedule" }),
-      store.members(scope.teamId, channelId),
-      store.nextScheduleDue(scope.teamId, channelId, new Date(observedNow).toISOString()),
-    ]);
-    const times: string[] = [];
-    if (settings) {
-      const body = object(settings.body);
-      if (body.enabled === true)
-        times.push("10:00", string(body.goalTime), string(body.reviewTime));
-    }
-    for (let start = 0; start < members.length; start += 10) {
-      const preferences = await Promise.all(
-        members.slice(start, start + 10).map((userId) => store.preferences({ ...scope, userId })),
-      );
-      for (const preference of preferences) {
-        if (preference.enabled)
-          times.push(
-            ...[preference.goalTime, preference.reviewTime].filter(
-              (time) => time >= "08:00" && time < "22:00",
-            ),
-          );
-      }
-    }
-    const next = nextCommunityAlarm(times, deliveryDue, observedNow);
-    if (next === null) await this.ctx.storage.deleteAlarm();
-    else await this.ctx.storage.setAlarm(next);
-    return { next };
+  private refreshSchedule(channelId: string): Promise<{ readonly next: number | null }> {
+    return refreshCommunitySchedule(this.env, this.ctx.storage, channelId);
   }
 
   async inspect(): Promise<ClockInspection> {
@@ -174,29 +141,89 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
       if (!channelId) return;
       if (!role) await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
       try {
-        const now = new Date();
-        const garden = await runDueGardenDeliveries(this.env, channelId, now.getTime());
+        const now = new Date(Date.now());
+        let scheduleRetry: number | null = null;
+        let garden: { readonly processed: number; readonly nextDue: number | null } = {
+          processed: 0,
+          nextDue: null,
+        };
+        try {
+          garden = await runDueGardenDeliveries(this.env, channelId, now.getTime());
+        } catch (error) {
+          if (!(error instanceof Error)) throw error;
+          console.error(
+            JSON.stringify({
+              event: "community.clock.queue.failed",
+              queue: "garden",
+              errorType: error.name,
+            }),
+          );
+          garden = { processed: 0, nextDue: now.getTime() + 60_000 };
+        }
+        const membership = await runMembershipDue(
+          this.env,
+          new NeonStore(this.env.DATABASE_URL),
+          channelId,
+          now.getTime(),
+          await this.ctx.storage.get<string>("referralReconcileCursor"),
+        );
+        if (membership.nextCursor === null)
+          await this.ctx.storage.delete("referralReconcileCursor");
+        else await this.ctx.storage.put("referralReconcileCursor", membership.nextCursor);
         if (
           this.env.COMMUNITY_ENABLED === "true" &&
           this.env.COMMUNITY_ADMIN_ID &&
           [this.env.COMMUNITY_CHANNEL_ID, this.env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId)
         ) {
-          const result = await runCommunitySchedule(
-            {
-              ...this.env,
-              COMMUNITY_CHANNEL_ID: channelId,
-              COMMUNITY_ADMIN_ID: this.env.COMMUNITY_ADMIN_ID,
-            },
-            new CommunityStore(new NeonStore(this.env.DATABASE_URL)),
-            now,
+          try {
+            const result = await runCommunitySchedule(
+              {
+                ...this.env,
+                COMMUNITY_CHANNEL_ID: channelId,
+                COMMUNITY_ADMIN_ID: this.env.COMMUNITY_ADMIN_ID,
+              },
+              new CommunityStore(new NeonStore(this.env.DATABASE_URL)),
+              now,
+            );
+            await this.ctx.storage.put("lastRun", { at: now.getTime(), ...result });
+          } catch (error) {
+            if (!(error instanceof Error)) throw error;
+            console.error(
+              JSON.stringify({
+                event: "community.clock.queue.failed",
+                queue: "reminders",
+                errorType: error.name,
+              }),
+            );
+            const retrySeconds =
+              error instanceof CommunitySlackError ? (error.retryAfterSeconds ?? 60) : 60;
+            scheduleRetry = now.getTime() + Math.min(retrySeconds, 3_600) * 1_000;
+          }
+        }
+        if (scheduleRetry !== null) {
+          const current = await this.ctx.storage.getAlarm();
+          const candidates = [scheduleRetry, garden.nextDue, membership.nextDue].filter(
+            (candidate): candidate is number => candidate !== null,
           );
-          await this.ctx.storage.put("lastRun", { at: now.getTime(), ...result });
+          const due = Math.max(now.getTime() + 1_000, Math.min(...candidates));
+          if (current === null || current <= now.getTime() || due < current)
+            await this.ctx.storage.setAlarm(due);
+          return;
         }
         await this.refreshSchedule(channelId);
-        if (garden.nextDue !== null) {
+        if (garden.nextDue !== null || garden.processed >= 10 || membership.possiblyMore) {
           const current = await this.ctx.storage.getAlarm();
-          if (current === null || garden.nextDue < current)
-            await this.ctx.storage.setAlarm(garden.nextDue);
+          const immediate = garden.processed >= 10 || membership.possiblyMore;
+          const candidates = [garden.nextDue, membership.nextDue].filter(
+            (candidate): candidate is number => candidate !== null,
+          );
+          const due = immediate
+            ? now.getTime() + 1_000
+            : candidates.length
+              ? Math.min(...candidates)
+              : null;
+          if (due !== null && (current === null || Math.max(now.getTime() + 1_000, due) < current))
+            await this.ctx.storage.setAlarm(Math.max(now.getTime() + 1_000, due));
         }
       } catch (error) {
         await this.ctx.storage.put("lastRun", {

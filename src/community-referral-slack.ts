@@ -26,7 +26,9 @@ async function effectUuid(value: string): Promise<string> {
   return uuidFromHex(hex);
 }
 
-export function referralSlackPort(env: ReferralSlackEnv): ReferralSlackPort {
+export function referralSlackPort(
+  env: Pick<ReferralSlackEnv, "SLACK_BOT_TOKEN">,
+): ReferralSlackPort {
   return {
     async postEphemeral(input) {
       const result = await callSlack(env.SLACK_BOT_TOKEN, "chat.postEphemeral", {

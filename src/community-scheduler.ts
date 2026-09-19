@@ -14,6 +14,7 @@ export type CommunityScheduleEnv = {
   readonly COMMUNITY_ADMIN_ID: string;
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
   readonly COMMUNITY_BOT_USER_ID?: string;
+  readonly REVIEW_THREAD_V2?: string;
 };
 export type ScheduleClock = { readonly now: () => Date };
 type ScheduleStore = Pick<
@@ -121,7 +122,13 @@ export async function runCommunitySchedule(
       await commonText(env, date, kind, eligibleMembers),
     );
   }
-  common += await sendCommonDeliveries({ token: env.SLACK_BOT_TOKEN, now, scope, store });
+  common += await sendCommonDeliveries({
+    token: env.SLACK_BOT_TOKEN,
+    now,
+    scope,
+    store,
+    reviewThreadV2: env.REVIEW_THREAD_V2 === "true",
+  });
   if (isWeekend(date) || (publicChannel && !targetedDue)) return { common, personal: 0 };
   const personal = await sendReminderBatches({
     token: env.SLACK_BOT_TOKEN,
@@ -129,6 +136,7 @@ export async function runCommunitySchedule(
     channelId: scope.channelId,
     now,
     store,
+    reviewThreadV2: env.REVIEW_THREAD_V2 === "true",
   });
   return { common, personal };
 }

@@ -2,8 +2,11 @@ export { CommunityClock } from "./community-clock";
 
 import { readBoardLink } from "./board-link";
 import { armBugDeliveryClock, BUG_CLOCK_CAPABILITIES } from "./community-bug-clock-client";
+import { armCommunityClock } from "./community-clock-client";
 import { handleCommunityEvent } from "./community-events";
 import { communityInteraction } from "./community-interactions";
+import { handleReferralIntakeRequest } from "./community-referral-intake";
+import { CommunityReferralStore } from "./community-referral-store";
 import type { CommunityEnv } from "./community-runtime";
 import { confirmMention, eventPayload, handleMention, verificationResponse } from "./events";
 import { BodySizeError, InputError, koreaDate, object, readBody } from "./input";
@@ -14,7 +17,7 @@ import { renderBoard } from "./render/board";
 import { command, interaction } from "./requests";
 import { verifySlack } from "./signing";
 import { openView, reply } from "./slack-api";
-import type { Store } from "./store";
+import { NeonStore, type Store } from "./store";
 import { createWorkerHandler } from "./worker-entry";
 
 export type Env = PilotEnv &
@@ -43,6 +46,28 @@ export async function handleRequest(
   try {
     if (request.method === "GET" && url.pathname === "/health") {
       return Response.json({ status: "ok", capabilities: BUG_CLOCK_CAPABILITIES });
+    }
+    if (url.pathname.startsWith("/internal/referrals/")) {
+      if (env.DATABASE_MAINTENANCE === "true")
+        return new Response("Maintenance", { status: 503, headers: { "Retry-After": "30" } });
+      if (
+        env.REFERRALS_ENABLED !== "true" ||
+        (url.pathname !== "/internal/referrals/withdraw" &&
+          env.PUBLIC_APPLICATIONS_ENABLED !== "true")
+      )
+        return new Response("Unavailable", { status: 503 });
+      const response = await handleReferralIntakeRequest(
+        request,
+        env,
+        new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+          teamId: env.SLACK_TEAM_ID,
+          channelId: env.COMMUNITY_PUBLIC_CHANNEL_ID ?? "",
+          userId: env.COMMUNITY_ADMIN_ID ?? "",
+        }),
+      );
+      if (response.status === 202 && env.COMMUNITY_PUBLIC_CHANNEL_ID)
+        ctx.waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+      return response;
     }
     if (env.DATABASE_MAINTENANCE === "true" && url.pathname.startsWith("/slack/"))
       return new Response("잠시 데이터 정리 중입니다. 곧 다시 시도해 주세요.", {

@@ -1,4 +1,5 @@
 import type { ClockBinding } from "./community-bug-clock-client";
+import type { InviteReconcileBucket } from "./community-referral-reconcile";
 import { callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
 import type { CommunityScope } from "./community-types";
@@ -13,6 +14,19 @@ export type CommunityEnv = {
   readonly BOARD_SIGNING_SECRET: string;
   readonly PUBLIC_BASE_URL: string;
   readonly COMMUNITY_ENABLED?: string;
+  readonly LIFECYCLE_MODE?: string;
+  readonly REVIEW_THREAD_V2?: string;
+  readonly GARDEN_RECONCILIATION?: string;
+  readonly REFERRALS_ENABLED?: string;
+  readonly PUBLIC_APPLICATIONS_ENABLED?: string;
+  readonly SITE_CORE_HMAC_SECRET?: string;
+  readonly INVITE_EMAIL_PEPPER?: string;
+  readonly LIFECYCLE_ACTION_SECRET?: string;
+  readonly INVITE_PRIVATE_KEK?: string;
+  readonly INVITE_PRIVATE_KEK_VERSION?: string;
+  readonly REFERRAL_TOKEN_SECRET?: string;
+  readonly PUBLIC_APPLICATION_ORIGIN?: string;
+  readonly INVITE_PRIVATE_OBJECTS?: InviteReconcileBucket;
   readonly COMMUNITY_BOT_USER_ID?: string;
   readonly DATABASE_MAINTENANCE?: string;
   readonly COMMUNITY_CLOCK?: ClockBinding;

@@ -187,9 +187,10 @@ export async function runDueGardenDeliveries(
     processed += 1;
     if (result.nextDue !== null) nextDue = Math.min(nextDue ?? result.nextDue, result.nextDue);
   }
-  await runDueGardenRetirements(env, channelId, now, async (retirementDue) => {
-    nextDue = Math.min(nextDue ?? retirementDue, retirementDue);
-  });
+  if (env.GARDEN_RECONCILIATION === "true")
+    await runDueGardenRetirements(env, channelId, now, async (retirementDue) => {
+      nextDue = Math.min(nextDue ?? retirementDue, retirementDue);
+    });
   if (nextDue !== null && observeDue) await observeDue(nextDue);
   return { processed, nextDue };
 }

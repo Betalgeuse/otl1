@@ -19,6 +19,7 @@ export async function undoChange(context: CommunityContext, key: string): Promis
     key: context.key,
     action: "undo",
     syncLegacy: context.scope.channelId === context.env.COMMUNITY_PUBLIC_CHANNEL_ID,
+    reviewThreadV2: context.env.REVIEW_THREAD_V2 === "true",
     undoKey,
     delivery: { source: context.source, thread: context.thread, undoKey: null },
   });

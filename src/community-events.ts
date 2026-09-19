@@ -8,11 +8,15 @@ import { deliverWelcomeGuide } from "./community-guide";
 import { incomingMessageBody } from "./community-intake";
 import { handleIntroductionChannelMessage } from "./community-introduction-channel";
 import { dispatchCommunityMessage, dispatchFeedbackBugMessage } from "./community-message-router";
+import { handleReferralTeamJoin } from "./community-referral-join";
+import { handleReferralLinkMessage } from "./community-referral-link";
+import { referralSlackPort } from "./community-referral-slack";
+import { CommunityReferralStore } from "./community-referral-store";
 import { replayReflectionOutcomeDelivery } from "./community-reflection-outcome";
 import { type CommunityEnv, textReply } from "./community-runtime";
 import { CommunityStore } from "./community-store";
 import { welcomeTownhallMember } from "./community-welcome";
-import { InputError, object, string } from "./input";
+import { InputError, koreaDate, object, string } from "./input";
 import { messageEvent } from "./slack-message-event";
 import { NeonStore } from "./store";
 
@@ -26,7 +30,26 @@ export async function handleCommunityEvent(
     data.team_id !== env.SLACK_TEAM_ID
   )
     return false;
-  const event = messageEvent(object(data.event));
+  const rawEvent = object(data.event);
+  if (rawEvent.type === "team_join") {
+    if (env.REFERRALS_ENABLED === "true") {
+      const joined = object(rawEvent.user);
+      const referral = new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+        teamId: env.SLACK_TEAM_ID,
+        channelId: env.COMMUNITY_PUBLIC_CHANNEL_ID ?? "",
+        userId: env.COMMUNITY_ADMIN_ID ?? "",
+      });
+      await handleReferralTeamJoin(
+        { teamId: env.SLACK_TEAM_ID, eventId: string(data.event_id), userId: string(joined.id) },
+        env,
+        referral,
+        referralSlackPort(env),
+      );
+    }
+    return true;
+  }
+  if (rawEvent.type !== "message" && rawEvent.type !== "app_mention") return false;
+  const event = messageEvent(rawEvent);
   if (await deliverWelcomeGuide(event, env)) return true;
   if (await handleIntroductionChannelMessage(event, env)) return true;
   await enrollReminderMember(event, env);
@@ -64,6 +87,42 @@ export async function handleCommunityEvent(
   const scope = { teamId: env.SLACK_TEAM_ID, channelId: string(event.channel), userId };
   const store = new CommunityStore(new NeonStore(env.DATABASE_URL));
   const key = `incoming:${source}${event.edit_ts ? `:edit:${string(event.edit_ts)}` : ""}`;
+  if (env.REFERRALS_ENABLED === "true" && text === "내 초대 링크" && !isFeedbackChannel) {
+    if (event.edit_ts) return true;
+    await store.putRecord({
+      ...scope,
+      key,
+      kind: "incoming",
+      body: incomingMessageBody(
+        {
+          date: koreaDate(stamp),
+          thread: string(event.thread_ts ?? source),
+          rawText,
+          normalizedText: text,
+          editTs: null,
+        },
+        null,
+      ),
+    });
+    if (!(await store.claimRecord({ ...scope, key }))) return true;
+    try {
+      await handleReferralLinkMessage(
+        { teamId: env.SLACK_TEAM_ID, channelId: string(event.channel), userId, text },
+        env,
+        new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+          teamId: env.SLACK_TEAM_ID,
+          channelId: string(event.channel),
+          userId,
+        }),
+        referralSlackPort(env),
+      );
+      await store.finishRecord({ ...scope, key }, "sent");
+    } catch (error) {
+      await store.finishRecord({ ...scope, key }, "failed");
+      throw error;
+    }
+    return true;
+  }
   const thread = string(event.thread_ts ?? event.ts);
   const date = await messageDate(store, scope, string(env.COMMUNITY_ADMIN_ID), source, thread);
   const textEntryState =

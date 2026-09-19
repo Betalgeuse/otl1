@@ -19,6 +19,7 @@ async function finishSent(
     readonly kind: "goal" | "review";
   },
   messageTs: string,
+  reviewThreadV2: boolean,
 ): Promise<void> {
   await store.putRecord({
     ...scope,
@@ -32,7 +33,7 @@ async function finishSent(
     kind: "prompt",
     body: { date: delivery.date, kind: delivery.kind, ts: messageTs },
   });
-  if (delivery.kind === "review") {
+  if (delivery.kind === "review" && reviewThreadV2) {
     await store.finishReviewRoot({
       ...scope,
       leaseToken: delivery.leaseToken,
@@ -69,6 +70,7 @@ export async function sendCommonDeliveries(input: {
   readonly now: string;
   readonly scope: CommunityScope;
   readonly store: CommonStore;
+  readonly reviewThreadV2?: boolean;
 }): Promise<number> {
   let sent = 0;
   for (let index = 0; index < 4; index += 1) {
@@ -89,7 +91,13 @@ export async function sendCommonDeliveries(input: {
             )
           : null;
       if (reconciled) {
-        await finishSent(input.store, input.scope, delivery, reconciled);
+        await finishSent(
+          input.store,
+          input.scope,
+          delivery,
+          reconciled,
+          input.reviewThreadV2 === true,
+        );
         sent += 1;
         continue;
       }
@@ -99,7 +107,13 @@ export async function sendCommonDeliveries(input: {
       });
       const messageTs = string(response.ts);
       if (!/^\d+\.\d+$/.test(messageTs)) throw new InputError("Slack timestamp missing");
-      await finishSent(input.store, input.scope, delivery, messageTs);
+      await finishSent(
+        input.store,
+        input.scope,
+        delivery,
+        messageTs,
+        input.reviewThreadV2 === true,
+      );
       sent += 1;
     } catch (error) {
       if (!(error instanceof CommunitySlackError)) throw error;

@@ -4,6 +4,13 @@ import type { ReminderBatch, ReminderBatchFinish, ReminderJob } from "./communit
 import { list, object, string } from "./input";
 
 export type ReminderBatchStore = {
+  claimReminderBatch(input: {
+    readonly teamId: string;
+    readonly channelId: string;
+    readonly now: string;
+    readonly workerId: string;
+    readonly leaseToken: string;
+  }): Promise<ReminderBatch | null>;
   claimReviewReminderBatch(input: {
     readonly teamId: string;
     readonly channelId: string;
@@ -121,15 +128,19 @@ export async function sendReminderBatch(input: {
   readonly channelId: string;
   readonly now: string;
   readonly store: ReminderBatchStore;
+  readonly reviewThreadV2?: boolean;
 }): Promise<number> {
   const leaseToken = crypto.randomUUID();
-  const review = await input.store.claimReviewReminderBatch({
-    teamId: input.teamId,
-    channelId: input.channelId,
-    now: input.now,
-    workerId: "community-scheduler",
-    leaseToken,
-  });
+  const review =
+    input.reviewThreadV2 === false
+      ? null
+      : await input.store.claimReviewReminderBatch({
+          teamId: input.teamId,
+          channelId: input.channelId,
+          now: input.now,
+          workerId: "community-scheduler",
+          leaseToken,
+        });
   if (review)
     return deliverReviewReminder({
       token: input.token,
@@ -139,13 +150,17 @@ export async function sendReminderBatch(input: {
       store: input.store,
       render: renderReminderBatch,
     });
-  let batch = await input.store.claimGoalReminderBatch({
+  const claimInput = {
     teamId: input.teamId,
     channelId: input.channelId,
     now: input.now,
     workerId: "community-scheduler",
     leaseToken,
-  });
+  };
+  let batch =
+    input.reviewThreadV2 === false
+      ? await input.store.claimReminderBatch(claimInput)
+      : await input.store.claimGoalReminderBatch(claimInput);
   if (!batch) return 0;
   const claimedLeaseToken = batch.leaseToken;
   const text = renderReminderBatch(batch.jobs);
@@ -219,6 +234,7 @@ export async function sendReminderBatches(input: {
   readonly channelId: string;
   readonly now: string;
   readonly store: ReminderBatchStore;
+  readonly reviewThreadV2?: boolean;
 }): Promise<number> {
   let delivered = 0;
   for (let batch = 0; batch < 10; batch += 1) {

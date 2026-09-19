@@ -134,6 +134,7 @@ export async function applyChange(context: CommunityContext, change: DayChange):
   const result = await context.store.change({
     ...change,
     syncLegacy: context.scope.channelId === context.env.COMMUNITY_PUBLIC_CHANNEL_ID,
+    reviewThreadV2: context.env.REVIEW_THREAD_V2 === "true",
     delivery: {
       source: context.source,
       thread: context.thread,

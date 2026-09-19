@@ -23,6 +23,7 @@ export type GardenSeason = {
 export type DayChange = DayScope & {
   readonly syncLegacy?: boolean;
   readonly preserveOutcome?: boolean;
+  readonly reviewThreadV2?: boolean;
   readonly key: string;
   readonly action: "goal" | "complete" | "partial" | "not_done" | "reflection" | "rest" | "undo";
   readonly text?: string;

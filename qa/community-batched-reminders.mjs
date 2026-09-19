@@ -32,6 +32,7 @@ const env = {
   COMMUNITY_PUBLIC_CHANNEL_ID: "CPUBLIC",
   COMMUNITY_BOT_USER_ID: "UBOT",
   COMMUNITY_ADMIN_ID: "UADMIN",
+  REVIEW_THREAD_V2: "true",
 };
 const posts = [];
 const originalFetch = globalThis.fetch;

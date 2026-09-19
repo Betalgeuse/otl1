@@ -18,7 +18,7 @@ export type GardenDelivery = {
   readonly messageTs: string | null;
   readonly projectionKey: string;
   readonly routeKind: "interaction" | "goal_prompt" | "review_prompt";
-  readonly routeProvenance: "recorded" | "daily_prompt_fallback";
+  readonly routeProvenance: "recorded" | "daily_prompt_fallback" | "canonical_review";
 };
 export type GardenRetirement = {
   readonly retirementId: number;
@@ -62,8 +62,14 @@ function delivery(value: Json): GardenDelivery | null {
     throw new InputError("Invalid garden attempts");
   if (!["interaction", "goal_prompt", "review_prompt"].includes(routeKind))
     throw new InputError("Invalid garden route kind");
-  if (!["recorded", "daily_prompt_fallback"].includes(routeProvenance))
-    throw new InputError("Invalid garden route provenance");
+  switch (routeProvenance) {
+    case "recorded":
+    case "daily_prompt_fallback":
+    case "canonical_review":
+      break;
+    default:
+      throw new InputError("Invalid garden route provenance");
+  }
   return {
     teamId: string(item.teamId),
     channelId: string(item.channelId),
@@ -81,7 +87,7 @@ function delivery(value: Json): GardenDelivery | null {
     messageTs: nullableString(item.messageTs),
     projectionKey: string(item.projectionKey),
     routeKind: routeKind as GardenDelivery["routeKind"],
-    routeProvenance: routeProvenance as GardenDelivery["routeProvenance"],
+    routeProvenance,
   };
 }
 

@@ -40,6 +40,7 @@ export async function runDueGardenRetirements(
   now: number,
   observeDue?: (nextDue: number) => Promise<void>,
 ): Promise<number> {
+  if (env.GARDEN_RECONCILIATION !== "true") return 0;
   const deliveries = new GardenDeliveryStore(new NeonStore(env.DATABASE_URL));
   let processed = 0;
   let nextDue: number | null = null;

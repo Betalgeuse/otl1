@@ -49,10 +49,11 @@ export async function deliverInviteAdminReview(
   env: InviteAdminEnv,
   store: ReferralRuntimeStore,
   slack: ReferralSlackPort,
+  now = Date.now(),
 ): Promise<boolean> {
   const adminId = env.COMMUNITY_ADMIN_ID;
   if (!adminId) return false;
-  const review = await store.claimAdminReview(new Date().toISOString());
+  const review = await store.claimAdminReview(new Date(now).toISOString());
   if (!review) return false;
   try {
     const applicant = await readInvitePrivateObject(
@@ -90,14 +91,14 @@ export async function deliverInviteAdminReview(
     await store.finishOutbox({
       outboxId: review.outboxId,
       status: "sent",
-      now: new Date().toISOString(),
+      now: new Date(now).toISOString(),
     });
     return true;
   } catch (error) {
     await store.finishOutbox({
       outboxId: review.outboxId,
       status: "failed",
-      now: new Date().toISOString(),
+      now: new Date(now).toISOString(),
     });
     if (error instanceof Error) return false;
     throw error;
@@ -131,7 +132,7 @@ export async function handleInviteAdminAction(
     throw error;
   }
   const value = actionValueSchema.safeParse(decoded);
-  if (!value.success || !/^\d+\.\d+$/.test(input.actionTs))
+  if (!value.success || !/^\d{10}\.\d{1,6}$/.test(input.actionTs))
     throw new InputError("신청 정보를 확인할 수 없습니다.");
   const base = {
     teamId: input.teamId,
@@ -139,7 +140,7 @@ export async function handleInviteAdminAction(
     requestId: value.data.requestId,
     expectedRevision: value.data.revision,
     key: `slack:${input.actionTs}:${input.actionId}`,
-    now: new Date().toISOString(),
+    now: new Date(Number(input.actionTs) * 1_000).toISOString(),
   };
   if (input.actionId === "community_invite_mark_invited") {
     await store.markInvited(base);
