@@ -149,7 +149,8 @@ const env = {
   COMMUNITY_CHANNEL_ID: "CADMIN", COMMUNITY_ENABLED: "true", REFERRALS_ENABLED: "true",
   PUBLIC_APPLICATIONS_ENABLED: "true", LIFECYCLE_MODE: "disabled",
   SLACK_BOT_TOKEN: "xoxb-fake", SLACK_SIGNING_SECRET: "slack-test-secret",
-  DATABASE_URL: "postgresql://user:pass@fake.neon.tech/test", BOARD_SIGNING_SECRET: "board-test",
+  DATABASE_URL: "postgresql://user:pass@fake.neon.tech/test",
+  INTEREST_RUNTIME_DATABASE_URL: "postgresql://user:pass@fake.neon.tech/test", BOARD_SIGNING_SECRET: "board-test",
   PUBLIC_BASE_URL: "https://core.invalid", PUBLIC_APPLICATION_ORIGIN: "https://site.invalid",
   REFERRAL_TOKEN_SECRET: "token-test-secret", SITE_CORE_HMAC_SECRET: "site-test-secret",
   INVITE_EMAIL_PEPPER: Buffer.alloc(32, 8).toString("base64url"), INVITE_PRIVATE_KEK: Buffer.alloc(32, 7).toString("base64url"),
@@ -179,7 +180,7 @@ try {
   await run(join(pgBin, "initdb"), ["-D", data, "--no-locale", "--encoding=UTF8", "--auth=trust"]);
   await run(join(pgBin, "pg_ctl"), ["-D", data, "-o", `-F -k ${socket} -p ${port}`, "-l", join(temp, "postgres.log"), "-w", "start"]);
   started = true;
-  for (const migration of migrations.filter((name) => Number(name.slice(0, 3)) <= 37)) {
+  for (const migration of migrations.filter((name) => Number(name.slice(0, 3)) <= 38)) {
     if (migration.startsWith("006_"))
       await run(join(pgBin, "psql"), ["-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", `migrations/${migration}`, "-f", "migrations/007_normalized_legacy.sql"]);
     else if (!migration.startsWith("007_"))
