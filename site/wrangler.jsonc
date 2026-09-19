@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "otl1-site",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-31",
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "404-page"
+  },
+  "services": [
+    {
+      "binding": "CORE",
+      "service": "otl1-onething-garden"
+    }
+  ],
+  "vars": {
+    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA"
+  }
+}

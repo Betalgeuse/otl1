@@ -1,0 +1,54 @@
+{
+  "desktop": {
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "hiddenReveals": 0
+  },
+  "mobile": {
+    "scrollWidth": 375,
+    "clientWidth": 375,
+    "hiddenReveals": 1
+  },
+  "small": {
+    "scrollWidth": 320,
+    "clientWidth": 320,
+    "hiddenReveals": 1,
+    "firstFocus": {
+      "tag": "A",
+      "outline": "3px"
+    },
+    "secondFocus": {
+      "tag": "BUTTON",
+      "outline": "3px"
+    },
+    "menuOpen": {
+      "expanded": "true",
+      "display": "grid"
+    }
+  },
+  "longKorean": {
+    "scrollWidth": 320,
+    "clientWidth": 320,
+    "overflow": false,
+    "targetVisible": true
+  },
+  "jsBlocked": {
+    "story": true,
+    "linksDisplay": "grid",
+    "scrollWidth": 375,
+    "clientWidth": 375
+  },
+  "reducedMotion": {
+    "media": true,
+    "transition": "1e-05s",
+    "hasMotion": false
+  },
+  "notFoundStatus": 404,
+  "missingAssetStatus": 404,
+  "headers": {
+    "csp": "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; upgrade-insecure-requests",
+    "hsts": "max-age=31536000; includeSubDomains",
+    "nosniff": "nosniff",
+    "referrer": "strict-origin-when-cross-origin"
+  }
+}

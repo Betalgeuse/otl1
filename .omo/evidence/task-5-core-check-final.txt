@@ -1,0 +1,72 @@
+$ node scripts/check.mjs
+Checking lint
+$ biome check src
+Checking typecheck
+$ tsc --noEmit
+Checking test:unit
+$ node scripts/test-unit.mjs
+PASS admin access: actor/team/channel guards before effects; explicit action allowlist; private QA controls; modal owner binding
+PASS clocks: durable global bug tick re-arms before isolated maintenance; existing channel schedule remains separate.
+PASS custom catalog selection, distinct picks, alias exclusion, cache, bot text conversion
+PASS earlier day eligibility; partial+review/rest excluded; pure notice; explicit prompt/root date beats reply date
+PASS partial-without-review stays open; reviewed noncompletion closed; rest suppresses notice
+PASS questions: source-backed sidebar answer, no record access, record-request handoff, unknown/error fail-closed
+PASS explicit optional-weekend question bypasses model uncertainty
+PASS palette ownership, modal owner guard, palette persistence/redraw, private transport and origin context
+PASS personal notification settings only sent to owner
+PASS public board has no controls; owner ephemeral palette; old image stripped after new send; text/threads preserved
+PASS failed new publication never removes previous image
+PASS continuous garden grows 4-to-8, rolls without reset, keeps weekend participation, signs and renders PNG
+PASS full-scope markers are collision-free and retirement stays inside one projection route
+PASS durable garden retries post failure, reconciles accepted response, then retires old image after durable sent receipt
+PASS /one retired: signed command changes no records, manifest has no slash command
+PASS verified human join atomically restores current membership/profile while preserving reminder preferences and arms clock
+PASS empty weekends omitted, participated weekend preserved, Monday remains, signed image roundtrip
+PASS edit preview owner-only, exact past date/revision, goal preserves outcome/reflection, invalid status blocked
+PASS past edit keeps target summary but garden includes current-day written goal
+77 reflection header cases passed
+3 additional independent-review counterexamples passed
+PASS actual multiline first review auto-saves scoped date+verbatim body; past/overwrite/rest/conflict confirm; missing/invalid no writes
+PASS unclear explicit reflection headers cannot fall through to automatic AI writes
+PASS status-only completion is not a review; contradictory/meta text causes zero automatic writes
+PASS past status-only confirmation cannot overwrite review; ambiguous dated body never proposes wrong-date mutation
+PASS spaced/unsupported dates cannot produce wrong-date confirmation; extra negative/meta cases cannot auto-complete
+PASS narrative correction wording cannot bypass safe explicit-header date handling
+PASS historical, numeric and reason-word reflections store body-only
+PASS durable public outcome question is private-text-free, retryable, owner/date/revision-bound, and optional
+PASS user message edits retain original author/source/thread and use edit timestamp for freshness/idempotency; bot edits ignored
+PASS immutable welcome publication, dry-run, exact source pinning, same-user correction, concurrency, ordered images, and fail-closed delivery
+PASS welcome publisher defaults to credential-safe dry-run and targeted repair requires --apply to mutate
+PASS welcome publisher/repair use admin DB while join delivery uses runtime-only DB
+PASS guide role bootstrap generates distinct credentials and sends them only through protected stdin sinks
+PASS public welcome export uses placeholders, excludes private pins, and contains no GitHub Actions
+PASS Slack email scope remains narrowly justified by active invitation recipient binding
+PASS first registration/review direct top-level townhall; no user-shoutout button; duplicates and undo routing; private QA isolation
+23 boundary assertions passed
+All 6 kinds exclude previous fallback and stale model choice
+PASS 15 target-date syntax cases distinguish headers from content
+PASS target-date guard calls AI only for current or incidental date content
+PASS explicit goal fields outrank title verbs, isolate the goal line, preserve date safety, and compare normalized exact repeats
+PASS signed Slack routing: incidental dates save once, partial reflection follows its thread, historical edit stays protected
+PASS record decision separates outcome from preserved reflection; ordinary intake stays replayable and bug intake stores digest-only metadata
+PASS townhall: bound preview, old/changed/expired/nonowner blocked, one publication, cross-channel feedback lookup, no real Slack calls
+PASS welcome routing: first join, duplicate, both event types, bot, wrong channel/team; no real Slack
+PASS self-introduction: create/edit reactions, partial failure compensation, clean retry, cleanup failure logging
+PASS introduction channel: join prompt, owner action, private directory, missing-member mention
+PASS migration maintenance: no database writes or ACK-success during migration, health remains available
+PASS KST weekend: Saturday optional 10 once/no mention, Sunday none, no personal/review, Monday current-member common flow
+PASS bug intake: signed event/action delivery failed1->sent2, terminal failed3, summary/receipt/handoff outbox, no duplicate; status=new -> needs_info -> needs_info -> needs_info -> needs_info -> needs_info -> needs_info_exhausted -> new -> needs_info -> new -> needs_info
+PASS community bug dialogue: 29 Korean/adversarial cases, exact spans, one-question cap, confirmation gate
+PASS due delivery parser: a malformed claimed row is isolated without logging payload data.
+PASS bug backlog: every saturated team-scoped phase reports continuation until drained.
+PASS admin collection QA action: owner-scoped current-member public triggers, one batch each, private count receipt and replay denial
+PASS admin replay separates configured schedule time from monotonic current membership observation
+PASS current member snapshot: paginated, deduplicated, bounded human classification and partial failure closed
+PASS reminder batch: bounds, rate-limit retry, exact-history ambiguity reconciliation and no duplicate post
+PASS batched reminders: one complete snapshot and one post for goal and review members
+PASS reminder audit: deterministic 101/201 chunks, bounded posts, and complete empty snapshots
+PASS common delivery: bounded 429 retry and exact multi-page history reconciliation prevent duplicate posts
+PASS schedule overlap: common and personal due at the same KST minute each post exactly once
+Passed 54 isolated synthetic suites.
+Checking build
+$ wrangler deploy --dry-run --outdir .output

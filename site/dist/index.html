@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ONE THING은 오늘 가장 중요한 한 가지를 끝까지 해내는 작은 리듬입니다.">
+    <title>ONE THING · 오늘 한 가지를 끝까지</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+    <header class="site-header" data-header>
+      <nav class="site-nav" aria-label="주요 탐색">
+        <a class="wordmark" href="#home" aria-label="ONE THING 처음으로">ONE<br>THING</a>
+        <button class="menu-button" type="button" data-menu aria-controls="site-links" aria-expanded="false">
+          <span class="sr-only">메뉴 열기</span><span></span><span></span><span></span>
+        </button>
+        <div class="site-links" id="site-links" data-links>
+          <a href="#rhythm">리듬</a><a href="#garden">함께 보기</a><a href="#return">돌아오기</a>
+        </div>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="chapter chapter--paper" id="home" aria-labelledby="home-title">
+        <div class="chapter-inner">
+          <div class="chapter-label"><span>오늘의 시작</span><span>01</span></div>
+          <div class="hero-copy reveal">
+            <p class="eyebrow">매일의 스크럼, 한 가지에 닿는 방식</p>
+            <h1 id="home-title">오늘 가장 중요한<br>한 가지를 먼저 끝냅니다.</h1>
+            <p>더 많은 할 일을 쌓는 대신, 지금 가장 중요한 일을 한 문장으로 남깁니다. 작게 시작해도 하루의 방향은 선명해집니다.</p>
+            <a class="text-link" href="#rhythm">하루의 리듬 보기 <span aria-hidden="true">↓</span></a>
+          </div>
+          <svg class="hero-illustration" viewBox="0 0 680 440" role="img" aria-labelledby="hero-art-title">
+            <title id="hero-art-title">한 가지 우선순위가 네 칸의 기록으로 이어지는 모습</title>
+            <path class="ink-stroke" d="M42 320C184 320 184 101 341 101S483 320 636 320" />
+            <path class="ink-stroke thin" d="M42 365H636" />
+            <g class="priority-note"><rect x="85" y="55" width="205" height="132" /><path d="M112 92H263M112 122H220M112 152H188" /></g>
+            <g class="garden-grid"><rect x="352" y="249" width="74" height="74" /><rect x="438" y="249" width="74" height="74" /><rect x="352" y="335" width="74" height="74" /><rect x="438" y="335" width="74" height="74" /><circle class="seed-dot" cx="389" cy="286" r="10" /><path class="check-mark" d="M460 371l16 16 34-40" /></g>
+          </svg>
+        </div>
+      </section>
+      <section class="editorial editorial--night" id="rhythm" aria-labelledby="rhythm-title">
+        <div class="editorial-inner reveal">
+          <div class="editorial-rail"><span>01</span><p>하루의 리듬</p></div>
+          <div class="editorial-reading">
+            <h2 id="rhythm-title">시작과 끝은 <span class="mobile-line">한 대화 안에서</span> <span class="mobile-line">함께 이어집니다.</span></h2>
+            <ol class="dayline">
+              <li><span>10:00</span><strong>목표를 남깁니다.</strong><p>완벽한 계획 대신, 오늘 끝낼 한 가지를 적습니다.</p></li>
+              <li><span>DOING</span><strong>그 일을 합니다.</strong><p>알림보다 실행에 시간을 돌려드립니다.</p></li>
+              <li><span>18:00</span><strong>짧은 회고로 오늘을 닫습니다.</strong><p>완료, 부분 진행, 휴식을 구분해 다음 하루를 판단합니다.</p></li>
+            </ol>
+          </div>
+        </div>
+      </section>
+      <section class="chapter chapter--leaf" id="garden" aria-labelledby="garden-title">
+        <div class="chapter-inner">
+          <div class="chapter-label"><span>함께 이어지는 기록</span><span>02</span></div>
+          <div class="garden-intro reveal">
+            <p class="eyebrow">작은 기록은 혼자 남지 않습니다</p>
+            <h2 id="garden-title">한 칸씩 자라는 <span class="mobile-line">기록이 서로의</span> <span class="mobile-line">다음 행동을 비춥니다.</span></h2>
+          </div>
+          <div class="thread-scene" aria-labelledby="thread-title">
+            <h3 class="sr-only" id="thread-title">한 사람의 기록에 이어지는 동료의 반응과 도움</h3>
+            <div class="thread thread--one"></div><div class="thread thread--two"></div>
+            <article class="message message--goal"><small>10:00</small><strong>제안서 첫 문단 쓰기</strong></article>
+            <article class="message message--peer"><small>동료의 반응</small><strong>첫 문장을 잡은 게 좋아요.</strong></article>
+            <article class="message message--support"><small>먼저 다가가는 도움</small><strong>막힌 곳이 있으면 같이 풀어요.</strong></article>
+            <div class="mini-garden" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+      </section>
+      <section class="editorial editorial--night" aria-labelledby="support-title">
+        <div class="editorial-inner reveal">
+          <div class="editorial-rail"><span>02</span><p>사람과 실천</p></div>
+          <div class="editorial-reading reading-grid">
+            <div><h2 id="support-title">반응은 <span class="mobile-line">실제 행동을 향합니다.</span></h2><p>완료를 과장하지 않고, 어려운 날에는 강도를 낮춥니다. 봇의 말은 봇의 말로 남기고, 서로의 응원은 서로의 말로 남깁니다.</p></div>
+            <div class="rule-list"><p><b>기록</b><span>한 문장으로 시작한 일</span></p><p><b>반응</b><span>구체적이고 짧은 동료의 말</span></p><p><b>지원</b><span>필요할 때 먼저 건네는 도움</span></p></div>
+          </div>
+        </div>
+      </section>
+      <section class="chapter chapter--return" id="return" aria-labelledby="return-title">
+        <div class="chapter-inner">
+          <div class="chapter-label"><span>다시 시작하기</span><span>03</span></div>
+          <div class="return-layout reveal">
+            <div><p class="eyebrow">멈춘 기록도 남습니다</p><h2 id="return-title">언제든 <span class="mobile-line">돌아올 수 있습니다.</span></h2><p>잠시 멈춘 날이 있어도 <span class="mobile-line">기록은 사라지지 않습니다.</span> 새 ONE THING 한 문장으로 다시 오늘의 네 칸을 엽니다.</p><a class="text-link" href="#home">오늘의 한 가지로 돌아가기 <span aria-hidden="true">↑</span></a></div>
+            <svg viewBox="0 0 360 280" role="img" aria-label="닫힌 네 칸의 기록이 새 한 칸으로 다시 열리는 모습"><path class="return-line" d="M76 188h208M76 188V76h208v112"/><rect class="return-empty" x="112" y="112" width="48" height="48"/><rect class="return-empty" x="200" y="112" width="48" height="48"/><path class="return-arrow" d="M182 44v74m0-74-25 25m25-25 25 25"/><circle class="return-seed" cx="136" cy="136" r="9"/></svg>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer"><p>ONE THING</p><p>오늘 한 가지를, 함께 끝까지.</p><a href="#home">위로</a></footer>
+  </body>
+</html>

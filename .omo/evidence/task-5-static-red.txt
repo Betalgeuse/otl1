@@ -1,0 +1,8 @@
+ENOENT: no such file or directory, open '/Users/zayden/Documents/otl1-worktrees/membership-site-shell/site/wrangler.jsonc'
+    path: "/Users/zayden/Documents/otl1-worktrees/membership-site-shell/site/wrangler.jsonc",
+ syscall: "open",
+   errno: -2,
+    code: "ENOENT"
+
+
+Bun v1.4.0 (macOS arm64)
