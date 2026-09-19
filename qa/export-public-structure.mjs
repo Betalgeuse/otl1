@@ -7,6 +7,7 @@ import {
 } from "../scripts/export-public-config.mjs";
 import {
   assertPublicExportPaths,
+  assertRequiredPublicExportSources,
   PUBLIC_COPY_PATHS,
   PUBLIC_DOC_NAMES,
   PUBLIC_QA_NAMES,
@@ -21,6 +22,11 @@ assert.equal(PUBLIC_COPY_PATHS.includes("site"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("migrations/029_member_lifecycle.sql"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("migrations/033_dormant_return.sql"), true);
 assert.deepEqual(PUBLIC_RUNTIME_MIGRATION_PATHS, ["migrations/034_referral_runtime_retention.sql"]);
+assert.doesNotThrow(() => assertRequiredPublicExportSources(PUBLIC_RUNTIME_MIGRATION_PATHS, () => true));
+assert.throws(
+  () => assertRequiredPublicExportSources(PUBLIC_RUNTIME_MIGRATION_PATHS, () => false),
+  /Missing required public export source: migrations\/034_referral_runtime_retention\.sql/,
+);
 assert.equal(PUBLIC_QA_NAMES.includes("community-guide-security-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("version-map.mjs"), true);
 assert.equal(PUBLIC_DOC_NAMES.includes("GUIDE_DATABASE_SECURITY.md"), true);

@@ -18,6 +18,7 @@ import {
 } from "./export-public-config.mjs";
 import {
   assertPublicExportPaths,
+  assertRequiredPublicExportSources,
   PUBLIC_COPY_PATHS,
   PUBLIC_DOC_NAMES,
   PUBLIC_QA_NAMES,
@@ -27,6 +28,10 @@ import {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const destination = resolve(process.argv[2] ?? "/tmp/otl1-public");
 const marker = join(destination, ".public-export");
+assertRequiredPublicExportSources(
+  [...PUBLIC_COPY_PATHS, ...PUBLIC_RUNTIME_MIGRATION_PATHS],
+  (path) => existsSync(join(root, path)),
+);
 if (existsSync(join(destination, ".git")))
   throw Error(
     "Refusing to overwrite a Git repository; preserve it and remove the export directory explicitly first.",
@@ -50,8 +55,7 @@ const copy = (path) => {
   cpSync(join(root, path), join(destination, path), { recursive: true });
 };
 for (const path of PUBLIC_COPY_PATHS) copy(path);
-for (const path of PUBLIC_RUNTIME_MIGRATION_PATHS)
-  if (existsSync(join(root, path))) copy(path);
+for (const path of PUBLIC_RUNTIME_MIGRATION_PATHS) copy(path);
 for (const name of PUBLIC_QA_NAMES) copy(`qa/${name}`);
 for (const name of PUBLIC_DOC_NAMES) copy("docs/" + name);
 copy("README.md");

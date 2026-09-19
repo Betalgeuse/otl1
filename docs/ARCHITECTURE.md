@@ -117,6 +117,8 @@ flowchart LR
 
 신청 본문·이메일·철회 capability는 R2의 전용 `INVITE_PRIVATE_OBJECTS`에 versioned AEAD 암호문으로 둡니다. 관계형 DB에는 opaque reference, digest, 동의·상태·revision·최소 감사 값만 남깁니다. `SITE_CORE_HMAC_SECRET`은 site와 core의 요청 인증에, `INVITE_EMAIL_PEPPER`는 정규화 이메일 equality digest에, `INVITE_PRIVATE_KEK`과 `INVITE_PRIVATE_KEK_VERSION`은 신청 비공개 객체에만 사용합니다. 이 값은 공개 구성·브라우저·로그·export에 넣지 않습니다.
 
+referral·lifecycle의 DB 함수와 비공개 객체 참조는 항상 workspace/team 범위에서 조회·변경합니다. site 서명은 site-to-core 요청을 인증할 뿐 다른 workspace의 신청·lifecycle·admin 카드에 대한 권한을 만들지 않습니다. runtime scheduler도 같은 DB/store 범위 안에서 만료·정리만 실행합니다.
+
 사이트의 Turnstile 검증은 서버에서 hostname·action·single-use token을 확인한 뒤에만 신청을 core에 전달합니다. nonce와 timestamp는 재사용을 거절하고 사용 후 정리합니다. core는 애플리케이션 승인과 Slack 초대를 분리합니다. `approved`는 내부 검토 결과일 뿐이고, `mark-invited`는 관리자가 Free Slack UI에서 수동으로 보낸 초대의 관찰 기록일 뿐 배달·가입 증명은 아닙니다. 검증된 이메일과 `team_join`을 대조한 뒤에만 소개 출처를 회원 관계로 기록합니다.
 
 활성 플래그는 모두 기본 꺼짐이며 서로 독립적입니다. `LIFECYCLE_MODE=disabled|shadow|enforce`, `REVIEW_THREAD_V2`, `GARDEN_RECONCILIATION`, `REFERRALS_ENABLED`, `PUBLIC_APPLICATIONS_ENABLED` 중 하나가 없거나 잘못되면 새 경로는 닫힙니다. migration 029–034는 028 뒤에 추가로만 적용합니다. `034_referral_runtime_retention.sql`은 runtime scheduler가 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하게 하며, runtime role에는 approve·reject·mark-invited 권한을 주지 않습니다.

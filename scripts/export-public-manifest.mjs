@@ -53,6 +53,11 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/034_referral_runtime_retention.sql",
 ];
 
+export function assertRequiredPublicExportSources(paths, exists) {
+  for (const path of paths)
+    if (!exists(path)) throw Error(`Missing required public export source: ${path}`);
+}
+
 export const PUBLIC_QA_NAMES = [
   "check-intent.mjs",
   "community-admin-access.mjs",
