@@ -19,6 +19,7 @@ const turnstileProductionSiteKey = "0x4AAAAAAE83tTpMHyLr4nIv";
 
 await Promise.all([
   mustExist("site/dist/404.html"),
+  mustExist("site/dist/boot.js"),
   mustExist("site/DESIGN.md"),
 ]);
 
@@ -44,6 +45,7 @@ for (const fragment of [
 for (const fragment of ["<main", "<nav", "<h1", "aria-expanded"]) {
   assert.ok(page.includes(fragment), `missing semantic markup: ${fragment}`);
 }
+assert.match(page, /<script src="\/boot\.js"><\/script>\s*<link rel="stylesheet"/, "mobile navigation must be enhanced before the first styled paint");
 
 for (const fragment of [
   "오늘 가장 중요한 한 가지",
