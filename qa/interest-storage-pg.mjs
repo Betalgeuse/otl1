@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { prepareInterestPrivateObject, putPreparedInterestPrivateObject, readInterestPrivateObject, deleteInterestPrivateObject } from '../src/community-interest-private.ts';
+import { CommunityInterestStore } from '../src/community-interest-store.ts';
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, '..');
@@ -13,6 +14,7 @@ const tag = randomUUID().replaceAll('-', '').slice(0, 12);
 const freshDb = `otl_i_${tag}_fresh`;
 const upgradeDb = `otl_i_${tag}_upgrade`;
 const ownerRole = `otl_i_${tag}_owner`;
+const runtimeProbeRole = `otl_i_${tag}_runtime`;
 const clusterEnv = { ...process.env, PGHOST: '127.0.0.1', PGPORT: '5432', PGDATABASE: 'postgres' };
 let dbEnv = clusterEnv;
 const run = (bin, args) => exec(join(pg, bin), args, { cwd: root, env: dbEnv, encoding: 'utf8' });
@@ -56,6 +58,41 @@ try {
   const first = { ...submit('FIRST1', 'a'.repeat(64)), ...prepared.ref };
   assert.deepEqual(await readInterestPrivateObject(privateConfig, { ...prepared.ref, requestId: first.interestId, revision: 0 }), privatePayload);
   assert.equal(JSON.parse(await call('interest_runtime_execute', 'submit', first)).created, true);
+  await sql(`CREATE ROLE ${runtimeProbeRole} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT PASSWORD NULL`);
+  await sql(`GRANT otl_referral_runtime TO ${runtimeProbeRole}`);
+  const ownerEnv = dbEnv;
+  const quoted = (value) => `'${value.replaceAll("'", "''")}'`;
+  const runtimeDb = { async queryJson(query, params) {
+    const rendered = params.reduce((statement, value, index) => statement.replaceAll(`$${index + 1}`, quoted(value)), query);
+    const output = await sql(rendered);
+    return output === '' ? null : JSON.parse(output);
+  } };
+  const runtimeStore = new CommunityInterestStore(runtimeDb);
+  dbEnv = { ...ownerEnv, PGUSER: runtimeProbeRole };
+  const [recoveredReceipt, recoveredObject] = await Promise.all([
+    runtimeStore.findSubmission('TREF', first.key),
+    runtimeStore.findPrivateIntake('TREF', first.interestId, first.objectDigest),
+  ]);
+  assert.deepEqual(recoveredReceipt,
+    { receiptId: first.receiptId, accepted: true, created: false, sameSubmissionKey: true });
+  assert.equal(recoveredObject, 'adopted');
+  assert.equal(await runtimeStore.findSubmission('TOTHER', first.key), null);
+  assert.equal(await runtimeStore.findSubmission('TREF', 'wrong-key-1234'), null);
+  assert.equal(await runtimeStore.findPrivateIntake('TOTHER', first.interestId, first.objectDigest), 'absent');
+  assert.equal(await runtimeStore.findPrivateIntake('TREF', first.interestId, '0'.repeat(64)), 'conflict');
+  assert.equal(await runtimeStore.findPrivateIntake('TREF', 'IREQ-WRONG1', first.objectDigest), 'conflict');
+  assert.equal(await runtimeStore.findPrivateIntake('TREF', 'IREQ-MISSING1', '0'.repeat(64)), 'absent');
+  assert.equal(await sql("SELECT has_table_privilege(current_user,'otl.interest_submission_receipts','SELECT')"), 'f');
+  assert.equal(await sql("SELECT has_table_privilege(current_user,'otl.interest_private_payloads','SELECT')"), 'f');
+  await assert.rejects(sql("SELECT count(*) FROM otl.interest_submission_receipts"), /permission denied/);
+  await assert.rejects(sql("SELECT count(*) FROM otl.interest_private_payloads"), /permission denied/);
+  assert.ok(!JSON.stringify([recoveredReceipt, recoveredObject]).includes(privatePayload.email));
+  assert.ok(!JSON.stringify([recoveredReceipt, recoveredObject]).includes(privatePayload.intent));
+  dbEnv = ownerEnv;
+  console.log(JSON.stringify({ scenario: 'runtime-reconcile-read', role: runtimeProbeRole,
+    receiptRecovered: true, objectAdopted: true, crossTeamDenied: true, wrongKeyMissing: true,
+    wrongDigestConflict: true, directTablesDenied: true, piiAbsent: true }));
+
   assert.equal(await sql("SELECT count(*) FROM otl.interest_requests WHERE team_id='TREF'"), '1');
   assert.equal(await sql("SELECT count(*) FROM otl.interest_private_payloads WHERE team_id='TREF'"), '1');
   assert.equal(await sql("SELECT count(*) FROM otl.referral_requests WHERE team_id='TREF'"), '0');
@@ -149,7 +186,6 @@ try {
   const memberConfirmation = { teamId: 'TREF', interestId: confirmed.interestId, memberId: 'UREFERRER',
     expectedRevision: 0, signedNonceDigest: '4'.repeat(64), evidenceDigest: '4'.repeat(64),
     key: 'member-confirm1', now };
-  const ownerEnv = dbEnv;
   dbEnv = { ...ownerEnv, PGUSER: 'otl_interest_member_login' };
   await assert.rejects(sql(`SELECT otl.interest_member_confirm('${JSON.stringify({ ...memberConfirmation, evidenceDigest: '5'.repeat(64) })}'::jsonb)`), /member introduction denied/);
   assert.equal(JSON.parse(await sql(`SELECT otl.interest_member_confirm('${JSON.stringify(memberConfirmation)}'::jsonb)`)).state, 'introduction_verified');
@@ -248,7 +284,7 @@ try {
     await sql(`DROP DATABASE IF EXISTS ${upgradeDb} WITH (FORCE)`);
     for (const role of ['otl_interest_member_login','otl_interest_member','otl_referral_admin_login',
       'otl_referral_admin','otl_referral_runtime','otl_lifecycle_admin_login','otl_lifecycle_admin',
-      'otl_lifecycle_runtime','otl_guide_admin','otl_guide_runtime','legacy_invitation_runtime',ownerRole]) {
+      'otl_lifecycle_runtime','otl_guide_admin','otl_guide_runtime','legacy_invitation_runtime',runtimeProbeRole,ownerRole]) {
       await sql(`DROP ROLE IF EXISTS ${role}`);
     }
     console.log(JSON.stringify({ scenario: 'local-pg-cleanup', freshDb, upgradeDb, dropped: true }));

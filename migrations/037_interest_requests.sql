@@ -224,7 +224,28 @@ DECLARE t text:=p->>'teamId'; k text:=p->>'key'; h text:=md5(p::text);
   e otl.interest_events; b otl.interest_referral_bridges; r otl.referral_requests;
   old_state text; result jsonb;
 BEGIN
-  IF coalesce(t,'')='' OR coalesce(k,'') !~ '^[A-Za-z0-9_-]{8,120}$' OR coalesce(p->>'now','')=''
+  IF coalesce(t,'')='' THEN RAISE EXCEPTION 'invalid interest scope'; END IF;
+  IF op='find_submission' THEN
+    IF coalesce(k,'') !~ '^[A-Za-z0-9_-]{8,120}$'
+    THEN RAISE EXCEPTION 'invalid interest submission key'; END IF;
+    SELECT * INTO s FROM otl.interest_submission_receipts
+      WHERE team_id=t AND submission_key=k;
+    IF NOT FOUND THEN RETURN 'null'::jsonb; END IF;
+    RETURN jsonb_build_object('receiptId',s.receipt_id,'accepted',true,'created',false,
+      'sameSubmissionKey',s.interest_id IS NOT NULL);
+  ELSIF op='find_private_intake' THEN
+    IF coalesce(p->>'interestId','') !~ '^IREQ-[A-Z0-9-]{4,64}$'
+      OR coalesce(p->>'objectDigest','') !~ '^[0-9a-f]{64}$'
+    THEN RAISE EXCEPTION 'invalid interest private lookup'; END IF;
+    IF EXISTS(SELECT 1 FROM otl.interest_private_payloads pp WHERE pp.team_id=t
+      AND pp.interest_id=p->>'interestId' AND pp.object_digest=p->>'objectDigest')
+    THEN RETURN to_jsonb('adopted'::text); END IF;
+    IF EXISTS(SELECT 1 FROM otl.interest_private_payloads pp WHERE pp.team_id=t
+      AND (pp.interest_id=p->>'interestId' OR pp.object_digest=p->>'objectDigest'))
+    THEN RETURN to_jsonb('conflict'::text); END IF;
+    RETURN to_jsonb('absent'::text);
+  END IF;
+  IF coalesce(k,'') !~ '^[A-Za-z0-9_-]{8,120}$' OR coalesce(p->>'now','')=''
   THEN RAISE EXCEPTION 'invalid interest scope'; END IF;
   now_at:=(p->>'now')::timestamptz;
   IF op='submit' THEN

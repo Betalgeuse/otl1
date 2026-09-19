@@ -42,12 +42,8 @@ export class CommunityInterestStore {
 
   async findSubmission(teamId: string, key: string): Promise<InterestReceipt | null> {
     const value = await this.db.queryJson(
-      `SELECT CASE WHEN s.receipt_id IS NULL THEN NULL ELSE jsonb_build_object(
-        'receiptId',s.receipt_id,'accepted',true,'created',false,
-        'sameSubmissionKey',s.interest_id IS NOT NULL) END
-       FROM (SELECT 1) seed LEFT JOIN otl.interest_submission_receipts s
-       ON s.team_id=$1 AND s.submission_key=$2`,
-      [teamId, key],
+      "SELECT otl.interest_runtime_execute('find_submission',$1::jsonb)",
+      [JSON.stringify({ teamId, key })],
     );
     return value === null ? null : receipt(value);
   }
@@ -58,11 +54,8 @@ export class CommunityInterestStore {
     objectDigest: string,
   ): Promise<"adopted" | "absent" | "conflict"> {
     const value = await this.db.queryJson(
-      `SELECT to_jsonb(CASE
-        WHEN EXISTS(SELECT 1 FROM otl.interest_private_payloads WHERE team_id=$1 AND interest_id=$2 AND object_digest=$3) THEN 'adopted'
-        WHEN EXISTS(SELECT 1 FROM otl.interest_private_payloads WHERE team_id=$1 AND (interest_id=$2 OR object_digest=$3)) THEN 'conflict'
-        ELSE 'absent' END)`,
-      [teamId, interestId, objectDigest],
+      "SELECT otl.interest_runtime_execute('find_private_intake',$1::jsonb)",
+      [JSON.stringify({ teamId, interestId, objectDigest })],
     );
     if (value === "adopted" || value === "absent" || value === "conflict") return value;
     throw new InputError("Invalid interest private state");
