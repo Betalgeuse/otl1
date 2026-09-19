@@ -13,6 +13,9 @@ const css = await read("site/dist/styles.css");
 const script = await read("site/dist/app.js");
 const observations = JSON.parse(await read(".omo/evidence/task-5-browser-observations.json"));
 const documentText = page.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+const productionHostname = "otl1.hyuk.me";
+const turnstileTestSiteKey = "1x00000000000000000000AA";
+const turnstileProductionSiteKey = "0x4AAAAAAE83tTpMHyLr4nIv";
 
 await Promise.all([
   mustExist("site/dist/404.html"),
@@ -25,7 +28,8 @@ assert.equal(config.assets?.binding, "ASSETS");
 assert.equal(config.assets?.run_worker_first, true);
 assert.equal(config.assets?.not_found_handling, "404-page");
 assert.equal(config.services?.[0]?.binding, "CORE");
-assert.equal(config.vars?.TURNSTILE_SITE_KEY, "1x00000000000000000000AA");
+assert.notEqual(config.vars?.TURNSTILE_SITE_KEY, turnstileTestSiteKey, `${productionHostname} must not use the Cloudflare Turnstile test sitekey`);
+assert.equal(config.vars?.TURNSTILE_SITE_KEY, turnstileProductionSiteKey, `${productionHostname} must use its hostname-scoped production sitekey`);
 
 for (const fragment of [
   "default-src 'self'",
