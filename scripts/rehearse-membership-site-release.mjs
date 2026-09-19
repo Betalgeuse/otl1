@@ -20,7 +20,7 @@ const protectedTables = [
   "workspace_channel_memberships", "community_reminder_audit",
 ];
 const focusedQa = [
-  "release-rehearsal-http", "member-lifecycle-pg", "lifecycle-delivery-pg", "lifecycle-admin-security",
+  "release-rehearsal-http", "release-rehearsal-leak", "member-lifecycle-pg", "lifecycle-delivery-pg", "lifecycle-admin-security",
   "referral-storage-pg", "referral-retention-pg", "community-runtime-pg",
   "review-thread-topology-pg", "garden-projection-upgrade-pg",
   "membership-reminder-audit-pg", "community-guide-security-pg",
@@ -30,6 +30,36 @@ const injection = process.argv.find((arg) => arg.startsWith("--inject="))?.slice
 const receiptPath = resolve(process.argv.find((arg) => arg.startsWith("--receipt="))?.slice(10)
   ?? join(root, ".omo/evidence/task-14-otl1-membership-invite-site.json"));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+const fakeSecret = `FAKE_RELEASE_SECRET_CANARY_${"Z".repeat(32)}`;
+const sensitiveValues = [fakeSecret, ...Object.entries(process.env)
+  .filter(([name, value]) => /(?:SECRET|TOKEN|KEY|KEK|PEPPER|DATABASE_URL)/.test(name) && value?.length >= 12)
+  .map(([, value]) => value)];
+const credentialPattern = /xox[baprs]-[A-Za-z0-9-]{20,}|postgres(?:ql)?:\/\/[^:\s]+:[^@\s]+@[^/\s]+|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/;
+function assertNoLeak(content, checkPatterns = true) {
+  if (sensitiveValues.some((value) => content.includes(value)) ||
+    (checkPatterns && credentialPattern.test(content)))
+    throw new Error("release artifact secret leak detected");
+}
+async function scanPublicExport(directory) {
+  let scanned = 0;
+  async function walk(path, relative = "") {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name === ".wrangler") continue;
+      const name = relative ? `${relative}/${entry.name}` : entry.name;
+      const absolute = join(path, entry.name);
+      if (entry.isDirectory()) { await walk(absolute, name); continue; }
+      if (!entry.isFile()) continue;
+      const contents = await readFile(absolute);
+      if (sensitiveValues.some((value) => contents.includes(Buffer.from(value))))
+        throw new Error("release artifact secret leak detected");
+      if (contents.includes(0)) continue;
+      assertNoLeak(contents.toString("utf8"), !name.startsWith("qa/"));
+      scanned++;
+    }
+  }
+  await walk(directory);
+  return scanned;
+}
 const receipt = { scenario: "todo14-local-release-rehearsal", sourceSha: "", status: "failed", checks: {}, manifest: {} };
 let temp;
 let started = false;
@@ -41,6 +71,7 @@ async function run(binary, args, options = {}) {
 }
 async function check(name, binary, args, options) {
   const result = await run(binary, args, options);
+  assertNoLeak(result.stdout + result.stderr);
   receipt.checks[name] = { exit: 0, outputSha256: sha256(result.stdout + result.stderr) };
   return result;
 }
@@ -95,6 +126,11 @@ try {
   const config = JSON.parse(await readFile(join(root, "wrangler.jsonc"), "utf8"));
   const site = JSON.parse(await readFile(join(root, "site/wrangler.jsonc"), "utf8"));
   const vars = await readFile(join(root, ".dev.vars.example"), "utf8");
+  if (injection === "secret-leak") {
+    const leakedConfig = structuredClone(site);
+    leakedConfig.vars.RELEASE_DEBUG_SECRET = fakeSecret;
+    assertNoLeak(JSON.stringify(leakedConfig));
+  }
   const alternate = structuredClone(site);
   alternate.services = [];
   await expectFailure("missing-binding", async () => preflight(config, alternate, vars));
@@ -178,8 +214,10 @@ try {
   for (const name of focusedQa) await check(`qa/${name}`, "bun", [`qa/${name}.mjs`]);
   const exportDir = join(temp, "public");
   await check("public-export", "node", ["scripts/export-public.mjs", exportDir]);
+  receipt.checks.publicLeakScan = { exit: 0, scannedFiles: await scanPublicExport(exportDir) };
   await check("public-check", "bun", ["run", "check"], { cwd: exportDir });
   await check("public-site-build", join(exportDir, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "site/wrangler.jsonc"], { cwd: exportDir });
+  receipt.checks.publicBuiltLeakScan = { exit: 0, scannedFiles: await scanPublicExport(exportDir) };
   await check("git-diff-check", "git", ["diff", "--check"]);
   const dirty = (await run("git", ["status", "--porcelain", "--untracked-files=all"])).stdout.trim();
   assert.equal(dirty, "", "release source worktree is dirty");
@@ -192,6 +230,15 @@ try {
   if (started) await run(join(pgBin, "pg_ctl"), ["-D", join(temp, "data"), "-m", "immediate", "-w", "stop"]).catch(() => {});
   if (temp) await rm(temp, { recursive: true, force: true });
   await mkdir(dirname(receiptPath), { recursive: true });
-  await writeFile(receiptPath, JSON.stringify(receipt, null, 2) + "\n");
+  let receiptText = JSON.stringify(receipt, null, 2) + "\n";
+  try { assertNoLeak(receiptText); }
+  catch {
+    receipt.status = "failed";
+    receipt.failure = "release receipt secret leak detected";
+    receipt.checks = {};
+    process.exitCode = 1;
+    receiptText = JSON.stringify(receipt, null, 2) + "\n";
+  }
+  await writeFile(receiptPath, receiptText);
   console.log(`${receipt.status.toUpperCase()} release rehearsal: ${receiptPath}`);
 }
