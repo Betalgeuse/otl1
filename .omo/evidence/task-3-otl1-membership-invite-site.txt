@@ -1,0 +1,62 @@
+TASK 3 EVIDENCE - referral, application, consent, decision, and private-payload storage
+Base: 6c51b86dff3db2fd5a5ccbee14be6f73c6515bf1
+Implementation commit: 7a82f43d4613b271469b14ef49c8261e3b2696c7
+Worktree: /Users/zayden/Documents/otl1-worktrees/membership-referral-storage
+Date: 2026-09-19 Asia/Seoul
+
+SCENARIO failing-first PostgreSQL storage contract
+Invocation: REFERRAL_RED=1 bun qa/referral-storage-pg.mjs
+Binary observable: exit 1 for the intended absent function
+Captured output:
+ERROR: function otl.referral_runtime_execute(unknown, jsonb) does not exist
+Artifact: .omo/evidence/task-3-otl1-membership-invite-site.txt
+
+SCENARIO failing-first invite-private module contract
+Invocation: bun qa/invite-private.mjs
+Binary observable: exit 1 for the intended absent module
+Captured output:
+error: Cannot find module '../src/community-invite-private.ts'
+Artifact: .omo/evidence/task-3-otl1-membership-invite-site.txt
+
+SCENARIO disposable PostgreSQL fresh and upgrade contract
+Invocation: bun qa/referral-storage-pg.mjs
+Binary observable: exit 0 with state-derived check count and concurrency counts
+Captured output:
+PASS referral storage: fresh+upgrade=001-030 checks=59 concurrent-open=1 concurrent-decision=1 pii-rows=0 roles=isolated rollback=clean legacy=disabled
+Coverage observable: migrations 001-030 fresh and 001-029 upgrade paths; active/current/nondeleted/nonbot lazy issue; stable pause/restore; rotation/revocation; generic invalid-token response; one open request per team and normalized-email HMAC digest; earliest request/referrer retention; duplicate and terminal-new-request behavior; submission/decision/join/purge replay; missing/wrong consent; malformed Unicode digest; forged/cross-team member and admin denial; stale/missing revision; all approved/declined/duplicate/withdrawn/suspected_abuse decisions; manual-invite assertion distinct from delivery; matched join attribution; 24-hour/7-day/30-day/12-month retention; purge failure/retry/replay; immutable consent/referrer/audit; PUBLIC/direct-table/cross-role denial; transaction rollback; concurrent request and decision one-winner behavior; and legacy invitation functions revoked and unreferenced.
+Cleanup observable: unique PostgreSQL cluster stopped in finally and its otl-referral-storage-* directory removed.
+Artifact: .omo/evidence/task-3-otl1-membership-invite-site.txt
+
+SCENARIO in-memory R2 and cryptographic contract
+Invocation: bun qa/invite-private.mjs
+Binary observable: exit 0 with digest, object, and denial outputs
+Captured output:
+PASS invite private: random-token-bits=192 token-digest=sha256 email-digest=hmac-sha256-normalized bucket=invite-private objects=1 roundtrip=1 ciphertext-pii=absent wrong-key=denied wrong-version=denied aad-swap=denied namespace-swap=denied tamper=denied missing=denied purge-retry=2 bug-private-baseline=roundtrip+tamper-denied
+Coverage observable: two independent random tokens; deterministic token digest; normalized email equivalence; pepper separation; malformed full-width email denial; dedicated invite-private object prefix/schema/AAD/key version; AES-GCM envelope round trip; raw email/name/intent absent from ciphertext; wrong KEK/version/request/AAD/namespace/ciphertext failures; missing bucket/object denial; deletion retry without KEK; and unchanged bug-private write/read/tamper behavior.
+Artifact: .omo/evidence/task-3-otl1-membership-invite-site.txt
+
+SCENARIO repository quality gate
+Invocation: bun run check
+Binary observable: exit 0
+Captured output summary:
+Biome checked 116 source files with no fixes; tsc --noEmit passed; 54 isolated synthetic suites passed; wrangler deploy --dry-run exited normally.
+Artifact: .omo/evidence/task-3-otl1-membership-invite-site.txt
+
+SCENARIO strict TypeScript and diff gate
+Invocation: bun /Users/zayden/.codex/plugins/cache/sisyphuslabs/omo/4.19.4/skills/programming/scripts/typescript/check-no-excuse-rules.ts src/community-invite-private.ts src/community-referral-token.ts src/community-referral-types.ts && git diff --check
+Binary observable: exit 0
+Captured output:
+No violations in 3 file(s).
+git diff --check produced no output.
+Artifact: .omo/evidence/task-3-otl1-membership-invite-site.txt
+
+SCENARIO exact committed implementation and cleanup
+Invocation: git rev-parse HEAD; git status --short; find /tmp /var/folders -type d -name 'otl-referral-storage-*' -print
+Binary observable: implementation SHA exact; status and cleanup output empty before evidence creation
+Captured output:
+7a82f43d4613b271469b14ef49c8261e3b2696c7
+Changed paths are exactly migration 030, the three referral/invite-private TypeScript modules, the two QA drivers, and their two SQL fixtures.
+Artifact: .omo/evidence/task-3-otl1-membership-invite-site.txt
+
+BOUNDARY
+Migration 030 is additive and un-deployed. Referral tokens preserve provenance and are not admission credentials, quotas, rewards, or inviter access. Approval, manual-invite assertion, and observed Slack join are separate facts. Worker/router/scheduler/site/wrangler/docs/package/runtime binding and production PostgreSQL/R2/Slack operations remain intentionally outside Todo 3.
