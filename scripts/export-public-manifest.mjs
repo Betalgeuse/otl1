@@ -82,12 +82,6 @@ export const PUBLIC_MEMBERSHIP_SOURCE_PATHS = [
   "site/qa/interest-siteverify.mjs",
 ];
 
-export const PUBLIC_REQUIRED_EXPORT_SOURCES = [
-  ...PUBLIC_COPY_PATHS,
-  ...PUBLIC_RUNTIME_MIGRATION_PATHS,
-  ...PUBLIC_MEMBERSHIP_SOURCE_PATHS,
-];
-
 export function assertRequiredPublicExportSources(paths, exists) {
   for (const path of paths)
     if (!exists(path)) throw Error(`Missing required public export source: ${path}`);
@@ -174,6 +168,7 @@ export const PUBLIC_QA_NAMES = [
   "community-interest-intake.mjs",
   "community-interest-admin.mjs",
   "community-interest-local-e2e.mjs",
+  "interest-dead-alert.mjs",
   "interest-private.mjs",
   "interest-storage-pg.mjs",
   "invite-private.mjs",
@@ -199,6 +194,13 @@ export const PUBLIC_QA_NAMES = [
   "bug-dialogue-cases.json",
   "maintainer-dry-run.mjs",
   "fixtures/bug-packets/confirmed-valid.v1.json",
+];
+
+export const PUBLIC_REQUIRED_EXPORT_SOURCES = [
+  ...PUBLIC_COPY_PATHS,
+  ...PUBLIC_RUNTIME_MIGRATION_PATHS,
+  ...PUBLIC_MEMBERSHIP_SOURCE_PATHS,
+  ...PUBLIC_QA_NAMES.map((name) => `qa/${name}`),
 ];
 
 export const PUBLIC_DOC_NAMES = [

@@ -39,6 +39,15 @@ assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("site/qa/interest-check.mjs
 assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("src/community-interest-intake.ts"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("referral-capacity-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("interest-storage-pg.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("interest-dead-alert.mjs"), true);
+assert.throws(
+  () =>
+    assertRequiredPublicExportSources(
+      PUBLIC_REQUIRED_EXPORT_SOURCES,
+      (path) => path !== "qa/interest-dead-alert.mjs",
+    ),
+  /Missing required public export source: qa\/interest-dead-alert\.mjs/,
+);
 assert.doesNotThrow(() => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPORT_SOURCES, () => true));
 assert.throws(
   () => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPORT_SOURCES, (path) => path !== "migrations/036_referral_capacity.sql"),
