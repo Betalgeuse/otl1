@@ -31,6 +31,9 @@ const receiptPath = resolve(process.argv.find((arg) => arg.startsWith("--receipt
   ?? join(root, ".omo/evidence/task-14-otl1-membership-invite-site.json"));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const fakeSecret = `FAKE_RELEASE_SECRET_CANARY_${"Z".repeat(32)}`;
+const turnstileTestSiteKey = "1x00000000000000000000AA";
+const turnstileProductionSiteKey = "0x4AAAAAAE83tTpMHyLr4nIv";
+const productionHostname = "otl1.hyuk.me";
 const sensitiveValues = [fakeSecret, ...Object.entries(process.env)
   .filter(([name, value]) => /(?:SECRET|TOKEN|KEY|KEK|PEPPER|DATABASE_URL)/.test(name) && value?.length >= 12)
   .map(([, value]) => value)];
@@ -105,7 +108,7 @@ async function expectFailure(name, action) {
   assert.equal(failed, true, `${name} must fail closed`);
   receipt.checks[name] = { exit: 0, observed: "rejected" };
 }
-function preflight(config, site, vars) {
+function preflight(config, site, vars, siteWorker) {
   assert.equal(migrations.length, 35, "schema head must be 035");
   assert.deepEqual(release.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035"]);
   assert.equal(site.services?.find((item) => item.binding === "CORE")?.service, config.name, "CORE service binding missing");
@@ -117,8 +120,12 @@ function preflight(config, site, vars) {
   assert.equal(config.vars.LIFECYCLE_MODE, "disabled");
   for (const name of ["REVIEW_THREAD_V2", "GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED"])
     assert.equal(config.vars[name], "false", `${name} must default off`);
-  assert.equal(site.vars.TURNSTILE_SITE_KEY, "1x00000000000000000000AA", "production Turnstile key must be installed only at release");
-  assert.equal(config.vars.PUBLIC_APPLICATION_ORIGIN, "https://otl1.hyuk.me");
+  assert.notEqual(site.vars.TURNSTILE_SITE_KEY, turnstileTestSiteKey, `${productionHostname} must not use the Cloudflare Turnstile test sitekey`);
+  assert.equal(site.vars.TURNSTILE_SITE_KEY, turnstileProductionSiteKey, `${productionHostname} must use its verified hostname-scoped Turnstile sitekey`);
+  assert.equal(site.vars.TURNSTILE_SECRET, undefined, "TURNSTILE_SECRET must be a Worker secret, never a public var");
+  assert.match(siteWorker, /if \(!env\.TURNSTILE_SECRET \|\| !token \|\| token\.length > 2048\) return "invalid";/, "TURNSTILE_SECRET must fail closed when absent");
+  assert.match(siteWorker, /secret: env\.TURNSTILE_SECRET/, "TURNSTILE_SECRET must be sent only to Siteverify");
+  assert.equal(config.vars.PUBLIC_APPLICATION_ORIGIN, `https://${productionHostname}`);
 }
 
 try {
@@ -126,19 +133,28 @@ try {
   const config = JSON.parse(await readFile(join(root, "wrangler.jsonc"), "utf8"));
   const site = JSON.parse(await readFile(join(root, "site/wrangler.jsonc"), "utf8"));
   const vars = await readFile(join(root, ".dev.vars.example"), "utf8");
-  if (injection === "secret-leak") {
+  const siteWorker = await readFile(join(root, "site/src/index.ts"), "utf8");
+  if (injection === "secret-leak" || injection === "turnstile-secret-leak") {
     const leakedConfig = structuredClone(site);
-    leakedConfig.vars.RELEASE_DEBUG_SECRET = fakeSecret;
+    leakedConfig.vars.TURNSTILE_SECRET = fakeSecret;
     assertNoLeak(JSON.stringify(leakedConfig));
   }
   const alternate = structuredClone(site);
   alternate.services = [];
-  await expectFailure("missing-binding", async () => preflight(config, alternate, vars));
-  await expectFailure("missing-secret", async () => preflight(config, site, vars.replace("INVITE_PRIVATE_KEK=", "")));
-  if (injection === "missing-binding") preflight(config, alternate, vars);
-  if (injection === "missing-secret") preflight(config, site, vars.replace("INVITE_PRIVATE_KEK=", ""));
+  const testKeySite = structuredClone(site);
+  testKeySite.vars.TURNSTILE_SITE_KEY = turnstileTestSiteKey;
+  const secretVarSite = structuredClone(site);
+  secretVarSite.vars.TURNSTILE_SECRET = fakeSecret;
+  await expectFailure("missing-binding", async () => preflight(config, alternate, vars, siteWorker));
+  await expectFailure("missing-secret", async () => preflight(config, site, vars.replace("INVITE_PRIVATE_KEK=", ""), siteWorker));
+  await expectFailure("turnstile-test-key", async () => preflight(config, testKeySite, vars, siteWorker));
+  await expectFailure("turnstile-secret-in-vars", async () => preflight(config, secretVarSite, vars, siteWorker));
+  if (injection === "missing-binding") preflight(config, alternate, vars, siteWorker);
+  if (injection === "missing-secret") preflight(config, site, vars.replace("INVITE_PRIVATE_KEK=", ""), siteWorker);
+  if (injection === "turnstile-test-key") preflight(config, testKeySite, vars, siteWorker);
+  if (injection === "turnstile-secret-in-vars") preflight(config, secretVarSite, vars, siteWorker);
   if (injection === "schema-head") throw new Error("injected schema head mismatch");
-  preflight(config, site, vars);
+  preflight(config, site, vars, siteWorker);
   receipt.manifest = {
     migrations: release, coreWorker: config.name, siteWorker: site.name,
     bindings: ["AI", "COMMUNITY_CLOCK", "INTENT_RATE_LIMITER", "BUG_PRIVATE_OBJECTS", "INVITE_PRIVATE_OBJECTS", "CORE", "ASSETS", "RATE_LIMITER"],
@@ -149,7 +165,7 @@ try {
     siteSecrets: ["TURNSTILE_SECRET", "SITE_CORE_HMAC_SECRET"],
     operatorOnlySecrets: ["GUIDE_ADMIN_DATABASE_URL"],
     slackScopes: ["im:write", "users:read.email"], slackEvents: ["team_join"],
-    domain: "otl1.hyuk.me", turnstileProductionKeys: "required before enablement",
+    domain: productionHostname, turnstileProductionSiteKey, turnstileSecret: "required by name before enablement",
     flagsDefaultOff: ["LIFECYCLE_MODE", "REVIEW_THREAD_V2", "GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED"],
     previousProductionSha: "unavailable",
     previousWorkerVersions: { core: "unavailable", site: "undeployed or unavailable" },
