@@ -13,15 +13,17 @@ import { fileURLToPath } from "node:url";
 import {
   assertSanitizedCoreConfig,
   sanitizePackageMetadata,
+  sanitizeSiteQaCoreConfig,
   sanitizeSiteWranglerConfig,
   sanitizeWranglerConfig,
 } from "./export-public-config.mjs";
 import {
   assertPublicExportPaths,
   assertRequiredPublicExportSources,
-  PUBLIC_COPY_PATHS,
   PUBLIC_DOC_NAMES,
   PUBLIC_QA_NAMES,
+  PUBLIC_COPY_PATHS,
+  PUBLIC_REQUIRED_EXPORT_SOURCES,
   PUBLIC_RUNTIME_MIGRATION_PATHS,
 } from "./export-public-manifest.mjs";
 
@@ -29,7 +31,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const destination = resolve(process.argv[2] ?? "/tmp/otl1-public");
 const marker = join(destination, ".public-export");
 assertRequiredPublicExportSources(
-  [...PUBLIC_COPY_PATHS, ...PUBLIC_RUNTIME_MIGRATION_PATHS],
+  PUBLIC_REQUIRED_EXPORT_SOURCES,
   (path) => existsSync(join(root, path)),
 );
 if (existsSync(join(destination, ".git")))
@@ -89,6 +91,10 @@ const siteConfig = sanitizeSiteWranglerConfig(
   JSON.parse(readFileSync(join(root, "site/wrangler.jsonc"), "utf8")),
 );
 write("site/wrangler.jsonc", JSON.stringify(siteConfig, null, 2) + "\n");
+const siteQaCoreConfig = sanitizeSiteQaCoreConfig(
+  JSON.parse(readFileSync(join(root, "site/qa/fake-core.wrangler.jsonc"), "utf8")),
+);
+write("site/qa/fake-core.wrangler.jsonc", JSON.stringify(siteQaCoreConfig, null, 2) + "\n");
 const packageMetadata = sanitizePackageMetadata(
   JSON.parse(readFileSync(join(root, "package.json"), "utf8")),
 );

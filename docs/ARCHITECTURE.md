@@ -46,6 +46,11 @@ flowchart LR
 | `bug_events`, `bug_transition_contract`, `bug_jobs` | 허용 상태 전이, idempotency 이력, 재현·수정·검토·배포 작업 outbox |
 | `bug_deliveries` | 질문·요약·접수 영수증·비공개 관리자 인계의 Slack delivery outbox와 lease·재시도·발송 영수증 |
 | `bug_artifacts`, `bug_links`, `agent_runs`, `git_changes` | digest로 참조하는 산출물, 중복·회귀 관계, 이후 작업의 관찰 이력 |
+| `referral_capacity_defaults`, `referral_capacity_members`, `referral_capacity_events` | 운영자만 바꾸는 전역·회원별 lifetime 초대 한도와 불변 변경 감사. 가입과 승인 예약만 계산함 |
+| `interest_requests`, `interest_consents`, `interest_attachment_consents` | 비소속자 비공개 문의의 상태, `interest-consent-v1`과 별도 `invite-consent-v1` |
+| `interest_private_payloads`, `interest_submission_receipts` | 문의 원문의 암호화 객체 참조와 멱등 접수 영수증 |
+| `interest_introduction_evidence`, `interest_introduction_prompts`, `interest_referral_bridges` | 활성 회원의 서명 확인, 한 번 쓰는 prompt, 확인 뒤 일반 소개 신청 하나에 붙인 관계 |
+| `interest_events`, `interest_outbox`, `interest_service_nonces` | team 범위 상태 감사, 비공개 관리자 효과, site-to-core 재사용 거절 |
 | `schema_migrations`, `otl_archive` | 적용 이력과 이관 전 데이터 보존 |
 
 ```mermaid
@@ -102,7 +107,7 @@ welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_r
 
 ## 계획된 membership·site 경계
 
-다음 구조는 v0.0.56–v0.0.64의 미출시 경계입니다. core Worker는 Slack 서명, lifecycle·소개 신청 저장, R2 비공개 객체와 Slack 효과를 맡고, 공개 site Worker는 서비스 바인딩 `CORE`로만 core에 요청합니다. site Worker에는 Slack·Neon 자격증명을 두지 않습니다.
+다음 구조는 v0.0.56–v0.0.66의 미출시 경계입니다. core Worker는 Slack 서명, lifecycle·초대 한도·소개 신청·비소속자 문의 저장, R2 비공개 객체와 Slack 효과를 맡고, 공개 site Worker는 서비스 바인딩 `CORE`로만 core에 요청합니다. site Worker에는 Slack·Neon 자격증명을 두지 않습니다. 현재 core shadow와 migration 036·037은 staged implementation일 뿐 출시가 아닙니다.
 
 ```mermaid
 flowchart LR
@@ -111,16 +116,22 @@ flowchart LR
   Site -->|HMAC timestamp nonce| Core[core Worker]
   Core --> DB[(Neon: 상태 감사 digest)]
   Core --> InviteR2[(INVITE_PRIVATE_OBJECTS: 암호문)]
-  Core --> Slack[Slack private admin card / DM]
+  Core --> Slack[Slack private admin card / signed active-member confirmation]
   Slack -->|team_join| Core
 ```
 
-신청 본문·이메일·철회 capability는 R2의 전용 `INVITE_PRIVATE_OBJECTS`에 versioned AEAD 암호문으로 둡니다. 관계형 DB에는 opaque reference, digest, 동의·상태·revision·최소 감사 값만 남깁니다. `SITE_CORE_HMAC_SECRET`은 site와 core의 요청 인증에, `INVITE_EMAIL_PEPPER`는 정규화 이메일 equality digest에, `INVITE_PRIVATE_KEK`과 `INVITE_PRIVATE_KEK_VERSION`은 신청 비공개 객체에만 사용합니다. 이 값은 공개 구성·브라우저·로그·export에 넣지 않습니다.
+소개 신청과 비소속자 문의의 본문·이메일·철회 capability는 R2의 전용 `INVITE_PRIVATE_OBJECTS`에 versioned AEAD 암호문으로 둡니다. 관계형 DB에는 opaque reference, digest, 동의·상태·revision·최소 감사 값만 남깁니다. `SITE_CORE_HMAC_SECRET`은 site와 core의 요청 인증에, `INVITE_EMAIL_PEPPER`는 정규화 이메일 equality digest에, `INVITE_PRIVATE_KEK`과 `INVITE_PRIVATE_KEK_VERSION`은 신청 비공개 객체에만 사용합니다. 이 값은 공개 구성·브라우저·로그·export에 넣지 않습니다.
 
-referral·lifecycle의 DB 함수와 비공개 객체 참조는 항상 workspace/team 범위에서 조회·변경합니다. site 서명은 site-to-core 요청을 인증할 뿐 다른 workspace의 신청·lifecycle·admin 카드에 대한 권한을 만들지 않습니다. runtime scheduler도 같은 DB/store 범위 안에서 만료·정리만 실행합니다.
+referral·lifecycle·interest의 DB 함수와 비공개 객체 참조는 항상 workspace/team 범위에서 조회·변경합니다. site 서명은 site-to-core 요청을 인증할 뿐 다른 workspace의 신청·lifecycle·admin 카드에 대한 권한을 만들지 않습니다. runtime scheduler도 같은 DB/store 범위 안에서 만료·정리만 실행합니다.
 
 lifecycle 정정은 일반 Worker `DATABASE_URL`에서 분리한 `LIFECYCLE_ADMIN_DATABASE_URL`로만 실행합니다. 035의 `otl_lifecycle_admin_login`은 Neon 호환 제한 로그인 역할이며, 직접 테이블 접근과 일반 lifecycle runtime·소개·guide 함수는 받지 않습니다. 후보 범위 읽기와 audit가 남는 `restore_error`만 허용합니다. 이 연결을 쓰는 Slack 입력은 서명 검증 뒤 설정된 workspace, 지정 관리자, 공개 채널과 다른 비공개 admin 채널을 모두 확인하므로 site 서명이나 scheduler가 lifecycle 관리자 권한을 얻을 수 없습니다.
 
 사이트의 Turnstile 검증은 서버에서 hostname·action·single-use token을 확인한 뒤에만 신청을 core에 전달합니다. nonce와 timestamp는 재사용을 거절하고 사용 후 정리합니다. core는 애플리케이션 승인과 Slack 초대를 분리합니다. `approved`는 내부 검토 결과일 뿐이고, `mark-invited`는 관리자가 Free Slack UI에서 수동으로 보낸 초대의 관찰 기록일 뿐 배달·가입 증명은 아닙니다. 검증된 이메일과 `team_join`을 대조한 뒤에만 소개 출처를 회원 관계로 기록합니다.
 
-활성 플래그는 모두 기본 꺼짐이며 서로 독립적입니다. `LIFECYCLE_MODE=disabled|shadow|enforce`, `REVIEW_THREAD_V2`, `GARDEN_RECONCILIATION`, `REFERRALS_ENABLED`, `PUBLIC_APPLICATIONS_ENABLED` 중 하나가 없거나 잘못되면 새 경로는 닫힙니다. migration 029–035는 028 뒤에 추가로만 적용합니다. `034_referral_runtime_retention.sql`은 runtime scheduler가 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하게 하며, runtime role에는 approve·reject·mark-invited 권한을 주지 않습니다. 035의 전용 lifecycle 관리자 로그인은 이 runtime role을 확장하지 않습니다.
+036의 `referral_capacity_status`는 전역 기본값 또는 회원별 override에서 lifetime 최대를 정하고, joined attribution과 `approved` 예약을 더합니다. 기본값은 2이며 pending 소개 신청과 `pending_introduction` 관심 문의는 수에 넣지 않습니다. `otl_referral_admin_login`만 `referral_capacity_admin_execute`를 호출하며, 일반 runtime과 회원은 한도를 수정하거나 승인할 수 없습니다. `REFERRAL_ADMIN_DATABASE_URL`은 이 역할의 별도 연결이고 공개 export에는 빈 placeholder만 둡니다.
+
+037의 `/interest`는 일반 소개 링크가 없는 사람의 운영자 전용 문의를 받습니다. 이 문의는 referral·quota·Slack invite를 만들지 않습니다. 문의자는 `interest-consent-v1`과 `invite-consent-v1`을 각각 수락하고, 이름·이메일 공유는 별도로 선택합니다. 공유를 거부하면 admin 카드에 회원 선택 action을 만들지 않고, 임의의 offline digest나 운영자 주입 행으로도 attach할 수 없습니다. 운영자가 지목한 활성 회원은 별도 비공개 Slack prompt에서 서명 확인을 남겨야 `introduction_verified`가 됩니다. 그 다음에만 ordinary pending referral 하나를 붙일 수 있고, `approved`가 되기 전에는 초대 한도를 예약하지 않습니다.
+
+interest runtime은 `INTEREST_RUNTIME_DATABASE_URL`로 만료·정리만 하고, `INTEREST_ADMIN_DATABASE_URL`은 비공개 admin 카드, `INTEREST_MEMBER_DATABASE_URL`은 활성 회원의 서명 확인에만 씁니다. `INTEREST_ADMIN_CHANNEL_ID`는 공개 채널과 달라야 하며, `PUBLIC_INTEREST_ENABLED`를 비롯한 모든 membership flag는 기본 꺼짐입니다. 이 role URL, `REFERRAL_ADMIN_DATABASE_URL`, HMAC·키·R2 이름·신청 데이터는 공개 config와 export에 넣지 않습니다.
+
+활성 플래그는 모두 기본 꺼짐이며 서로 독립적입니다. `LIFECYCLE_MODE=disabled|shadow|enforce`, `REVIEW_THREAD_V2`, `GARDEN_RECONCILIATION`, `REFERRALS_ENABLED`, `PUBLIC_APPLICATIONS_ENABLED`, `PUBLIC_INTEREST_ENABLED` 중 하나가 없거나 잘못되면 해당 새 경로는 닫힙니다. migration 029–037은 028 뒤에 추가로만 적용합니다. `034_referral_runtime_retention.sql`은 runtime scheduler가 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하게 하며, runtime role에는 approve·reject·mark-invited 권한을 주지 않습니다. 035의 전용 lifecycle 관리자 로그인과 036의 referral admin login, 037의 active-member confirmation login은 서로 권한을 확장하지 않습니다.

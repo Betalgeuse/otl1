@@ -1,6 +1,6 @@
 # 문서 안내
 
-ONE THING 문서는 **현재 동작**, **구현 중인 기반**, **앞으로의 계획**, **과거 근거**를 구분합니다. 현재 운영 기준은 **v0.0.55**입니다. lifecycle·소개 신청·공개 사이트는 [로드맵](ROADMAP.md)의 v0.0.56–v0.0.64 미출시 계획이며, [업데이트 이력](UPDATE_HISTORY.md)은 출시한 결과만 기록합니다. v0.0.54의 버그 제보 기반은 exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web QA까지 통과했지만, 현재 checkout이 canonical private `ops/main`이 아니고 정식 release authority가 없어서 pre-release로 남습니다.
+ONE THING 문서는 **현재 동작**, **구현 중인 기반**, **앞으로의 계획**, **과거 근거**를 구분합니다. 현재 운영 기준은 **v0.0.55**입니다. lifecycle·초대 한도·비공개 참여 문의·소개 신청·공개 사이트는 [로드맵](ROADMAP.md)의 v0.0.56–v0.0.66 미출시 계획이며, [업데이트 이력](UPDATE_HISTORY.md)은 출시한 결과만 기록합니다. v0.0.54의 버그 제보 기반은 exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web QA까지 통과했지만, 현재 checkout이 canonical private `ops/main`이 아니고 정식 release authority가 없어서 pre-release로 남습니다.
 
 | 알고 싶은 내용 | 읽을 문서 |
 | --- | --- |

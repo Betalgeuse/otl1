@@ -22,6 +22,8 @@ const PUBLIC_VARS = Object.freeze({
   GARDEN_RECONCILIATION: "false",
   REFERRALS_ENABLED: "false",
   PUBLIC_APPLICATIONS_ENABLED: "false",
+  PUBLIC_INTEREST_ENABLED: "false",
+  PUBLIC_APPLICATION_ORIGIN: "https://your-site.workers.dev",
 });
 
 const PUBLIC_R2_BUCKETS = Object.freeze([
@@ -43,10 +45,19 @@ export function sanitizeSiteWranglerConfig(source) {
   delete config.account_id;
   config.name = "onething-site";
   config.services = [{ binding: "CORE", service: "replace-with-core-worker" }];
-  config.vars = { TURNSTILE_SITE_KEY: "replace-with-turnstile-site-key" };
+  config.vars = {
+    TURNSTILE_SITE_KEY: "replace-with-turnstile-site-key",
+    PUBLIC_INTEREST_ENABLED: "false",
+  };
   config.ratelimits = [
     { name: "RATE_LIMITER", namespace_id: "1001", simple: { limit: 20, period: 60 } },
   ];
+  return config;
+}
+
+export function sanitizeSiteQaCoreConfig(source) {
+  const config = structuredClone(source);
+  config.name = "onething-core-fixture";
   return config;
 }
 

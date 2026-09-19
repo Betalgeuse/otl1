@@ -48,11 +48,43 @@ export const PUBLIC_COPY_PATHS = [
   "scripts/publish-welcome-guide.mjs",
   "scripts/bootstrap-guide-db-roles.mjs",
   "scripts/bootstrap-lifecycle-admin-db-role.mjs",
+  "scripts/bootstrap-referral-admin-db-role.mjs",
 ];
 
 export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/034_referral_runtime_retention.sql",
   "migrations/035_lifecycle_admin_login.sql",
+  "migrations/036_referral_capacity.sql",
+  "migrations/037_interest_requests.sql",
+];
+
+// `src` and `site` are copied as directories, but these paths keep the membership
+// boundary fail-closed when a future cleanup removes a required entrypoint or asset.
+export const PUBLIC_MEMBERSHIP_SOURCE_PATHS = [
+  "src/community-referral-capacity-admin.ts",
+  "src/community-interest-admin.ts",
+  "src/community-interest-channel.ts",
+  "src/community-interest-due.ts",
+  "src/community-interest-intake.ts",
+  "src/community-interest-interactions.ts",
+  "src/community-interest-private.ts",
+  "src/community-interest-reconcile.ts",
+  "src/community-interest-store.ts",
+  "src/community-interest-types.ts",
+  "site/dist/interest.html",
+  "site/dist/receipt.html",
+  "site/dist/app.js",
+  "site/dist/styles.css",
+  "site/dist/assets/otl1-emoji/ack-yes.png",
+  "site/dist/assets/otl1-emoji/finish_flag.png",
+  "site/qa/interest-check.mjs",
+  "site/qa/interest-siteverify.mjs",
+];
+
+export const PUBLIC_REQUIRED_EXPORT_SOURCES = [
+  ...PUBLIC_COPY_PATHS,
+  ...PUBLIC_RUNTIME_MIGRATION_PATHS,
+  ...PUBLIC_MEMBERSHIP_SOURCE_PATHS,
 ];
 
 export function assertRequiredPublicExportSources(paths, exists) {
@@ -136,6 +168,15 @@ export const PUBLIC_QA_NAMES = [
   "member-lifecycle.mjs",
   "referral-flow.mjs",
   "referral-security.mjs",
+  "referral-capacity-pg.mjs",
+  "referral-capacity-slack.mjs",
+  "community-interest-intake.mjs",
+  "community-interest-admin.mjs",
+  "community-interest-local-e2e.mjs",
+  "interest-private.mjs",
+  "interest-storage-pg.mjs",
+  "invite-private.mjs",
+  "membership-invite-security.mjs",
   "review-thread-topology-pg.mjs",
   "site-intake.mjs",
   "dormant-shoutout.mjs",

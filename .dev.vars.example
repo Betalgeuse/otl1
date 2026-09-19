@@ -35,3 +35,11 @@ REFERRAL_TOKEN_SECRET=
 LIFECYCLE_ACTION_SECRET=
 # Dedicated otl_lifecycle_admin_login credential; never reuse DATABASE_URL.
 LIFECYCLE_ADMIN_DATABASE_URL=
+# Dedicated otl_referral_admin_login credential from bootstrap-referral-admin-db-role.mjs.
+REFERRAL_ADMIN_DATABASE_URL=
+# Interest runtime, private-admin, and active-member confirmation roles stay separate from DATABASE_URL.
+INTEREST_RUNTIME_DATABASE_URL=
+INTEREST_ADMIN_DATABASE_URL=
+INTEREST_MEMBER_DATABASE_URL=
+INTEREST_ADMIN_CHANNEL_ID=
+INTEREST_ACTION_SECRET=

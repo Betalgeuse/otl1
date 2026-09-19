@@ -120,15 +120,23 @@ DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 �
 
 ## 계획된 membership·site 운영 절차
 
-이 절은 v0.0.56–v0.0.64를 배포하기 전의 runbook입니다. 현재 운영 설정을 바꾸거나 기능이 출시되었다고 선언하지 않습니다.
+이 절은 v0.0.56–v0.0.66를 배포하기 전의 runbook입니다. 현재 운영 설정을 바꾸거나 기능이 출시되었다고 선언하지 않습니다.
 
-1. exact clean SHA와 `schema_migrations` 028을 readback하고, `029_member_lifecycle.sql`, `030_referral_applications.sql`, `031_review_thread_gardens.sql`, `032_lifecycle_runtime_delivery.sql`, `033_dormant_return.sql`, `034_referral_runtime_retention.sql`, `035_lifecycle_admin_login.sql`을 정확한 순서로 release receipt에 적습니다. 034의 runtime role은 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하며, 승인·거절·수동 초대 표시는 지정 관리자 경로에 남깁니다. 이미 적용한 migration을 고치거나 002–004의 retired invitation 경로를 되살리지 않습니다.
+1. exact clean SHA와 `schema_migrations` 028을 readback하고, `029_member_lifecycle.sql`부터 `037_interest_requests.sql`까지를 정확한 순서로 release receipt에 적습니다. 034의 runtime role은 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하며, 036은 초대 한도, 037은 비소속자 문의를 각각 추가합니다. 승인·거절·수동 초대 표시는 지정 관리자 경로에 남깁니다. 이미 적용한 migration을 고치거나 002–004의 retired invitation 경로를 되살리지 않습니다.
 2. 유지보수를 켠 뒤 core Worker를 먼저 배포하고, `SITE_CORE_HMAC_SECRET`, `INVITE_EMAIL_PEPPER`, `INVITE_PRIVATE_KEK`, `INVITE_PRIVATE_KEK_VERSION`, 전용 `INVITE_PRIVATE_OBJECTS`를 값 없이 이름만 확인합니다. site Worker에는 core Service Binding과 Turnstile public site key만 둡니다. Slack·Neon·R2 비밀을 site asset이나 공개 vars에 넣지 않습니다.
 3. site preview에서 Turnstile 성공·실패, nonce 재사용 거절, HMAC 거절, 신청·철회, 축소 모션·키보드·320/375/768/1440 폭을 브라우저로 확인합니다. preview가 통과한 뒤에만 DNS와 `otl1.hyuk.me` custom domain의 기존 레코드·binding 충돌을 read-only로 확인하고 연결합니다.
 4. Slack manifest를 생성해 checked-in `slack-manifest.json`과 byte-for-byte 비교합니다. `im:write`, `users:read.email`, `team_join`은 Slack 앱 재설치와 event subscription readback이 필요한 변경입니다. `message.im`은 추가하지 않습니다. 그 밖의 기존 scope는 유지합니다.
-5. 모든 새 플래그는 기본 꺼짐입니다. canonical review root, 계절 잔디, shadow 후보, 유예, 종료, 새 ONE THING 복귀, 신청, 비공개 승인·join provenance, domain 순서로 하나씩 올립니다. 각 단계마다 Slack/DB/브라우저의 독립 관찰 영수증을 남기고 실패하면 해당 플래그만 즉시 되돌립니다. shadow의 zero-retroactive 후보 audit 전에는 enforce로 올리지 않습니다.
+5. 모든 새 플래그는 기본 꺼짐입니다. canonical review root, 계절 잔디, shadow 후보, 유예, 종료, 새 ONE THING 복귀, 초대 한도, 비공개 참여 문의, 확인된 소개 신청, 비공개 승인·join provenance, domain 순서로 하나씩 올립니다. 각 단계마다 Slack/DB/브라우저의 독립 관찰 영수증을 남기고 실패하면 해당 플래그만 즉시 되돌립니다. shadow의 zero-retroactive 후보 audit 전에는 enforce로 올리지 않습니다.
 
 신청은 `approved`여도 Slack 접근 권한이 아닙니다. 지정 운영자만 비공개 admin 카드에서 결정하고, Free Slack UI에서 받는 사람별 초대를 수동으로 보낸 뒤 `mark-invited`를 기록합니다. `team_join`은 실제 가입 관찰에만 쓰고 inviter authority를 만들지 않습니다. inviter에게 지원자·유예·휴식·결정 정보를 보이지 않습니다.
+
+### 계획된 초대 한도와 비공개 참여 문의
+
+036 적용 뒤 `scripts/bootstrap-referral-admin-db-role.mjs`는 DB 소유자 연결에서 `otl_referral_admin_login`의 새 비밀번호를 만들어 지정한 secret sink로만 전달합니다. sink가 Core Worker의 `REFERRAL_ADMIN_DATABASE_URL`에 전용 연결을 설치합니다. 일반 `DATABASE_URL`이나 회원 링크에는 이 권한을 주지 않습니다. 지정 운영자는 비공개 admin 채널에서만 자연어 `초대 한도 보기`, `초대 한도 <@U...> 보기`, `초대 한도 <@U...> 3`, `초대 기본 한도 2`로 전체 기본값과 회원별 lifetime 한도를 읽거나 바꿉니다. 기본값은 2명이며, 가입과 승인 예약만 세고 joined 출처는 계속 셉니다. 회원은 한도를 바꾸거나 신청을 승인할 수 없습니다.
+
+037의 비소속자 문의는 `PUBLIC_INTEREST_ENABLED`가 꺼진 상태에서 시작하지 않습니다. 열기 전에는 `INTEREST_RUNTIME_DATABASE_URL`, `INTEREST_ADMIN_DATABASE_URL`, `INTEREST_MEMBER_DATABASE_URL`, `INTEREST_ADMIN_CHANNEL_ID`, `INTEREST_ACTION_SECRET`, 비공개 R2 객체와 키를 각각 설치하고, admin 채널이 공개 채널과 다름을 Slack API로 확인합니다. `INTEREST_RUNTIME_DATABASE_URL`은 만료·정리 전용이며 승인·소개 첨부 권한이 없습니다. 공개 `/interest` 양식은 `interest-consent-v1`과 `invite-consent-v1`을 따로 받고, 이름·이메일 공유 동의가 없는 문의를 회원 확인이나 첨부 대상으로 만들지 않습니다. 임의의 offline digest나 운영자 메모는 signed active-member confirmation을 대신할 수 없습니다.
+
+관심 문의가 `introduction_verified`가 된 뒤에만 별도의 일반 pending 소개 신청 하나를 붙일 수 있습니다. 이 단계는 한도를 예약하지 않던 문의를 새 소개 신청으로 바꾸는 것이며, 이후 `approved` 때만 reservation이 생깁니다. 승인 뒤 Slack 초대는 계속 Free Slack UI에서 수동으로 보내고, `team_join` 관찰 전에는 가입으로 쓰지 않습니다.
 
 보존과 정리는 신청 상태별로 실행합니다. pending/approved payload는 30일, rejected/withdrawn payload는 24시간, joined payload는 가입 뒤 7일 안에 R2에서 정리합니다. 비민감 decision/security audit는 12개월만 보존합니다. 암호문·nonce·digest·객체 경로·email·Turnstile token·Slack payload는 운영 로그와 공개 export에 쓰지 않습니다. purge 실패는 재시도 가능한 outbox 상태로 남기고, 삭제가 확인될 때까지 성공으로 쓰지 않습니다.
 
@@ -142,4 +150,4 @@ DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 �
 
 전용 연결은 Slack 서명이 검증되고, 설정된 workspace·공개 채널과 다른 비공개 admin 채널·지정 관리자 ID가 모두 일치한 `생애주기` 명령에서만 사용합니다. 운영자는 후보를 읽거나 dormant 상태와 revision 및 근거 키가 일치할 때만 `restore_error`를 기록할 수 있습니다. 범용 runtime 관리자 권한, 다른 회원·채널·workspace 조회, 임의 상태 전환 권한은 만들지 않습니다.
 
-롤백은 먼저 lifecycle feature flag와 전용 `LIFECYCLE_ADMIN_DATABASE_URL` 비밀을 닫아 새 관리 호출을 멈춥니다. migration 029–035은 운영 DB에서 down하지 않으며, 필요한 복구는 audit를 보존한 forward repair로만 합니다. 다시 열기 전에는 새 자격증명을 설치하고 비공개 Slack 관리자 gate와 후보·정정 경로를 재검증합니다. 이 절은 v0.0.56–v0.0.64의 미출시 runbook이며, 자격증명 설치만으로 출시를 선언하지 않습니다.
+롤백은 먼저 lifecycle feature flag와 전용 `LIFECYCLE_ADMIN_DATABASE_URL`, 소개 플래그와 `REFERRAL_ADMIN_DATABASE_URL`, 관심 문의 플래그와 interest 역할 비밀을 닫아 새 관리 호출을 멈춥니다. migration 029–037은 운영 DB에서 down하지 않으며, 필요한 복구는 audit를 보존한 forward repair로만 합니다. 다시 열기 전에는 새 자격증명을 설치하고 비공개 Slack 관리자 gate와 후보·정정 경로를 재검증합니다. 이 절은 v0.0.56–v0.0.66의 미출시 runbook이며, 자격증명 설치만으로 출시를 선언하지 않습니다.
