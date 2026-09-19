@@ -262,7 +262,9 @@ async function withdrawInterest(request: Request, env: SiteEnv, receiptId: strin
     const response = await coreRequest(env, INTEREST_WITHDRAW_PATH, { receiptId, withdrawalToken: token, withdrawalKey });
     if (response.status !== 202) return message(GENERIC_ERROR, 503);
   } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 503); throw error; }
-  return new Response(null, { status: 303, headers: { location: `/receipt/${receiptId}?withdrawn=1`, "set-cookie": `otl1_interest_withdraw=; Path=/receipt/${receiptId}; HttpOnly; Secure; SameSite=Strict; Max-Age=0` } });
+  const confirmation = message("철회 요청을 확인했습니다.", 200);
+  confirmation.headers.set("set-cookie", `otl1_interest_withdraw=; Path=/receipt/${receiptId}; HttpOnly; Secure; SameSite=Strict; Max-Age=0`);
+  return confirmation;
 }
 
 async function withdraw(request: Request, env: SiteEnv, receiptId: string): Promise<Response> {
@@ -302,17 +304,17 @@ const siteWorker = {
     else if (request.method === "POST" && applyRoute) response = await apply(request, env, applyRoute[1]);
     else if (request.method === "GET" && interestReceipt) {
       const html = await assetHtml(env, request, "receipt.html");
-      const withdrawn = url.searchParams.get("withdrawn") === "1";
       const sealed = request.headers.get("cookie")?.match(/(?:^|;\s*)otl1_interest_withdraw=([^;]+)/)?.[1];
       const capability = sealed && env.SITE_CORE_HMAC_SECRET ? await openCapability(env.SITE_CORE_HMAC_SECRET, interestReceipt[1], sealed) : null;
-      const withdrawForm = withdrawn || !capability ? "" : `<form action="/receipt/${interestReceipt[1]}/withdraw" method="post"><input type="hidden" name="withdrawalKey" value="${crypto.randomUUID()}"><button class="button button--quiet" type="submit">문의 철회 요청</button></form>`;
-      response = new Response(html.replaceAll("__RECEIPT_LABEL__", "문의 접수 기록").replaceAll("__RECEIPT_ID__", interestReceipt[1]).replaceAll("__STATUS__", withdrawn ? "철회 요청을 확인했습니다." : "문의가 접수되었습니다.").replaceAll("__RECEIPT_COPY__", "운영자가 문의를 검토합니다. 문의만으로 참여 자격이나 초대가 생기지 않으며, 참여하려면 기존 회원의 확인된 소개와 운영자 승인이 필요합니다.").replaceAll("__WITHDRAW_FORM__", withdrawForm), { headers: { "content-type": "text/html;charset=UTF-8" } });
+      const receiptBlock = capability ? `<p class="receipt-id"><span>영수증</span><strong>${interestReceipt[1]}</strong></p>` : "";
+      const withdrawForm = capability ? `<form action="/receipt/${interestReceipt[1]}/withdraw" method="post"><input type="hidden" name="withdrawalKey" value="${crypto.randomUUID()}"><button class="button button--quiet" type="submit">문의 철회 요청</button></form>` : "";
+      response = new Response(html.replaceAll("__RECEIPT_LABEL__", capability ? "문의 접수 기록" : "문의 확인").replaceAll("__STATUS__", capability ? "문의가 접수되었습니다." : "접수 여부를 확인할 수 없어요.").replaceAll("__RECEIPT_COPY__", capability ? "운영자가 문의를 검토합니다. 문의만으로 참여 자격이나 초대가 생기지 않으며, 참여하려면 기존 회원의 확인된 소개와 운영자 승인이 필요합니다." : "이 브라우저에서 문의 접수 기록을 확인할 수 없습니다. 이 화면은 문의 상태를 알려주지 않습니다.").replaceAll("__RECEIPT_BLOCK__", receiptBlock).replaceAll("__WITHDRAW_FORM__", withdrawForm), { headers: { "content-type": "text/html;charset=UTF-8" } });
     } else if (request.method === "POST" && interestWithdrawal) response = await withdrawInterest(request, env, interestWithdrawal[1]);
     else if (request.method === "GET" && receipt) {
       const html = await assetHtml(env, request, "receipt.html");
       const withdrawn = url.searchParams.get("withdrawn") === "1";
       const withdrawForm = withdrawn ? "" : `<form action="/receipt/${receipt[1]}/withdraw" method="post"><input type="hidden" name="withdrawalKey" value="${crypto.randomUUID()}"><button class="button button--quiet" type="submit">신청 철회</button></form>`;
-      response = new Response(html.replaceAll("__RECEIPT_LABEL__", "신청 영수증").replaceAll("__RECEIPT_ID__", receipt[1]).replaceAll("__STATUS__", withdrawn ? "신청 철회가 접수되었습니다." : "신청이 안전하게 접수되었습니다.").replaceAll("__RECEIPT_COPY__", "운영자가 내용을 직접 확인합니다. 승인되면 Slack 초대를 수동으로 보내며, 초대를 수락해야 참여가 확인됩니다.").replaceAll("__WITHDRAW_FORM__", withdrawForm), { headers: { "content-type": "text/html;charset=UTF-8" } });
+      response = new Response(html.replaceAll("__RECEIPT_LABEL__", "신청 영수증").replaceAll("__RECEIPT_BLOCK__", `<p class="receipt-id"><span>영수증</span><strong>${receipt[1]}</strong></p>`).replaceAll("__RECEIPT_ID__", receipt[1]).replaceAll("__STATUS__", withdrawn ? "신청 철회가 접수되었습니다." : "신청이 안전하게 접수되었습니다.").replaceAll("__RECEIPT_COPY__", "운영자가 내용을 직접 확인합니다. 승인되면 Slack 초대를 수동으로 보내며, 초대를 수락해야 참여가 확인됩니다.").replaceAll("__WITHDRAW_FORM__", withdrawForm), { headers: { "content-type": "text/html;charset=UTF-8" } });
     } else if (request.method === "POST" && withdrawal) response = await withdraw(request, env, withdrawal[1]);
     else response = await env.ASSETS.fetch(request);
     return secured(response);
