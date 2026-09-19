@@ -172,6 +172,7 @@ export async function submitIntroduction(
     });
     return;
   }
+  let createdMessageTs: string | null = null;
   try {
     const payload = {
       channel: channelId,
@@ -185,25 +186,54 @@ export async function submitIntroduction(
           ts: prepared.messageTs,
         })
       : await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", payload);
+    const messageTs = string(sent.ts);
+    if (!prepared.messageTs) {
+      createdMessageTs = messageTs;
+      await addReactions(context.env.SLACK_BOT_TOKEN, {
+        channel: channelId,
+        ts: messageTs,
+        names: await randomCustomEmoji(context.env.SLACK_BOT_TOKEN),
+      });
+    }
     const result = await context.store.finishIntroduction({
       teamId,
       userId,
       token: viewId,
       channelId,
-      messageTs: string(sent.ts),
+      messageTs,
     });
     if (!result) throw new InputError("자기소개 저장 결과를 확인할 수 없어요.");
-    if (!prepared.messageTs)
-      await addReactions(context.env.SLACK_BOT_TOKEN, {
-        channel: channelId,
-        ts: string(sent.ts),
-        names: await randomCustomEmoji(context.env.SLACK_BOT_TOKEN),
-      });
+    createdMessageTs = null;
     await ephemeral(context, {
       text: prepared.messageTs ? "자기소개를 수정했어요." : "자기소개를 올렸어요.",
     });
   } catch (error) {
-    await context.store.abortIntroduction(teamId, userId, viewId);
+    try {
+      await context.store.abortIntroduction(teamId, userId, viewId);
+    } catch (cleanupError) {
+      console.error(
+        JSON.stringify({
+          event: "community.introduction.cleanup_failed",
+          phase: "database",
+          type: cleanupError instanceof Error ? cleanupError.name : "Unknown",
+        }),
+      );
+    }
+    if (createdMessageTs)
+      try {
+        await callSlack(context.env.SLACK_BOT_TOKEN, "chat.delete", {
+          channel: channelId,
+          ts: createdMessageTs,
+        });
+      } catch (cleanupError) {
+        console.error(
+          JSON.stringify({
+            event: "community.introduction.cleanup_failed",
+            phase: "slack",
+            type: cleanupError instanceof Error ? cleanupError.name : "Unknown",
+          }),
+        );
+      }
     await ephemeral(context, {
       text: "자기소개 게시 결과를 확인하지 못했어요. 다시 시도해 주세요.",
     });

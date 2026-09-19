@@ -71,12 +71,31 @@ const context = {
   key: "interaction:1",
 };
 const original = globalThis.fetch;
+const originalError = console.error;
+const errors = [];
+let postedMessageCount = 0;
+let reactionAttempt = 0;
+let failReactionAt = 0;
+let failDelete = false;
+console.error = (value) => errors.push(String(value));
 globalThis.fetch = async (url, options) => {
   const body = options.body ? JSON.parse(options.body) : null;
   const method = new URL(url).pathname.split("/").at(-1);
   calls.push({ method, body });
   if (method === "emoji.list") return Response.json({ ok: true, emoji });
-  return Response.json({ ok: true, ts: "2.000001", message_ts: "2.000001" });
+  if (method === "chat.postMessage") {
+    postedMessageCount += 1;
+    const ts = `${postedMessageCount + 1}.000001`;
+    return Response.json({ ok: true, ts, message_ts: ts });
+  }
+  if (method === "reactions.add") {
+    reactionAttempt += 1;
+    if (reactionAttempt === failReactionAt)
+      return Response.json({ ok: false, error: "internal_error" });
+  }
+  if (method === "chat.delete" && failDelete)
+    return Response.json({ ok: false, error: "internal_error" });
+  return Response.json({ ok: true, ts: body?.ts ?? "2.000001", message_ts: "2.000001" });
 };
 try {
   const authEnv = {
@@ -175,9 +194,57 @@ try {
   await submitIntroduction(context, "STALE", parseIntroduction(edited), 1);
   assert.equal(current.revision, 2, "stale modal cannot overwrite a newer introduction");
   assert.match(calls.at(-1).body.text, /먼저 바뀌었어요/);
+
+  current = null;
+  pending = null;
+  calls.length = 0;
+  failReactionAt = reactionAttempt + 2;
+  await submitIntroduction(context, "VIEW-PARTIAL", parseIntroduction(values), 0);
+  assert.equal(
+    calls.filter((call) => call.method === "reactions.add").length,
+    2,
+    "the provider fails after one reaction was added",
+  );
+  const compensation = calls.filter((call) => call.method === "chat.delete");
+  assert.equal(compensation.length, 1, "a partially reacted introduction is deleted");
+  assert.equal(compensation[0].body.channel, "CINTRO");
+  assert.equal(compensation[0].body.ts, "3.000001");
+  assert.equal(current, null, "a failed create is not finalized");
+  assert.equal(pending, null, "a failed create clears its pending DB state");
+
+  const retryStart = calls.length;
+  failReactionAt = 0;
+  await submitIntroduction(context, "VIEW-RETRY", parseIntroduction(values), 0);
+  const retryCalls = calls.slice(retryStart);
+  const retryReactions = retryCalls.filter((call) => call.method === "reactions.add");
+  assert.equal(retryCalls.filter((call) => call.method === "chat.postMessage").length, 1);
+  assert.equal(retryReactions.length, 3, "retry creates three reactions from a clean state");
+  assert.equal(new Set(retryReactions.map((call) => call.body.name)).size, 3);
+  assert.equal(current.revision, 1);
+  assert.equal(current.messageTs, "4.000001");
+
+  current = null;
+  pending = null;
+  calls.length = 0;
+  failReactionAt = reactionAttempt + 1;
+  failDelete = true;
+  await submitIntroduction(context, "VIEW-CLEANUP-FAIL", parseIntroduction(values), 0);
+  assert.equal(current, null);
+  assert.equal(pending, null);
+  assert.ok(
+    errors.some((entry) => entry.includes('"event":"community.introduction.cleanup_failed"')),
+    "a failed compensation is surfaced without payload data",
+  );
+  assert.ok(
+    errors.every(
+      (entry) => !entry.includes(env.SLACK_BOT_TOKEN) && !entry.includes(values.intro.value.value),
+    ),
+    "cleanup logs do not expose tokens or introduction text",
+  );
   console.log(
-    "PASS self-introduction: multiline text, public info, three custom reactions, edit preserves reactions, stale revision block",
+    "PASS self-introduction: create/edit reactions, partial failure compensation, clean retry, cleanup failure logging",
   );
 } finally {
   globalThis.fetch = original;
+  console.error = originalError;
 }
