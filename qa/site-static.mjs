@@ -51,9 +51,11 @@ for (const fragment of [
   "오늘 가장 중요한 한 가지",
   "10:00",
   "18:00",
-  "동료의 반응",
-  "먼저 다가가는 도움",
-  "언제든 돌아올 수 있습니다",
+  "동료의 말",
+  "필요할 때 먼저 건네는 도움",
+  "서로 다른 하루가",
+  "매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야. 같이 할래?",
+  "각 회원에게 발급된 전용 링크",
 ]) assert.ok(documentText.includes(fragment), `missing semantic/story fragment: ${fragment}`);
 
 assert.match(css, /prefers-reduced-motion:\s*reduce/);
@@ -62,9 +64,17 @@ assert.doesNotMatch(css, /overflow-x:\s*clip/);
 assert.match(script, /IntersectionObserver/);
 assert.match(script, /classList\.add\("has-js"\)/);
 assert.match(css, /\.has-js \.site-links/);
-assert.match(page, /<article class="message message--goal">/);
+assert.match(page, /data-reaction-stage/);
+assert.match(page, /data-preview-state="registration"/);
+assert.match(page, /data-preview-state="completion"/);
+assert.match(page, /data-preview-state="rest"/);
+assert.match(page, /aria-live="polite"/);
+assert.match(page, /DAY 4/);
 assert.doesNotMatch(page, /thread-scene"[^>]*role="img"/);
-assert.doesNotMatch(css, /animation:\s*[^;]*infinite/);
+assert.match(css, /@keyframes rise-reaction/);
+assert.match(css, /reaction-stage\.is-paused \.rise/);
+assert.match(css, /prefers-reduced-motion:reduce[^}]*\.has-motion \.rise/);
+assert.match(script, /visibilitychange/);
 assert.match(css, /#home-title \{ font-size:2\.45rem; word-break:keep-all/);
 assert.match(css, /body \{[^}]*word-break:keep-all/);
 

@@ -39,3 +39,13 @@ Intersection observers reveal sections only after JavaScript has attached the mo
 ## 5. Responsive rules and accepted debt
 
 The nav collapses at 760px, chapter typography scales through `clamp()`, diagrams remain inside their containers, and text wraps naturally without horizontal scrolling at 320px. The referral page keeps the same paper, ink, leaf, square controls, and editorial grid. Its form and receipt remain readable when the site's animation script does not run; Turnstile still needs its own script to validate a submission. The site Worker resolves opaque links through the core binding and sends validated applications through a signed request.
+
+## 6. Reactions and member invitation
+
+The homepage keeps the notebook's paper, forest ink, leaf field, thin rules, and square edges. New reaction and preview chapters use the same primitives. The stage is a fixed-height, overflow-contained field, so moving imagery never changes document layout. Its twelve chosen Slack custom assets were screened in the site emoji inventory for generic imagery; ten are shipped locally on the homepage. GIFs appear only in the active rise layer. Static, real PNG assets make the six-image reduced-motion and no-script composition. No member photo or brand logo enters the site.
+
+The rise layer moves only by `transform` and `opacity`, with a bounded random negative start delay. Visibility and document state pause the layer when it cannot be seen. The controls below it are a locally simulated OT1L conversation, with pressed state, visible garden cells, and a polite announcement. It performs no network write.
+
+The invitation chapter uses the owner's exact spoken invitation and depicts a member-specific `/r/` link without making a shared link. The interest callout describes an optional private inquiry and stays non-interactive until the separate `/interest` route is ready. The closing chapter uses actual Day 1–Day 4 grass cells in three member rows. A shaded empty cell means a rest day, not a deleted history.
+
+New homepage primitives: `reaction-stage`, `preview-controls`/`preview-conversation`, `invitation-note`, and `collective-garden`. They preserve the existing 1240px container and collapse into reading order below 760px. The preview paper tint `#fffdf5`, grass strokes `#39764d`/`#5f9b59`, and grass bed `#83ad6d` are illustration-only colors within the paper/leaf family. Controls use a 180ms state transition; reduced motion removes it.
