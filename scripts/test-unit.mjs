@@ -56,6 +56,7 @@ const suites = [
   "community-reminder-audit",
   "community-common-delivery",
   "community-schedule-overlap",
+  "dormant-shoutout",
 ];
 for (const suite of suites) execFileSync("bun", [`qa/${suite}.mjs`], { stdio: "inherit" });
 console.log(`Passed ${suites.length} isolated synthetic suites.`);

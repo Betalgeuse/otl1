@@ -23,6 +23,7 @@ type ScheduleStore = Pick<
   | "claimRecord"
   | "finishRecord"
   | "reconcileChannelMembers"
+  | "members"
   | "reminderTriggerDue"
   | "claimReminderBatch"
   | "claimReviewReminderBatch"
@@ -109,14 +110,15 @@ export async function runCommunitySchedule(
     await store.reconcileChannelMembers(scope, snapshot);
   }
   let common = 0;
+  const eligibleMembers =
+    snapshot && scheduledKinds.length ? await store.members(scope.teamId, scope.channelId) : [];
   for (const kind of scheduledKinds) {
-    const members = snapshot?.eligibleHumanIds ?? [];
     await enqueueCommonDelivery(
       store,
       scope,
       date,
       kind,
-      await commonText(env, date, kind, members),
+      await commonText(env, date, kind, eligibleMembers),
     );
   }
   common += await sendCommonDeliveries({ token: env.SLACK_BOT_TOKEN, now, scope, store });

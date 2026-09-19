@@ -104,6 +104,12 @@ export async function communityInteraction(
           response_action: "errors",
           errors: { message: "응원을 1~500자로 적어 주세요." },
         });
+      const eligibleMembers = await store.members(scope.teamId, scope.channelId);
+      if (!eligibleMembers.includes(scope.userId) || !eligibleMembers.includes(target))
+        return Response.json({
+          response_action: "errors",
+          errors: { target: "지금 응원할 수 있는 동료를 골라주세요." },
+        });
       waitUntil(
         (async () => {
           const key = `shoutout:${view.id}`;

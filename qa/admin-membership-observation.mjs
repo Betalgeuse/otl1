@@ -36,6 +36,9 @@ const store = {
   async claimCommonDelivery() {
     return null;
   },
+  async members() {
+    return ["UONE"];
+  },
   async finishCommonDelivery() {
     return false;
   },

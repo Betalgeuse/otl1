@@ -27,6 +27,9 @@ const store = {
   async reconcileChannelMembers() {
     return true;
   },
+  async members() {
+    return ["U1"];
+  },
   async claimCommonDelivery(input) {
     if (!commonPending || commonClaimed) return null;
     commonClaimed = true;
@@ -81,11 +84,11 @@ try {
   globalThis.fetch = async (url, options = {}) => {
     const method = new URL(url).pathname.split("/").at(-1);
     if (method === "conversations.members")
-      return Response.json({ ok: true, members: ["U1"], response_metadata: { next_cursor: "" } });
+      return Response.json({ ok: true, members: ["U1", "UDORM"], response_metadata: { next_cursor: "" } });
     if (method === "users.info")
       return Response.json({
         ok: true,
-        user: { id: "U1", name: "one", deleted: false, is_bot: false, is_app_user: false },
+        user: { id: new URL(url).searchParams.get("user"), name: "member", deleted: false, is_bot: false, is_app_user: false },
       });
     if (method === "emoji.list") return Response.json({ ok: true, emoji: {} });
     posts.push(JSON.parse(options.body));
@@ -109,6 +112,9 @@ try {
   assert.equal(posts.length, 2);
   assert.equal(posts.filter((post) => /알림 설정/.test(post.text)).length, 1);
   assert.equal(posts.filter((post) => /오늘의 \*ONE THING\*/.test(post.text)).length, 1);
+  const common = posts.find((post) => /오늘의 \*ONE THING\*/.test(post.text));
+  assert.match(common.text, /<@U1>/);
+  assert.doesNotMatch(common.text, /<@UDORM>/);
   console.log(
     "PASS schedule overlap: common and personal due at the same KST minute each post exactly once",
   );

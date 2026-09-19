@@ -42,6 +42,9 @@ const fakeStore = {
     reconciles.push({ scope, snapshot });
     return true;
   },
+  async members() {
+    return ["UONE", "UTWO"];
+  },
   async claimReminderBatch(input) {
     if (claimedBatchTimes.has(input.now)) return null;
     claimedBatchTimes.add(input.now);

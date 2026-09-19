@@ -44,6 +44,7 @@ const store = {
   },
   async reminderTriggerDue() { dueCalls += 1; return false; },
   async reconcileChannelMembers() { return true; },
+  async members() { return ["UQA"]; },
   async claimReminderBatch() { return null; },
   async claimReviewReminderBatch() { return null; },
   async claimGoalReminderBatch() { return null; },
