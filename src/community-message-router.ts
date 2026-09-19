@@ -49,6 +49,32 @@ export async function dispatchCommunityMessage(
     await groupCard(context);
     return;
   }
+  const eligibility =
+    typeof context.store.lifecycleEligibility === "function"
+      ? await context.store.lifecycleEligibility(context.scope)
+      : { state: "active" as const, revision: null };
+  if (eligibility.state === "dormant") {
+    const today = koreaDate(Date.now() / 1000);
+    const goal = parseExplicitGoal(text, context.date, today);
+    if (goal !== null && context.date === today && eligibility.revision !== null) {
+      const day = await context.store.day({ ...context.scope, date: context.date });
+      await applyChange(context, {
+        ...context.scope,
+        date: context.date,
+        key: `change:${context.key}`,
+        expectedRevision: day.revision,
+        expectedLifecycleRevision: eligibility.revision,
+        now: new Date().toISOString(),
+        action: "goal",
+        text: goal,
+      });
+      return;
+    }
+    await ephemeral(context, {
+      text: "새로운 오늘의 ONE THING을 `원씽: 할 일` 형식으로 남기면 바로 새 시즌을 시작할 수 있어요.",
+    });
+    return;
+  }
   if (/^샤라웃( 보내기)?$/.test(text)) {
     await post(
       context,

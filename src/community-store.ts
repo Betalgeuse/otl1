@@ -97,6 +97,22 @@ export class CommunityStore extends CommunityScheduleStore {
   async members(teamId: string, channelId: string): Promise<readonly string[]> {
     return list(await this.call("members", { teamId, channelId })).map(string);
   }
+  async lifecycleEligibility(input: CommunityScope): Promise<{
+    readonly state: "active" | "grace" | "dormant";
+    readonly revision: number | null;
+  }> {
+    const value = object(await this.call("lifecycle_eligibility", input));
+    const state = string(value.state);
+    if (state !== "active" && state !== "grace" && state !== "dormant")
+      throw new InputError("Invalid lifecycle eligibility");
+    const revision = value.revision;
+    if (
+      revision !== null &&
+      (typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0)
+    )
+      throw new InputError("Invalid lifecycle revision");
+    return { state, revision };
+  }
   async history(input: CommunityScope): Promise<readonly CommunityDay[]> {
     return list(await this.call("history", input)).map(day);
   }
@@ -174,6 +190,26 @@ export class CommunityStore extends CommunityScheduleStore {
       throw new InputError("후기는 1~2000자로 적어 주세요.");
     const { delivery, ...change } = input;
     const v = object(await this.call("change", change));
+    let returnTransition: ChangeResult["returnTransition"];
+    if (v.returnTransition !== undefined) {
+      const transition = object(v.returnTransition);
+      if (transition.kind !== "welcome_back") throw new InputError("Invalid return transition");
+      const lifecycleRevision = transition.lifecycleRevision;
+      const seasonId = transition.seasonId;
+      if (
+        typeof lifecycleRevision !== "number" ||
+        typeof seasonId !== "number" ||
+        !Number.isSafeInteger(lifecycleRevision) ||
+        !Number.isSafeInteger(seasonId)
+      )
+        throw new InputError("Invalid return transition revision");
+      returnTransition = {
+        kind: "welcome_back",
+        lifecycleRevision,
+        seasonId,
+        effectKey: string(transition.effectKey),
+      };
+    }
     const result: ChangeResult = {
       day: day(v.day),
       changed: bool(v.changed),
@@ -182,6 +218,7 @@ export class CommunityStore extends CommunityScheduleStore {
       firstRegistration: v.firstRegistration === true,
       firstReflection: bool(v.firstReflection),
       undoKey: string(v.undoKey),
+      ...(returnTransition ? { returnTransition } : {}),
     };
     if (
       !result.changed ||

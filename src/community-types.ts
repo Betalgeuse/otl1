@@ -28,6 +28,8 @@ export type DayChange = DayScope & {
   readonly text?: string;
   readonly outcome?: Outcome;
   readonly expectedRevision?: number;
+  readonly expectedLifecycleRevision?: number;
+  readonly now?: string;
   readonly undoKey?: string;
   readonly delivery?: {
     readonly source: string;
@@ -44,6 +46,12 @@ export type ChangeResult = {
   readonly firstReflection: boolean;
   readonly undoKey: string;
   readonly gardenDeliveryKey?: string;
+  readonly returnTransition?: {
+    readonly kind: "welcome_back";
+    readonly lifecycleRevision: number;
+    readonly seasonId: number;
+    readonly effectKey: string;
+  };
 };
 export type SupportPreferences = CommunityScope & {
   readonly enabled: boolean;

@@ -22,6 +22,14 @@ BEGIN
   jsonb_build_object('userId','UAMBONE','displayName','QA UAMBONE','isBot',false,'isAppUser',false,'deleted',false),
   jsonb_build_object('userId','UAMBTWO','displayName','QA UAMBTWO','isBot',false,'isAppUser',false,'deleted',false)));
  ASSERT otl.community_execute('reconcile_channel_members',snapshot)='true'::jsonb,'complete snapshot';
+ INSERT INTO otl.member_lifecycles(team_id,channel_id,user_id,state,rollout_at,last_transition_at)
+ SELECT cm.team_id,cm.channel_id,cm.user_id,'active','2030-01-07T11:00:00Z','2030-01-07T11:00:00Z'
+ FROM otl.workspace_channel_memberships cm JOIN otl.workspace_members m USING(team_id,user_id)
+ WHERE cm.team_id='T-CURRENT' AND cm.channel_id='C-PUBLIC' AND cm.is_current
+   AND NOT coalesce(m.is_bot,false) AND NOT coalesce(m.is_app_user,false) AND NOT coalesce(m.slack_deleted,false);
+ INSERT INTO otl.grass_seasons(team_id,channel_id,user_id,opened_at,opened_on,opened_reason)
+ SELECT team_id,channel_id,user_id,'2030-01-07T11:00:00Z','2030-01-07','rollout'
+ FROM otl.member_lifecycles WHERE team_id='T-CURRENT';
  INSERT INTO otl.community_preferences(team_id,channel_id,user_id,enabled,goal_time,review_time,preference_source,eligible_from)
  SELECT 'T-CURRENT','C-PUBLIC',u,true,'10:00','18:00','user','2030-01-01' FROM unnest(ARRAY[
   'UGOAL','UREVIEW','UREST','UREFLECT','UNOGOAL','UBOTFIX','UAPPFIX','UDELETE','UAMBONE','UAMBTWO']) u;

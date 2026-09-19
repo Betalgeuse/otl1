@@ -201,6 +201,10 @@ try {
       SELECT 'TAUDIT','CAUDIT','UE'||lpad(n::text,3,'0'),true,'2026-09-18T05:00:00Z','2026-09-18T05:00:00Z' FROM generate_series(1,201)n;
     INSERT INTO otl.community_preferences(team_id,channel_id,user_id,enabled,preference_source,eligible_from,goal_time,review_time)
       SELECT 'TAUDIT','CAUDIT','UE'||lpad(n::text,3,'0'),true,'default','2026-09-18','11:00','20:00' FROM generate_series(1,201)n;
+    INSERT INTO otl.member_lifecycles(team_id,channel_id,user_id,state,rollout_at,last_transition_at)
+      SELECT 'TAUDIT','CAUDIT','UE'||lpad(n::text,3,'0'),'active','2026-09-18T05:00:00Z','2026-09-18T05:00:00Z' FROM generate_series(1,201)n;
+    INSERT INTO otl.grass_seasons(team_id,channel_id,user_id,opened_at,opened_on,opened_reason)
+      SELECT 'TAUDIT','CAUDIT','UE'||lpad(n::text,3,'0'),'2026-09-18T05:00:00Z','2026-09-18','rollout' FROM generate_series(1,201)n;
   `);
   const now = "2026-09-18T02:00:00Z";
   const sizes = [];
@@ -236,6 +240,14 @@ try {
   );
 
   await psql(`
+    INSERT INTO otl.member_lifecycles(team_id,channel_id,user_id,state,rollout_at,last_transition_at)
+      VALUES('TAUDIT','CAUDIT','U1','active','2026-09-18T05:00:00Z','2026-09-18T05:00:00Z'),
+            ('TAUDIT','CAUDIT','U2','active','2026-09-18T05:00:00Z','2026-09-18T05:00:00Z')
+      ON CONFLICT DO NOTHING;
+    INSERT INTO otl.grass_seasons(team_id,channel_id,user_id,opened_at,opened_on,opened_reason)
+      SELECT team_id,channel_id,user_id,'2026-09-18T05:00:00Z','2026-09-18','rollout'
+      FROM otl.member_lifecycles l WHERE team_id='TAUDIT' AND user_id IN ('U1','U2')
+        AND NOT EXISTS(SELECT 1 FROM otl.grass_seasons s WHERE s.team_id=l.team_id AND s.user_id=l.user_id);
     INSERT INTO otl.community_preferences(team_id,channel_id,user_id,enabled,preference_source,eligible_from,goal_time,review_time) VALUES('TAUDIT','CAUDIT','U2',true,'default','2026-09-18','11:00','20:00') ON CONFLICT(team_id,channel_id,user_id) DO UPDATE SET enabled=true;
     UPDATE otl.community_preferences SET enabled=true,goal_time='11:00',eligible_from='2026-09-18' WHERE team_id='TAUDIT' AND user_id IN ('U1','U2');
     UPDATE otl.workspace_channel_memberships SET is_current=true,synced_at='2026-09-18T06:00:00Z' WHERE team_id='TAUDIT' AND user_id IN ('U1','U2');
