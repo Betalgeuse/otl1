@@ -230,7 +230,7 @@ try {
   failDelete = true;
   await submitIntroduction(context, "VIEW-CLEANUP-FAIL", parseIntroduction(values), 0);
   assert.equal(current, null);
-  assert.equal(pending, null);
+  assert.equal(pending?.token, "VIEW-CLEANUP-FAIL", "failed deletion retains pending state");
   assert.ok(
     errors.some((entry) => entry.includes('"event":"community.introduction.cleanup_failed"')),
     "a failed compensation is surfaced without payload data",
@@ -240,6 +240,13 @@ try {
       (entry) => !entry.includes(env.SLACK_BOT_TOKEN) && !entry.includes(values.intro.value.value),
     ),
     "cleanup logs do not expose tokens or introduction text",
+  );
+  const blockedRetryStart = calls.length;
+  await submitIntroduction(context, "VIEW-CLEANUP-RETRY", parseIntroduction(values), 0);
+  assert.equal(
+    calls.slice(blockedRetryStart).filter((call) => call.method === "chat.postMessage").length,
+    0,
+    "retry cannot duplicate a partially reacted message when deletion failed",
   );
   console.log(
     "PASS self-introduction: create/edit reactions, partial failure compensation, clean retry, cleanup failure logging",

@@ -208,28 +208,31 @@ export async function submitIntroduction(
       text: prepared.messageTs ? "자기소개를 수정했어요." : "자기소개를 올렸어요.",
     });
   } catch (error) {
-    try {
-      await context.store.abortIntroduction(teamId, userId, viewId);
-    } catch (cleanupError) {
-      console.error(
-        JSON.stringify({
-          event: "community.introduction.cleanup_failed",
-          phase: "database",
-          type: cleanupError instanceof Error ? cleanupError.name : "Unknown",
-        }),
-      );
-    }
+    let canAbort = createdMessageTs === null;
     if (createdMessageTs)
       try {
         await callSlack(context.env.SLACK_BOT_TOKEN, "chat.delete", {
           channel: channelId,
           ts: createdMessageTs,
         });
+        canAbort = true;
       } catch (cleanupError) {
         console.error(
           JSON.stringify({
             event: "community.introduction.cleanup_failed",
             phase: "slack",
+            type: cleanupError instanceof Error ? cleanupError.name : "Unknown",
+          }),
+        );
+      }
+    if (canAbort)
+      try {
+        await context.store.abortIntroduction(teamId, userId, viewId);
+      } catch (cleanupError) {
+        console.error(
+          JSON.stringify({
+            event: "community.introduction.cleanup_failed",
+            phase: "database",
             type: cleanupError instanceof Error ? cleanupError.name : "Unknown",
           }),
         );
