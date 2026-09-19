@@ -5,6 +5,8 @@ import { armBugDeliveryClock, BUG_CLOCK_CAPABILITIES } from "./community-bug-clo
 import { armCommunityClock } from "./community-clock-client";
 import { handleCommunityEvent } from "./community-events";
 import { communityInteraction } from "./community-interactions";
+import { handleInterestIntakeRequest } from "./community-interest-intake";
+import { CommunityInterestStore } from "./community-interest-store";
 import { handleReferralIntakeRequest } from "./community-referral-intake";
 import { CommunityReferralStore } from "./community-referral-store";
 import type { CommunityEnv } from "./community-runtime";
@@ -46,6 +48,27 @@ export async function handleRequest(
   try {
     if (request.method === "GET" && url.pathname === "/health") {
       return Response.json({ status: "ok", capabilities: BUG_CLOCK_CAPABILITIES });
+    }
+    if (url.pathname.startsWith("/internal/interest/")) {
+      if (env.DATABASE_MAINTENANCE === "true")
+        return new Response("Maintenance", { status: 503, headers: { "Retry-After": "30" } });
+      if (
+        env.PUBLIC_INTEREST_ENABLED !== "true" ||
+        !env.INTEREST_RUNTIME_DATABASE_URL ||
+        !env.INTEREST_ADMIN_CHANNEL_ID ||
+        env.INTEREST_ADMIN_CHANNEL_ID === env.COMMUNITY_PUBLIC_CHANNEL_ID
+      )
+        return new Response("Unavailable", { status: 503 });
+      const interest = new CommunityInterestStore(new NeonStore(env.INTEREST_RUNTIME_DATABASE_URL));
+      const response = await handleInterestIntakeRequest(request, env, {
+        submit: (input) => interest.submit(input),
+        withdraw: (input) => interest.withdraw(input),
+        claimServiceNonce: (digest, expiresAt) =>
+          interest.claimServiceNonce(digest, expiresAt, env.SLACK_TEAM_ID),
+      });
+      if (response.status === 202 && env.COMMUNITY_PUBLIC_CHANNEL_ID)
+        ctx.waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+      return response;
     }
     if (url.pathname.startsWith("/internal/referrals/")) {
       if (env.DATABASE_MAINTENANCE === "true")

@@ -1,3 +1,5 @@
+import { runInterestDue } from "./community-interest-due";
+import { reconcileInterestIntake } from "./community-interest-reconcile";
 import { deliverInviteAdminReview } from "./community-invite-admin";
 import { deliverLifecycleNotices } from "./community-lifecycle-delivery";
 import { runLifecycleMaintenance } from "./community-lifecycle-runtime";
@@ -24,15 +26,18 @@ export async function runMembershipDue(
   channelId: string,
   now: number,
   cursor?: string,
+  interestCursor?: string,
 ): Promise<{
   readonly possiblyMore: boolean;
   readonly nextDue: number | null;
   readonly nextCursor: string | null;
+  readonly interestNextCursor: string | null;
 }> {
   if (channelId !== env.COMMUNITY_PUBLIC_CHANNEL_ID || env.DATABASE_MAINTENANCE === "true")
-    return { possiblyMore: false, nextDue: null, nextCursor: null };
+    return { possiblyMore: false, nextDue: null, nextCursor: null, interestNextCursor: null };
   let possiblyMore = false;
   let nextCursor: string | null = cursor ?? null;
+  let interestNextCursor: string | null = interestCursor ?? null;
   let failed = false;
   async function attempt(name: string, work: () => Promise<void>): Promise<void> {
     try {
@@ -163,6 +168,17 @@ export async function runMembershipDue(
       });
     }
   }
+  if (env.PUBLIC_INTEREST_ENABLED === "true") {
+    await attempt("interest", async () => {
+      const result = await runInterestDue(env, now);
+      possiblyMore ||= result.possiblyMore;
+    });
+    await attempt("interest_reconcile", async () => {
+      const result = await reconcileInterestIntake(env, now, interestCursor);
+      possiblyMore ||= result.possiblyMore;
+      interestNextCursor = result.nextCursor;
+    });
+  }
   let nextDue: number | null = null;
   await attempt("next_due", async () => {
     nextDue = await nextMembershipDue(env, db, channelId, now);
@@ -171,5 +187,6 @@ export async function runMembershipDue(
     possiblyMore,
     nextDue: failed ? Math.min(nextDue ?? now + 60_000, now + 60_000) : nextDue,
     nextCursor,
+    interestNextCursor,
   };
 }

@@ -55,7 +55,7 @@ try {
   const privatePayload = { email: 'person@example.com', displayName: 'Person', intent: 'A private interest', knownMemberClue: 'Met a member' };
   const prepared = await prepareInterestPrivateObject(privateConfig, 'IREQ-FIRST1', 0, privatePayload);
   await putPreparedInterestPrivateObject(privateConfig, prepared);
-  const first = { ...submit('FIRST1', 'a'.repeat(64)), ...prepared.ref };
+  const first = { ...submit('FIRST1', 'a'.repeat(64)), ...prepared.ref, shareNameEmailWithIntroducer: true };
   assert.deepEqual(await readInterestPrivateObject(privateConfig, { ...prepared.ref, requestId: first.interestId, revision: 0 }), privatePayload);
   assert.equal(JSON.parse(await call('interest_runtime_execute', 'submit', first)).created, true);
   await sql(`CREATE ROLE ${runtimeProbeRole} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT PASSWORD NULL`);
@@ -82,6 +82,11 @@ try {
   assert.equal(await runtimeStore.findPrivateIntake('TREF', first.interestId, '0'.repeat(64)), 'conflict');
   assert.equal(await runtimeStore.findPrivateIntake('TREF', 'IREQ-WRONG1', first.objectDigest), 'conflict');
   assert.equal(await runtimeStore.findPrivateIntake('TREF', 'IREQ-MISSING1', '0'.repeat(64)), 'absent');
+  const nonceDigest = 'f'.repeat(64);
+  const nonceExpires = new Date(Date.now() + 300_000).toISOString();
+  assert.equal(await runtimeStore.claimServiceNonce(nonceDigest, nonceExpires, 'TREF'), true);
+  assert.equal(await runtimeStore.claimServiceNonce(nonceDigest, nonceExpires, 'TREF'), false);
+  await assert.rejects(sql("SELECT count(*) FROM otl.interest_service_nonces"), /permission denied/);
   assert.equal(await sql("SELECT has_table_privilege(current_user,'otl.interest_submission_receipts','SELECT')"), 'f');
   assert.equal(await sql("SELECT has_table_privilege(current_user,'otl.interest_private_payloads','SELECT')"), 'f');
   await assert.rejects(sql("SELECT count(*) FROM otl.interest_submission_receipts"), /permission denied/);
@@ -102,7 +107,7 @@ try {
   assert.equal(await sql("SELECT count(*) FROM otl.interest_attachment_consents WHERE team_id='TREF'"), '1');
   await assert.rejects(call('interest_runtime_execute', 'submit', { ...submit('NOCONSENT1', '0'.repeat(64)), inviteConsentAccepted: false }), /invalid interest submission/);
   assert.equal(await sql("SELECT consented_at='2026-09-19T01:00:00Z'::timestamptz FROM otl.interest_consents WHERE interest_id='IREQ-FIRST1'"), 't');
-  await assert.rejects(call('interest_runtime_execute', 'submit', { ...first, shareNameEmailWithIntroducer: true }), /idempotency collision/);
+  await assert.rejects(call('interest_runtime_execute', 'submit', { ...first, shareNameEmailWithIntroducer: false }), /idempotency collision/);
   await assert.rejects(call('interest_runtime_execute', 'submit', { ...first, inviteConsentAccepted: false }), /invalid interest submission/);
   await assert.rejects(call('interest_runtime_execute', 'submit', { ...first, contentDigest: '8'.repeat(64) }), /idempotency collision/);
   assert.equal(JSON.parse(await call('interest_runtime_execute', 'submit', { ...first, objectDigest: 'd'.repeat(64) })).sameSubmissionKey, true);
@@ -129,18 +134,41 @@ try {
   assert.equal(await sql("SELECT has_function_privilege('otl_referral_admin_login','otl.interest_admin_execute(text,jsonb)','EXECUTE')"), 't');
   assert.equal(await sql("SELECT has_function_privilege('otl_interest_member_login','otl.interest_member_confirm(jsonb)','EXECUTE')"), 't');
   assert.equal(await sql("SELECT has_table_privilege('otl_interest_member_login','otl.interest_requests','SELECT')"), 'f');
-  const admin = { teamId: 'TREF', adminId: 'UADMIN', interestId: first.interestId, expectedRevision: 0, key: 'offline-first1', now };
-  const evidence = { ...admin, memberId: 'UREFERRER', evidenceType: 'offline_email', evidenceDigest: '9'.repeat(64), evidenceAt: now };
-  await assert.rejects(call('interest_admin_execute', 'verify_offline', { ...evidence, adminId: 'UREFERRER' }), /admin denied/);
-  await assert.rejects(call('interest_admin_execute', 'verify_offline', { ...evidence, memberId: 'UBOT' }), /evidence unavailable/);
-  await assert.rejects(call('interest_admin_execute', 'verify_offline', { ...evidence, evidenceDigest: '' }), /evidence unavailable/);
-  assert.equal(JSON.parse(await call('interest_admin_execute', 'verify_offline', evidence)).state, 'introduction_verified');
+  const adminContextInput = { teamId: 'TREF', adminId: 'UADMIN', interestId: first.interestId, key: 'context-first1', now };
+  dbEnv = { ...ownerEnv, PGUSER: 'otl_referral_admin_login' };
+  const initialContext = JSON.parse(await call('interest_admin_execute', 'context', adminContextInput));
+  assert.equal(initialContext.revision, 0);
+  assert.equal(initialContext.emailDigest, first.emailDigest);
+  assert.equal(initialContext.memberId, null);
+  assert.equal(initialContext.tokenDigest, null);
+  await assert.rejects(call('interest_admin_execute', 'context', { ...adminContextInput, teamId: 'TOTHER' }), /admin denied/);
+  dbEnv = { ...ownerEnv, PGUSER: runtimeProbeRole };
+  await assert.rejects(call('interest_admin_execute', 'context', adminContextInput), /permission denied/);
+  dbEnv = ownerEnv;
+  console.log(JSON.stringify({ scenario: 'restricted-admin-context', revision: initialContext.revision, emailDigest: true, noCandidate: true, crossTeamDenied: true, runtimeDenied: true }));
+  const admin = { teamId: 'TREF', adminId: 'UADMIN', interestId: first.interestId, expectedRevision: 0, key: 'first-admin1', now };
+  const firstPrompt = { ...admin, key: 'first-prompt1', memberId: 'UREFERRER',
+    nonceDigest: '9'.repeat(64), expiresAt: '2026-09-20T01:00:00Z' };
+  await assert.rejects(call('interest_admin_execute', 'verify_offline', { ...admin,
+    memberId: 'UREFERRER', evidenceType: 'offline_document', evidenceDigest: '8'.repeat(64), evidenceAt: now }), /offline introduction unavailable/);
+  await call('interest_admin_execute', 'request_introduction', firstPrompt);
+  dbEnv = { ...ownerEnv, PGUSER: 'otl_interest_member_login' };
+  assert.equal(JSON.parse(await sql(`SELECT otl.interest_member_confirm('${JSON.stringify({
+    teamId: 'TREF', interestId: first.interestId, memberId: 'UREFERRER', expectedRevision: 0,
+    signedNonceDigest: firstPrompt.nonceDigest, evidenceDigest: firstPrompt.nonceDigest,
+    key: 'first-confirm1', now,
+  })}'::jsonb)`)).state, 'introduction_verified');
+  dbEnv = ownerEnv;
   await sql(`INSERT INTO otl.interest_requests(team_id,interest_id,receipt_id,email_digest,withdrawal_digest,
     submission_key,submission_hash,submitted_at,payload_purge_after,audit_purge_after)
     VALUES('TREF','IREQ-FORGED1','INT-FORGED1',repeat('0',64),repeat('b',64),
       'forged-no-consent','00000000000000000000000000000000','${now}'::timestamptz,
       '${now}'::timestamptz+interval '30 days','${now}'::timestamptz+interval '12 months')`);
-  await call('interest_admin_execute', 'verify_offline', { ...evidence, interestId: 'IREQ-FORGED1', key: 'offline-forged1', evidenceDigest: '8'.repeat(64) });
+  await sql(`INSERT INTO otl.interest_introduction_evidence(team_id,interest_id,member_id,evidence_type,
+    evidence_digest,actor_id,evidence_at,verified_at,event_key)
+    VALUES('TREF','IREQ-FORGED1','UREFERRER','slack_signed_confirmation',repeat('8',64),
+      'UREFERRER','${now}'::timestamptz,'${now}'::timestamptz,'forged-owner-fixture')`);
+  await sql("UPDATE otl.interest_requests SET state='introduction_verified',revision=1 WHERE interest_id='IREQ-FORGED1'");
   await assert.rejects(call('interest_admin_execute', 'attach', { ...admin, interestId: 'IREQ-FORGED1', expectedRevision: 1, key: 'attach-no-consent', referral: { ...referral('FORGED1', '0'.repeat(64)), key: 'interest-attach:IREQ-FORGED1' } }), /attachment consent unavailable/);
   assert.equal(await sql("SELECT count(*) FROM otl.referral_requests WHERE request_id='REQ-FORGED1'"), '0');
   await sql("UPDATE otl.interest_outbox SET status='cancelled' WHERE interest_id='IREQ-FORGED1'");
@@ -164,6 +192,30 @@ try {
   assert.equal(JSON.parse(await call('interest_runtime_execute', 'withdraw', withdrawal)).accepted, true);
   const before = submit('BEFORE1', '1'.repeat(64));
   await call('interest_runtime_execute', 'submit', before);
+  await assert.rejects(call('interest_admin_execute', 'request_introduction', {
+    ...admin, interestId: before.interestId, key: 'false-share-prompt1',
+    memberId: 'UREFERRER', nonceDigest: '7'.repeat(64), expiresAt: '2026-09-20T01:00:00Z',
+  }), /prompt unavailable/);
+  await assert.rejects(call('interest_admin_execute', 'verify_offline', {
+    ...admin, interestId: before.interestId, key: 'false-share-offline1',
+    memberId: 'UREFERRER', evidenceType: 'offline_document', evidenceDigest: '7'.repeat(64), evidenceAt: now,
+  }), /offline introduction unavailable/);
+  await assert.rejects(call('interest_admin_execute', 'attach', { ...admin,
+    interestId: before.interestId, key: 'false-share-attach1', referral: {
+      ...referral('FALSESHARE1', before.emailDigest), key: `interest-attach:${before.interestId}`, },
+  }), /introduction unverified/);
+  assert.equal(await sql("SELECT count(*) FROM otl.interest_referral_bridges WHERE interest_id='IREQ-BEFORE1'"), '0');
+  await sql(`INSERT INTO otl.interest_introduction_evidence(team_id,interest_id,member_id,evidence_type,
+    evidence_digest,actor_id,evidence_at,verified_at,event_key)
+    VALUES('TREF','IREQ-BEFORE1','UREFERRER','offline_document',repeat('7',64),
+      'UADMIN','${now}'::timestamptz,'${now}'::timestamptz,'owner-injected-offline1')`);
+  await sql("UPDATE otl.interest_requests SET state='introduction_verified',revision=1 WHERE interest_id='IREQ-BEFORE1'");
+  await assert.rejects(call('interest_admin_execute', 'attach', { ...admin,
+    interestId: before.interestId, expectedRevision: 1, key: 'false-share-injected1', referral: {
+      ...referral('FALSESHARE2', before.emailDigest), key: `interest-attach:${before.interestId}`,
+    },
+  }), /sharing consent unavailable/);
+  assert.equal(await sql("SELECT count(*) FROM otl.referral_requests WHERE request_id='REQ-FALSESHARE2'"), '0');
   await call('interest_runtime_execute', 'withdraw', { teamId: 'TREF', receiptId: before.receiptId, withdrawalDigest: before.withdrawalDigest, key: 'withdraw-before1', now });
   assert.equal(await sql("SELECT state FROM otl.interest_requests WHERE interest_id='IREQ-BEFORE1'"), 'withdrawn');
   const absentObject = JSON.parse(await call('interest_retention_execute', 'claim_purge', { teamId: 'TREF', key: 'purge-absent1', now: '2026-09-20T02:00:00Z' }));
@@ -181,17 +233,50 @@ try {
   await call('interest_runtime_execute', 'submit', due);
   assert.ok(JSON.parse(await call('interest_retention_execute', 'expire_due', { teamId: 'TREF', now: '2026-10-20T02:00:00Z' })).processed >= 1);
   assert.equal(await sql("SELECT state FROM otl.interest_requests WHERE interest_id='IREQ-EXPIRE1'"), 'expired');
-  const confirmed = submit('MEMBER1', '3'.repeat(64));
+  const confirmed = { ...submit('MEMBER1', '3'.repeat(64)), shareNameEmailWithIntroducer: true };
   await call('interest_runtime_execute', 'submit', confirmed);
+  const promptNow = new Date().toISOString();
+  const prompt = { teamId: 'TREF', adminId: 'UADMIN', interestId: confirmed.interestId,
+    expectedRevision: 0, memberId: 'UREFERRER', nonceDigest: '4'.repeat(64),
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(), key: 'member-prompt1', now: promptNow };
+  dbEnv = { ...ownerEnv, PGUSER: 'otl_referral_admin_login' };
+  await assert.rejects(call('interest_admin_execute', 'request_introduction', { ...prompt, memberId: 'UBOT' }), /prompt unavailable/);
+  assert.equal(JSON.parse(await call('interest_admin_execute', 'request_introduction', prompt)).state, 'pending_introduction');
+  await assert.rejects(call('interest_admin_execute', 'request_introduction', { ...prompt, key: 'member-prompt2', memberId: 'UJOINED' }), /prompt already issued/);
+  dbEnv = { ...ownerEnv, PGUSER: 'otl_interest_member_login' };
+  const contextCall = (value) => sql(`SELECT otl.interest_member_confirm('${JSON.stringify(value)}'::jsonb)`);
+  const memberContextInput = { operation: 'context', teamId: 'TREF', interestId: confirmed.interestId,
+    memberId: 'UREFERRER', signedNonceDigest: prompt.nonceDigest };
+  const memberContext = JSON.parse(await contextCall(memberContextInput));
+  assert.equal(memberContext.revision, 0);
+  assert.equal(memberContext.shareNameEmailWithIntroducer, true);
+  assert.ok(memberContext.opaqueRef.startsWith('interest-private/'));
+  assert.equal(memberContext.envelopeDek, confirmed.envelopeDek);
+  await assert.rejects(contextCall({ ...memberContextInput, teamId: 'TOTHER' }), /member introduction denied/);
+  await assert.rejects(contextCall({ ...memberContextInput, memberId: 'UJOINED' }), /(prompt unavailable|member introduction denied)/);
+  await assert.rejects(contextCall({ ...memberContextInput, signedNonceDigest: '5'.repeat(64) }), /prompt unavailable/);
+  dbEnv = { ...ownerEnv, PGUSER: runtimeProbeRole };
+  await assert.rejects(contextCall(memberContextInput), /permission denied/);
+  dbEnv = ownerEnv;
+  console.log(JSON.stringify({ scenario: 'restricted-member-context', noPii: true,
+    crossTeamDenied: true, wrongMemberDenied: true, wrongNonceDenied: true, runtimeDenied: true }));
   const memberConfirmation = { teamId: 'TREF', interestId: confirmed.interestId, memberId: 'UREFERRER',
     expectedRevision: 0, signedNonceDigest: '4'.repeat(64), evidenceDigest: '4'.repeat(64),
-    key: 'member-confirm1', now };
+    key: 'member-confirm1', now: promptNow };
   dbEnv = { ...ownerEnv, PGUSER: 'otl_interest_member_login' };
   await assert.rejects(sql(`SELECT otl.interest_member_confirm('${JSON.stringify({ ...memberConfirmation, evidenceDigest: '5'.repeat(64) })}'::jsonb)`), /member introduction denied/);
   assert.equal(JSON.parse(await sql(`SELECT otl.interest_member_confirm('${JSON.stringify(memberConfirmation)}'::jsonb)`)).state, 'introduction_verified');
   await assert.rejects(sql(`SELECT otl.interest_member_confirm('${JSON.stringify({ ...memberConfirmation, key: 'member-confirm2' })}'::jsonb)`), /stale introduction/);
   dbEnv = ownerEnv;
   assert.equal(await sql("SELECT evidence_type FROM otl.interest_introduction_evidence WHERE interest_id='IREQ-MEMBER1'"), 'slack_signed_confirmation');
+  dbEnv = { ...ownerEnv, PGUSER: 'otl_interest_member_login' };
+  await assert.rejects(contextCall(memberContextInput), /prompt unavailable/);
+  dbEnv = { ...ownerEnv, PGUSER: 'otl_referral_admin_login' };
+  const verifiedContext = JSON.parse(await call('interest_admin_execute', 'context', { ...adminContextInput, interestId: confirmed.interestId }));
+  assert.equal(verifiedContext.memberId, 'UREFERRER');
+  assert.equal(verifiedContext.tokenDigest, token);
+  assert.equal(verifiedContext.emailDigest, confirmed.emailDigest);
+  dbEnv = ownerEnv;
   await assert.rejects(call('interest_admin_execute', 'attach', { ...admin, interestId: confirmed.interestId, expectedRevision: 1, key: 'cross-team', teamId: 'TOTHER', referral: { ...referral('CROSS1', confirmed.emailDigest), key: 'interest-attach:IREQ-MEMBER1' } }), /admin denied/);
   const joinedReferral = { ...referral('JOINED1', confirmed.emailDigest), key: 'interest-attach:IREQ-MEMBER1' };
   await call('interest_admin_execute', 'attach', { ...admin, interestId: confirmed.interestId, expectedRevision: 1, key: 'attach-member1', referral: joinedReferral });

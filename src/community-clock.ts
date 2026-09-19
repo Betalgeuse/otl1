@@ -167,10 +167,14 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
           channelId,
           now.getTime(),
           await this.ctx.storage.get<string>("referralReconcileCursor"),
+          await this.ctx.storage.get<string>("interestReconcileCursor"),
         );
         if (membership.nextCursor === null)
           await this.ctx.storage.delete("referralReconcileCursor");
         else await this.ctx.storage.put("referralReconcileCursor", membership.nextCursor);
+        if (membership.interestNextCursor === null)
+          await this.ctx.storage.delete("interestReconcileCursor");
+        else await this.ctx.storage.put("interestReconcileCursor", membership.interestNextCursor);
         if (
           this.env.COMMUNITY_ENABLED === "true" &&
           this.env.COMMUNITY_ADMIN_ID &&

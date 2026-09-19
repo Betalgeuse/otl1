@@ -151,6 +151,27 @@ CREATE TABLE otl.interest_outbox (
   UNIQUE(team_id,effect_key),
   FOREIGN KEY(team_id,interest_id) REFERENCES otl.interest_requests(team_id,interest_id)
 );
+CREATE TABLE otl.interest_service_nonces (
+  team_id text NOT NULL,
+  nonce_digest text NOT NULL CHECK(nonce_digest~'^[0-9a-f]{64}$'),
+  expires_at timestamptz NOT NULL,
+  PRIMARY KEY(team_id,nonce_digest)
+);
+CREATE TABLE otl.interest_introduction_prompts (
+  team_id text NOT NULL,
+  interest_id text NOT NULL,
+  member_id text NOT NULL,
+  expected_revision integer NOT NULL CHECK(expected_revision>=0),
+  nonce_digest text NOT NULL CHECK(nonce_digest~'^[0-9a-f]{64}$'),
+  requested_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  consumed_at timestamptz,
+  PRIMARY KEY(team_id,interest_id),
+  UNIQUE(team_id,nonce_digest),
+  FOREIGN KEY(team_id,interest_id) REFERENCES otl.interest_requests(team_id,interest_id),
+  FOREIGN KEY(team_id,member_id) REFERENCES otl.workspace_members(team_id,user_id),
+  CHECK(expires_at>requested_at)
+);
 CREATE FUNCTION otl.interest_identity_guard() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,otl AS $$
 BEGIN
   IF (NEW.team_id,NEW.interest_id,NEW.receipt_id,NEW.email_digest,NEW.withdrawal_digest,
@@ -225,6 +246,17 @@ DECLARE t text:=p->>'teamId'; k text:=p->>'key'; h text:=md5(p::text);
   old_state text; result jsonb;
 BEGIN
   IF coalesce(t,'')='' THEN RAISE EXCEPTION 'invalid interest scope'; END IF;
+  IF op='claim_nonce' THEN
+    IF coalesce(p->>'nonceDigest','') !~ '^[0-9a-f]{64}$'
+      OR coalesce(p->>'expiresAt','')=''
+      OR (p->>'expiresAt')::timestamptz<=transaction_timestamp()
+      OR (p->>'expiresAt')::timestamptz>transaction_timestamp()+interval '6 minutes'
+    THEN RAISE EXCEPTION 'invalid interest service nonce'; END IF;
+    INSERT INTO otl.interest_service_nonces(team_id,nonce_digest,expires_at)
+      VALUES(t,p->>'nonceDigest',(p->>'expiresAt')::timestamptz)
+      ON CONFLICT DO NOTHING;
+    RETURN to_jsonb(FOUND);
+  END IF;
   IF op='find_submission' THEN
     IF coalesce(k,'') !~ '^[A-Za-z0-9_-]{8,120}$'
     THEN RAISE EXCEPTION 'invalid interest submission key'; END IF;
@@ -360,6 +392,23 @@ BEGIN
   now_at:=(p->>'now')::timestamptz;
   SELECT * INTO i FROM otl.interest_requests WHERE team_id=t AND interest_id=p->>'interestId' FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'interest unavailable'; END IF;
+  IF op='context' THEN
+    SELECT ev.* INTO evidence FROM otl.interest_introduction_evidence ev
+      WHERE ev.team_id=t AND ev.interest_id=i.interest_id;
+    SELECT l.* INTO link FROM otl.member_referral_links l
+      WHERE l.team_id=t AND l.referrer_user_id=evidence.member_id AND l.status='active';
+    RETURN jsonb_build_object('interestId',i.interest_id,'state',i.state,'revision',i.revision,
+      'emailDigest',i.email_digest,'memberId',evidence.member_id,
+      'tokenDigest',CASE WHEN otl.interest_member_active(t,evidence.member_id) THEN link.token_digest ELSE NULL END,
+      'shareNameEmailWithIntroducer',(SELECT share_name_email_with_introducer FROM otl.interest_consents c
+        WHERE c.team_id=t AND c.interest_id=i.interest_id),
+      'opaqueRef',(SELECT opaque_ref FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id),
+      'objectDigest',(SELECT object_digest FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id),
+      'envelopeDek',(SELECT envelope_dek FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id),
+      'nonce',(SELECT nonce FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id),
+      'keyVersion',(SELECT key_version FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id),
+      'schemaVersion','interest-application.v1');
+  END IF;
   SELECT * INTO e FROM otl.interest_events WHERE team_id=t AND interest_id=i.interest_id AND event_key=k;
   IF FOUND THEN
     IF e.request_hash<>h THEN RAISE EXCEPTION 'interest idempotency collision'; END IF;
@@ -368,28 +417,26 @@ BEGIN
   IF coalesce(p->>'expectedRevision','') !~ '^[0-9]+$' OR i.revision<>(p->>'expectedRevision')::integer
   THEN RAISE EXCEPTION 'stale interest revision'; END IF;
   IF op='request_introduction' THEN
-    IF i.state<>'pending_introduction' THEN RAISE EXCEPTION 'interest unavailable'; END IF;
+    IF i.state<>'pending_introduction'
+      OR NOT EXISTS(SELECT 1 FROM otl.interest_consents c WHERE c.team_id=t
+        AND c.interest_id=i.interest_id AND c.share_name_email_with_introducer)
+      OR NOT otl.interest_member_active(t,p->>'memberId')
+      OR coalesce(p->>'nonceDigest','') !~ '^[0-9a-f]{64}$'
+      OR coalesce(p->>'expiresAt','')=''
+      OR (p->>'expiresAt')::timestamptz<=now_at
+      OR (p->>'expiresAt')::timestamptz>now_at+interval '7 days'
+    THEN RAISE EXCEPTION 'introduction prompt unavailable'; END IF;
+    INSERT INTO otl.interest_introduction_prompts(team_id,interest_id,member_id,
+      expected_revision,nonce_digest,requested_at,expires_at)
+      VALUES(t,i.interest_id,p->>'memberId',i.revision,p->>'nonceDigest',now_at,
+        (p->>'expiresAt')::timestamptz)
+      ON CONFLICT(team_id,interest_id) DO NOTHING;
+    IF NOT FOUND THEN RAISE EXCEPTION 'introduction prompt already issued'; END IF;
     result:=jsonb_build_object('interestId',i.interest_id,'state',i.state,'revision',i.revision);
     INSERT INTO otl.interest_outbox(team_id,interest_id,effect_key,effect_type,available_at)
       VALUES(t,i.interest_id,'intro-request:'||k,'introduction_requested',now_at);
   ELSIF op='verify_offline' THEN
-    IF i.state<>'pending_introduction' OR p->>'evidenceType' NOT IN
-      ('offline_email','offline_call','offline_document')
-      OR coalesce(p->>'evidenceDigest','') !~ '^[0-9a-f]{64}$'
-      OR coalesce(p->>'memberId','')='' OR coalesce(p->>'evidenceAt','')=''
-      OR (p->>'evidenceAt')::timestamptz>now_at
-      OR NOT otl.interest_member_active(t,p->>'memberId')
-    THEN RAISE EXCEPTION 'introduction evidence unavailable'; END IF;
-    INSERT INTO otl.interest_introduction_evidence(team_id,interest_id,member_id,evidence_type,
-      evidence_digest,actor_id,evidence_at,verified_at,event_key)
-      VALUES(t,i.interest_id,p->>'memberId',p->>'evidenceType',p->>'evidenceDigest',a,
-        (p->>'evidenceAt')::timestamptz,now_at,k);
-    old_state:=i.state;
-    UPDATE otl.interest_requests SET state='introduction_verified',revision=revision+1
-      WHERE team_id=t AND interest_id=i.interest_id RETURNING * INTO i;
-    result:=jsonb_build_object('interestId',i.interest_id,'state',i.state,'revision',i.revision);
-    INSERT INTO otl.interest_outbox(team_id,interest_id,effect_key,effect_type,available_at)
-      VALUES(t,i.interest_id,'intro-verified:'||k,'introduction_verified',now_at);
+    RAISE EXCEPTION 'offline introduction unavailable';
   ELSIF op='attach' THEN
     IF i.state<>'introduction_verified' THEN RAISE EXCEPTION 'introduction unverified'; END IF;
     SELECT * INTO evidence FROM otl.interest_introduction_evidence
@@ -402,6 +449,9 @@ BEGIN
     SELECT * INTO invite_consent FROM otl.interest_attachment_consents ac WHERE ac.team_id=t
       AND ac.interest_id=i.interest_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'attachment consent unavailable'; END IF;
+    IF NOT EXISTS(SELECT 1 FROM otl.interest_consents c WHERE c.team_id=t
+      AND c.interest_id=i.interest_id AND c.share_name_email_with_introducer)
+    THEN RAISE EXCEPTION 'sharing consent unavailable'; END IF;
     referral:=p->'referral';
     IF jsonb_typeof(referral)<>'object' OR referral->>'teamId'<>t
       OR referral->>'tokenDigest'<>link.token_digest
@@ -463,8 +513,41 @@ CREATE FUNCTION otl.interest_member_confirm(p jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,otl AS $$
 DECLARE t text:=p->>'teamId'; u text:=p->>'memberId'; k text:=p->>'key';
   h text:=md5(p::text); now_at timestamptz; i otl.interest_requests; e otl.interest_events;
-  result jsonb;
+  result jsonb; prompt otl.interest_introduction_prompts;
 BEGIN
+  IF p->>'operation'='context' THEN
+    IF coalesce(t,'')='' OR coalesce(u,'')='' OR coalesce(p->>'interestId','')=''
+      OR coalesce(p->>'signedNonceDigest','') !~ '^[0-9a-f]{64}$'
+      OR NOT otl.interest_member_active(t,u)
+    THEN RAISE EXCEPTION 'member introduction denied'; END IF;
+    SELECT * INTO prompt FROM otl.interest_introduction_prompts
+      WHERE team_id=t AND interest_id=p->>'interestId' AND member_id=u
+        AND nonce_digest=p->>'signedNonceDigest' AND consumed_at IS NULL
+        AND expires_at>transaction_timestamp();
+    IF NOT FOUND THEN RAISE EXCEPTION 'introduction prompt unavailable'; END IF;
+    SELECT * INTO i FROM otl.interest_requests WHERE team_id=t AND interest_id=prompt.interest_id;
+    IF NOT FOUND OR i.state<>'pending_introduction' OR i.revision<>prompt.expected_revision
+    THEN RAISE EXCEPTION 'stale introduction'; END IF;
+    RETURN jsonb_build_object('interestId',i.interest_id,'revision',i.revision,
+      'shareNameEmailWithIntroducer',(SELECT share_name_email_with_introducer FROM otl.interest_consents c
+        WHERE c.team_id=t AND c.interest_id=i.interest_id),
+      'opaqueRef',CASE WHEN (SELECT share_name_email_with_introducer FROM otl.interest_consents c
+        WHERE c.team_id=t AND c.interest_id=i.interest_id) THEN
+        (SELECT opaque_ref FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id) ELSE NULL END,
+      'objectDigest',CASE WHEN (SELECT share_name_email_with_introducer FROM otl.interest_consents c
+        WHERE c.team_id=t AND c.interest_id=i.interest_id) THEN
+        (SELECT object_digest FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id) ELSE NULL END,
+      'envelopeDek',CASE WHEN (SELECT share_name_email_with_introducer FROM otl.interest_consents c
+        WHERE c.team_id=t AND c.interest_id=i.interest_id) THEN
+        (SELECT envelope_dek FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id) ELSE NULL END,
+      'nonce',CASE WHEN (SELECT share_name_email_with_introducer FROM otl.interest_consents c
+        WHERE c.team_id=t AND c.interest_id=i.interest_id) THEN
+        (SELECT nonce FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id) ELSE NULL END,
+      'keyVersion',CASE WHEN (SELECT share_name_email_with_introducer FROM otl.interest_consents c
+        WHERE c.team_id=t AND c.interest_id=i.interest_id) THEN
+        (SELECT key_version FROM otl.interest_private_payloads pp WHERE pp.team_id=t AND pp.interest_id=i.interest_id) ELSE NULL END,
+      'schemaVersion','interest-application.v1');
+  END IF;
   IF coalesce(t,'')='' OR coalesce(u,'')='' OR coalesce(k,'')=''
     OR coalesce(p->>'now','')='' OR coalesce(p->>'signedNonceDigest','') !~ '^[0-9a-f]{64}$'
     OR coalesce(p->>'evidenceDigest','') !~ '^[0-9a-f]{64}$'
@@ -479,9 +562,18 @@ BEGIN
     IF e.request_hash<>h THEN RAISE EXCEPTION 'interest idempotency collision'; END IF;
     RETURN e.result;
   END IF;
-  IF i.state<>'pending_introduction' OR coalesce(p->>'expectedRevision','') !~ '^[0-9]+$'
+  IF i.state<>'pending_introduction'
+    OR NOT EXISTS(SELECT 1 FROM otl.interest_consents c WHERE c.team_id=t
+      AND c.interest_id=i.interest_id AND c.share_name_email_with_introducer)
+    OR coalesce(p->>'expectedRevision','') !~ '^[0-9]+$'
     OR i.revision<>(p->>'expectedRevision')::integer
   THEN RAISE EXCEPTION 'stale introduction'; END IF;
+  SELECT * INTO prompt FROM otl.interest_introduction_prompts WHERE team_id=t
+    AND interest_id=i.interest_id AND member_id=u AND nonce_digest=p->>'signedNonceDigest'
+    AND expected_revision=i.revision AND consumed_at IS NULL AND expires_at>now_at FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'introduction prompt unavailable'; END IF;
+  UPDATE otl.interest_introduction_prompts SET consumed_at=now_at
+    WHERE team_id=t AND interest_id=i.interest_id;
   INSERT INTO otl.interest_introduction_evidence(team_id,interest_id,member_id,evidence_type,
     evidence_digest,actor_id,evidence_at,verified_at,event_key)
     VALUES(t,i.interest_id,u,'slack_signed_confirmation',p->>'evidenceDigest',u,now_at,now_at,k);
@@ -514,6 +606,8 @@ BEGIN
       claim_key=k,available_at=now_at+interval '5 minutes'
       WHERE outbox_id=o.outbox_id RETURNING * INTO o;
     RETURN jsonb_build_object('outboxId',o.outbox_id,'interestId',o.interest_id,
+      'revision',(SELECT revision FROM otl.interest_requests WHERE team_id=t AND interest_id=o.interest_id),
+      'state',(SELECT state FROM otl.interest_requests WHERE team_id=t AND interest_id=o.interest_id),
       'effectKey',o.effect_key,'effectType',o.effect_type,'claimKey',k,
       'opaqueRef',(SELECT opaque_ref FROM otl.interest_private_payloads WHERE team_id=t AND interest_id=o.interest_id),
       'objectDigest',(SELECT object_digest FROM otl.interest_private_payloads WHERE team_id=t AND interest_id=o.interest_id),
@@ -621,6 +715,7 @@ BEGIN
       DELETE FROM otl.interest_outbox WHERE team_id=t AND interest_id=i.interest_id;
       DELETE FROM otl.interest_events WHERE team_id=t AND interest_id=i.interest_id;
       DELETE FROM otl.interest_referral_bridges WHERE team_id=t AND interest_id=i.interest_id;
+      DELETE FROM otl.interest_introduction_prompts WHERE team_id=t AND interest_id=i.interest_id;
       DELETE FROM otl.interest_introduction_evidence WHERE team_id=t AND interest_id=i.interest_id;
       DELETE FROM otl.interest_attachment_consents WHERE team_id=t AND interest_id=i.interest_id;
       DELETE FROM otl.interest_consents WHERE team_id=t AND interest_id=i.interest_id;
@@ -629,6 +724,7 @@ BEGIN
       DELETE FROM otl.interest_requests WHERE team_id=t AND interest_id=i.interest_id;
       processed:=processed+1;
     END LOOP;
+    DELETE FROM otl.interest_service_nonces WHERE team_id=t AND expires_at<=now_at;
     DELETE FROM otl.interest_submission_receipts WHERE team_id=t AND interest_id IS NULL
       AND recorded_at<=now_at-interval '12 months';
     PERFORM set_config('otl.interest_retention','',true);
@@ -639,7 +735,7 @@ END $$;
 
 REVOKE ALL ON TABLE otl.interest_requests,otl.interest_consents,otl.interest_attachment_consents,otl.interest_private_payloads,
   otl.interest_submission_receipts,otl.interest_introduction_evidence,otl.interest_referral_bridges,
-  otl.interest_events,otl.interest_outbox FROM PUBLIC,otl_referral_runtime,otl_referral_admin,otl_interest_member;
+  otl.interest_events,otl.interest_outbox,otl.interest_introduction_prompts,otl.interest_service_nonces FROM PUBLIC,otl_referral_runtime,otl_referral_admin,otl_interest_member;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA otl FROM PUBLIC,otl_referral_runtime,otl_referral_admin,otl_interest_member;
 REVOKE ALL ON FUNCTION otl.interest_identity_guard(),otl.interest_payload_identity_guard(),
   otl.interest_audit_guard(),otl.interest_referral_guard(),otl.interest_member_active(text,text),

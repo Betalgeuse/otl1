@@ -61,12 +61,6 @@ export type InterestAdminAction = {
   readonly key: string;
   readonly now: string;
 };
-export type InterestOfflineEvidence = InterestAdminAction & {
-  readonly memberId: string;
-  readonly evidenceType: "offline_email" | "offline_call" | "offline_document";
-  readonly evidenceDigest: string;
-  readonly evidenceAt: string;
-};
 export type InterestMemberConfirmation = {
   readonly teamId: string;
   readonly interestId: string;
@@ -97,3 +91,41 @@ export type InterestAttach = InterestAdminAction & {
     readonly schemaVersion: "invite-application.v1";
   };
 };
+
+export type InterestIntroductionPrompt = InterestAdminAction & {
+  readonly memberId: string;
+  readonly nonceDigest: string;
+  readonly expiresAt: string;
+};
+
+export const interestAdminContextSchema = z.object({
+  interestId: z.string(),
+  state: z.string(),
+  revision: z.number().int().nonnegative(),
+  emailDigest: z.string().regex(/^[0-9a-f]{64}$/),
+  memberId: z.string().nullable(),
+  tokenDigest: z.string().nullable(),
+  shareNameEmailWithIntroducer: z.boolean(),
+  opaqueRef: z.string().nullable(),
+  objectDigest: z.string().nullable(),
+  envelopeDek: z.string().nullable(),
+  nonce: z.string().nullable(),
+  keyVersion: z.string().nullable(),
+  schemaVersion: z.literal(INTEREST_PRIVATE_SCHEMA_VERSION),
+});
+export type InterestAdminContext = z.infer<typeof interestAdminContextSchema>;
+
+export const interestMemberContextSchema = interestAdminContextSchema
+  .pick({
+    interestId: true,
+    revision: true,
+    shareNameEmailWithIntroducer: true,
+    opaqueRef: true,
+    objectDigest: true,
+    envelopeDek: true,
+    nonce: true,
+    keyVersion: true,
+    schemaVersion: true,
+  })
+  .readonly();
+export type InterestMemberContext = z.infer<typeof interestMemberContextSchema>;

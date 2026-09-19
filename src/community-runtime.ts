@@ -19,6 +19,12 @@ export type CommunityEnv = {
   readonly GARDEN_RECONCILIATION?: string;
   readonly REFERRALS_ENABLED?: string;
   readonly PUBLIC_APPLICATIONS_ENABLED?: string;
+  readonly PUBLIC_INTEREST_ENABLED?: string;
+  readonly INTEREST_RUNTIME_DATABASE_URL?: string;
+  readonly INTEREST_ADMIN_DATABASE_URL?: string;
+  readonly INTEREST_MEMBER_DATABASE_URL?: string;
+  readonly INTEREST_ADMIN_CHANNEL_ID?: string;
+  readonly INTEREST_ACTION_SECRET?: string;
   readonly SITE_CORE_HMAC_SECRET?: string;
   readonly INVITE_EMAIL_PEPPER?: string;
   readonly LIFECYCLE_ACTION_SECRET?: string;

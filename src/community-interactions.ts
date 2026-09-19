@@ -2,6 +2,7 @@ import { parseBugAnswerActionId } from "./community-bug-actions";
 import { handleBugAction, handleBugView } from "./community-bug-interactions";
 import { armCommunityClock } from "./community-clock";
 import { openSettings, openShoutout, readSettings } from "./community-controls";
+import { handleInterestInteraction } from "./community-interest-interactions";
 import { introductionModal, parseIntroduction, submitIntroduction } from "./community-introduction";
 import { showIntroductionDirectory } from "./community-introduction-channel";
 import { handleInviteAdminAction } from "./community-invite-admin";
@@ -34,6 +35,12 @@ export async function communityInteraction(
   const action = actions[0] ? object(actions[0]) : null;
   const view = data.view ? object(data.view) : null;
   const id = string(action?.action_id ?? view?.callback_id ?? "");
+  if (data.type === "block_actions" && action && id.startsWith("community_interest_")) {
+    await handleInterestInteraction(data, env);
+    if (env.COMMUNITY_PUBLIC_CHANNEL_ID)
+      waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+    return new Response(null, { status: 200 });
+  }
   if (data.type === "block_actions" && action && id.startsWith("community_invite_")) {
     if (env.REFERRALS_ENABLED !== "true") throw new InputError("지금은 신청을 처리할 수 없습니다.");
     const teamId = string(object(data.team).id);

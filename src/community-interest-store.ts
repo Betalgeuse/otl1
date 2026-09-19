@@ -1,11 +1,17 @@
 import type {
   InterestAdminAction,
+  InterestAdminContext,
   InterestAttach,
+  InterestIntroductionPrompt,
   InterestMemberConfirmation,
-  InterestOfflineEvidence,
+  InterestMemberContext,
   InterestReceipt,
   InterestSubmit,
   InterestWithdraw,
+} from "./community-interest-types";
+import {
+  interestAdminContextSchema,
+  interestMemberContextSchema,
 } from "./community-interest-types";
 import { InputError, type Json, object, string } from "./input";
 import type { NeonStore } from "./store";
@@ -23,6 +29,15 @@ function receipt(value: Json): InterestReceipt {
 
 export class CommunityInterestStore {
   constructor(private readonly db: Pick<NeonStore, "queryJson">) {}
+
+  async claimServiceNonce(digest: string, expiresAt: string, teamId: string): Promise<boolean> {
+    const value = await this.db.queryJson(
+      "SELECT otl.interest_runtime_execute('claim_nonce',$1::jsonb)",
+      [JSON.stringify({ teamId, nonceDigest: digest, expiresAt })],
+    );
+    if (typeof value !== "boolean") throw new InputError("Interest nonce unavailable");
+    return value;
+  }
 
   async submit(input: InterestSubmit): Promise<InterestReceipt> {
     return receipt(
@@ -61,12 +76,27 @@ export class CommunityInterestStore {
     throw new InputError("Invalid interest private state");
   }
 
-  async requestIntroduction(input: InterestAdminAction): Promise<Json> {
-    return this.admin("request_introduction", input);
+  async adminContext(
+    input: Pick<InterestAdminAction, "teamId" | "adminId" | "interestId" | "key" | "now">,
+  ): Promise<InterestAdminContext> {
+    return interestAdminContextSchema.parse(await this.admin("context", input));
   }
 
-  async verifyOffline(input: InterestOfflineEvidence): Promise<Json> {
-    return this.admin("verify_offline", input);
+  async memberContext(input: {
+    readonly teamId: string;
+    readonly interestId: string;
+    readonly memberId: string;
+    readonly signedNonceDigest: string;
+  }): Promise<InterestMemberContext> {
+    return interestMemberContextSchema.parse(
+      await this.db.queryJson("SELECT otl.interest_member_confirm($1::jsonb)", [
+        JSON.stringify({ operation: "context", ...input }),
+      ]),
+    );
+  }
+
+  async requestIntroduction(input: InterestIntroductionPrompt): Promise<Json> {
+    return this.admin("request_introduction", input);
   }
 
   async attach(input: InterestAttach): Promise<Json> {
@@ -127,7 +157,11 @@ export class CommunityInterestStore {
 
   private admin(
     op: string,
-    input: InterestAdminAction | InterestOfflineEvidence | InterestAttach,
+    input:
+      | InterestAdminAction
+      | InterestAttach
+      | InterestIntroductionPrompt
+      | Pick<InterestAdminAction, "teamId" | "adminId" | "interestId" | "key" | "now">,
   ): Promise<Json> {
     return this.db.queryJson("SELECT otl.interest_admin_execute($1,$2::jsonb)", [
       op,
