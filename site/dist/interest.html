@@ -27,7 +27,7 @@
           <label><span>아는 회원이 있다면 단서 (선택)</span><input name="knownMemberClue" maxlength="200" aria-describedby="member-help"><small id="member-help">이름이나 관계만 간단히 적어 주세요. 이 내용만으로 소개가 확인되지는 않습니다.</small></label>
           <label class="consent"><input name="consent" type="checkbox" value="interest-consent-v1" required><span>운영자가 이 문의를 검토하고 답장하기 위해 입력한 정보를 처리하는 데 동의합니다. 문의만으로 초대나 참여 자격이 생기지 않습니다. (interest-consent-v1)</span></label>
           <label class="consent"><input name="inviteConsent" type="checkbox" value="invite-consent-v1" required><span>기존 회원의 소개가 확인되고 운영자가 나중에 승인한 경우에만 초대 절차를 위해 입력한 정보를 처리하는 데 동의합니다. 이 동의로 곧바로 Slack 초대가 발송되지는 않습니다. (invite-consent-v1)</span></label>
-          <label class="consent"><input name="shareNameEmailWithIntroducer" type="checkbox" value="yes"><span>소개를 확인할 필요가 생기면, 운영자가 확인된 기존 회원 한 명에게 제 이름과 이메일을 제한적으로 보여주는 데 동의합니다. 선택 사항이며, 동의하지 않아도 문의를 보낼 수 있습니다.</span></label>
+          <label class="consent"><input name="shareNameEmailWithIntroducer" type="checkbox" value="yes"><span>소개 확인이 필요해지면, 운영자가 확인된 기존 회원 한 명에게 제 이름과 이메일을 제한적으로 보여주는 데 동의합니다. 선택 사항입니다. 동의하지 않으면 문의는 운영자만 검토하며, 봇에서 이 문의를 회원 소개에 연결하거나 초대 절차를 진행하지 않습니다. 참여를 원하면 기존 회원에게 개인 전용 신청 링크를 받아 신청해 주세요.</span></label>
           <div class="cf-turnstile" data-sitekey="__TURNSTILE_SITE_KEY__" data-action="interest-submit" data-size="flexible"></div>
           <p class="form-status" data-form-status role="status" aria-live="polite"></p>
           <button class="button" type="submit" data-submit>비공개 문의 보내기</button>
