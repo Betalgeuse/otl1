@@ -57,3 +57,25 @@ Artifact: .omo/evidence/task-2-otl1-membership-invite-site.txt
 
 RISK AND BOUNDARY
 LIFECYCLE_MODE runtime wiring, scheduler behavior, Slack effects, referrals, site code, and deployment are intentionally outside Todo 2. Migration 029 is additive and un-deployed. Its tables deny direct PUBLIC access; later runtime-role grants and runtime integration remain downstream tasks.
+
+POST-COMPLETION DIRECT VERIFICATION
+Verified implementation commit: 33927681f4dfee235ba26dc6c4b31b64c4070b55
+Invocation: bun qa/member-lifecycle-pg.mjs && bun qa/membership-reminder-audit-pg.mjs && bun qa/community-current-members.mjs && bun run check
+Binary observable: exit 0
+Exact decisive output:
+PASS lifecycle storage: 39 machine-counted edges; fresh+upgrade 001-029; KST closure/weekends/evidence; rollout; active/grace/extension/dormant/return; stale/duplicate/concurrent/cross-scope denial; immutable audit; rollback=0
+PASS migration 027: monotonic/empty/atomic membership, opt-out preserving rejoin, 201-member chunks, per-peer retry pruning, ambiguity-before-prune, durable common retry
+PASS current member snapshot: paginated, deduplicated, bounded human classification and partial failure closed
+Checked 113 files. No fixes applied.
+Passed 54 isolated synthetic suites.
+Wrangler deploy --dry-run: exiting normally.
+
+Invocation: cleanup count; git diff --check; git status --porcelain; merge-base and changed-path checks
+Binary observable: exit 0
+Exact output:
+cleanup_count=0
+worktree_status_before_evidence_update=0
+verified_sha=33927681f4dfee235ba26dc6c4b31b64c4070b55
+merge_base=d2ce4812158557b0c6735f44f5a93f4a299fd596
+Changed paths were exactly this evidence file plus migration 029, three lifecycle QA artifacts, and two community-lifecycle TypeScript modules.
+Judgment: every Todo 2 acceptance surface passed on the committed implementation; no PostgreSQL process or temp directory remained.
