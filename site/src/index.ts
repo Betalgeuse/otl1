@@ -5,16 +5,21 @@ interface SiteEnv {
   readonly TURNSTILE_SITE_KEY: string;
   readonly TURNSTILE_SECRET?: string;
   readonly SITE_CORE_HMAC_SECRET?: string;
+  readonly PUBLIC_INTEREST_ENABLED?: string;
 }
 
 type TurnstileResult = { readonly success?: boolean; readonly action?: string; readonly hostname?: string };
 const APPLY_PATH = "/internal/referrals/apply";
 const WITHDRAW_PATH = "/internal/referrals/withdraw";
 const RESOLVE_PATH = "/internal/referrals/resolve";
+const INTEREST_SUBMIT_PATH = "/internal/interest/submit";
+const INTEREST_WITHDRAW_PATH = "/internal/interest/withdraw";
 const REFERRAL = /^\/r\/([A-Za-z0-9_-]{32})$/;
 const APPLY = /^\/r\/([A-Za-z0-9_-]{32})\/apply$/;
 const RECEIPT = /^\/receipt\/(RCP-[A-Z0-9-]{4,64})$/;
 const WITHDRAW = /^\/receipt\/(RCP-[A-Z0-9-]{4,64})\/withdraw$/;
+const INTEREST_RECEIPT = /^\/receipt\/(INT-[A-Z0-9-]{4,64})$/;
+const INTEREST_WITHDRAW = /^\/receipt\/(INT-[A-Z0-9-]{4,64})\/withdraw$/;
 const GENERIC_ERROR = "요청을 지금 처리할 수 없어요. 잠시 뒤 새로 확인해 주세요.";
 
 export const SHARE_COPY = (token: string): string =>
@@ -122,7 +127,7 @@ async function boundedForm(request: Request): Promise<FormData | null> {
     body,
   }).formData();
 }
-async function verifyTurnstile(request: Request, env: SiteEnv, token: string): Promise<"valid" | "invalid" | "unavailable"> {
+async function verifyTurnstile(request: Request, env: SiteEnv, token: string, action = "invite-apply"): Promise<"valid" | "invalid" | "unavailable"> {
   if (!env.TURNSTILE_SECRET || !token || token.length > 2048) return "invalid";
   try {
     const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, signal: AbortSignal.timeout(8_000), body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: request.headers.get("cf-connecting-ip") ?? "" }) });
@@ -131,7 +136,7 @@ async function verifyTurnstile(request: Request, env: SiteEnv, token: string): P
     const testKey = env.TURNSTILE_SITE_KEY === "1x00000000000000000000AA";
     const metadataValid = testKey
       ? result.action === undefined && result.hostname === "example.com"
-      : result.action === "invite-apply" && result.hostname === new URL(request.url).hostname;
+      : result.action === action && result.hostname === new URL(request.url).hostname;
     if (result.success !== true || !metadataValid)
       console.warn(JSON.stringify({ event: "turnstile_rejected", success: result.success === true, metadataValid, testKey }));
     return result.success === true && metadataValid ? "valid" : "invalid";
@@ -197,6 +202,69 @@ async function apply(request: Request, env: SiteEnv, token: string): Promise<Res
   } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 503); throw error; }
 }
 
+function interestEnabled(env: SiteEnv): boolean {
+  return env.PUBLIC_INTEREST_ENABLED === "true" && Boolean(env.SITE_CORE_HMAC_SECRET && env.TURNSTILE_SECRET && env.TURNSTILE_SITE_KEY);
+}
+
+async function interestPage(request: Request, env: SiteEnv): Promise<Response> {
+  if (!interestEnabled(env)) return message("참여 문의는 아직 준비 중입니다.", 503);
+  const html = await assetHtml(env, request, "interest.html");
+  return new Response(html.replaceAll("__TURNSTILE_SITE_KEY__", env.TURNSTILE_SITE_KEY).replaceAll("__SUBMISSION_KEY__", crypto.randomUUID()), { headers: { "content-type": "text/html;charset=UTF-8" } });
+}
+
+async function submitInterest(request: Request, env: SiteEnv): Promise<Response> {
+  if (!interestEnabled(env)) return message("참여 문의는 아직 준비 중입니다.", 503);
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  if (!(await env.RATE_LIMITER.limit({ key: `interest:ip:${ip}` })).success || !(await env.RATE_LIMITER.limit({ key: "interest:global" })).success) return message(GENERIC_ERROR, 429);
+  if (Number(request.headers.get("content-length") ?? "0") > 16_384) return message(GENERIC_ERROR, 422);
+  let form: FormData;
+  try {
+    const parsed = await boundedForm(request);
+    if (!parsed) return message(GENERIC_ERROR, 422);
+    form = parsed;
+  } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 422); throw error; }
+  const email = safeText(form.get("email"), 320)?.toLowerCase() ?? null;
+  const displayName = safeText(form.get("displayName"), 80);
+  const intent = safeText(form.get("intent"), 1000);
+  const rawClue = form.get("knownMemberClue");
+  const knownMemberClue = rawClue === "" || rawClue === null ? "" : safeText(rawClue, 200);
+  const submissionKey = safeText(form.get("submissionKey"), 120);
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !displayName || !intent || knownMemberClue === null || !submissionKey || submissionKey.length < 8 || form.get("consent") !== "interest-consent-v1" || form.get("inviteConsent") !== "invite-consent-v1") return message(GENERIC_ERROR, 422);
+  const shareNameEmailWithIntroducer = form.get("shareNameEmailWithIntroducer") === "yes";
+  const turnstile = await verifyTurnstile(request, env, String(form.get("cf-turnstile-response") ?? ""), "interest-submit");
+  if (turnstile !== "valid") return message(GENERIC_ERROR, turnstile === "invalid" ? 422 : 503);
+  try {
+    const consentedAt = new Date().toISOString();
+    const response = await coreRequest(env, INTEREST_SUBMIT_PATH, { submissionKey, consentVersion: "interest-consent-v1", consentedAt, inviteConsentAccepted: true, inviteConsentedAt: consentedAt, email, displayName, intent, knownMemberClue, shareNameEmailWithIntroducer });
+    if (response.status !== 202) return message(GENERIC_ERROR, 503);
+    const result = await response.json<{ receiptId?: string; withdrawalToken?: string }>();
+    if (!result.receiptId || !/^INT-[A-Z0-9-]{4,64}$/.test(result.receiptId) || (result.withdrawalToken && !/^[A-Za-z0-9_-]{43}$/.test(result.withdrawalToken))) return message(GENERIC_ERROR, 503);
+    const headers = new Headers({ location: `/receipt/${result.receiptId}` });
+    if (result.withdrawalToken && env.SITE_CORE_HMAC_SECRET) {
+      const sealed = await sealCapability(env.SITE_CORE_HMAC_SECRET, result.receiptId, result.withdrawalToken);
+      headers.set("set-cookie", `otl1_interest_withdraw=${sealed}; Path=/receipt/${result.receiptId}; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`);
+    }
+    return new Response(null, { status: 303, headers });
+  } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 503); throw error; }
+}
+
+async function withdrawInterest(request: Request, env: SiteEnv, receiptId: string): Promise<Response> {
+  if (!interestEnabled(env)) return message(GENERIC_ERROR, 503);
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  if (!(await env.RATE_LIMITER.limit({ key: `interest-withdraw:${ip}` })).success) return message(GENERIC_ERROR, 429);
+  const sealed = request.headers.get("cookie")?.match(/(?:^|;\s*)otl1_interest_withdraw=([^;]+)/)?.[1];
+  const token = sealed && env.SITE_CORE_HMAC_SECRET ? await openCapability(env.SITE_CORE_HMAC_SECRET, receiptId, sealed) : null;
+  if (!token) return message(GENERIC_ERROR, 404);
+  try {
+    const form = await boundedForm(request);
+    const withdrawalKey = form && safeText(form.get("withdrawalKey"), 120);
+    if (!withdrawalKey || withdrawalKey.length < 8) return message(GENERIC_ERROR, 422);
+    const response = await coreRequest(env, INTEREST_WITHDRAW_PATH, { receiptId, withdrawalToken: token, withdrawalKey });
+    if (response.status !== 202) return message(GENERIC_ERROR, 503);
+  } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 503); throw error; }
+  return new Response(null, { status: 303, headers: { location: `/receipt/${receiptId}?withdrawn=1`, "set-cookie": `otl1_interest_withdraw=; Path=/receipt/${receiptId}; HttpOnly; Secure; SameSite=Strict; Max-Age=0` } });
+}
+
 async function withdraw(request: Request, env: SiteEnv, receiptId: string): Promise<Response> {
   if (!(await env.RATE_LIMITER.limit({ key: `withdraw:${receiptId}` })).success) return message(GENERIC_ERROR, 429);
   const sealed = request.headers.get("cookie")?.match(/(?:^|;\s*)otl1_withdraw=([^;]+)/)?.[1];
@@ -220,14 +288,31 @@ const siteWorker = {
     const applyRoute = url.pathname.match(APPLY);
     const receipt = url.pathname.match(RECEIPT);
     const withdrawal = url.pathname.match(WITHDRAW);
+    const interestReceipt = url.pathname.match(INTEREST_RECEIPT);
+    const interestWithdrawal = url.pathname.match(INTEREST_WITHDRAW);
     let response: Response;
-    if (request.method === "GET" && referral) response = await referralPage(request, env, referral[1]);
+    if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+      const html = await assetHtml(env, request, "index.html");
+      response = new Response(html.replace("__INTEREST_COPY__", interestEnabled(env) ? "소개 링크가 없다면 운영자에게 비공개 참여 문의를 남길 수 있습니다. 문의만으로 회원이 되거나 초대를 받지는 않습니다." : "소개 링크가 없는 분을 위한 비공개 참여 문의를 준비하고 있습니다. 문의만으로 회원이 되거나 초대를 받지는 않습니다.").replace("__INTEREST_CTA__", interestEnabled(env) ? '<a class="interest-pending" href="/interest">비공개 참여 문의 남기기</a>' : '<span class="interest-pending">참여 문의 준비 중</span>'), { headers: { "content-type": "text/html;charset=UTF-8" } });
+    }
+    else if (url.pathname === "/interest.html" || url.pathname === "/receipt.html") response = message(GENERIC_ERROR, 404);
+    else if (request.method === "GET" && url.pathname === "/interest") response = await interestPage(request, env);
+    else if (request.method === "POST" && url.pathname === "/interest") response = await submitInterest(request, env);
+    else if (request.method === "GET" && referral) response = await referralPage(request, env, referral[1]);
     else if (request.method === "POST" && applyRoute) response = await apply(request, env, applyRoute[1]);
+    else if (request.method === "GET" && interestReceipt) {
+      const html = await assetHtml(env, request, "receipt.html");
+      const withdrawn = url.searchParams.get("withdrawn") === "1";
+      const sealed = request.headers.get("cookie")?.match(/(?:^|;\s*)otl1_interest_withdraw=([^;]+)/)?.[1];
+      const capability = sealed && env.SITE_CORE_HMAC_SECRET ? await openCapability(env.SITE_CORE_HMAC_SECRET, interestReceipt[1], sealed) : null;
+      const withdrawForm = withdrawn || !capability ? "" : `<form action="/receipt/${interestReceipt[1]}/withdraw" method="post"><input type="hidden" name="withdrawalKey" value="${crypto.randomUUID()}"><button class="button button--quiet" type="submit">문의 철회 요청</button></form>`;
+      response = new Response(html.replaceAll("__RECEIPT_LABEL__", "문의 접수 기록").replaceAll("__RECEIPT_ID__", interestReceipt[1]).replaceAll("__STATUS__", withdrawn ? "철회 요청을 확인했습니다." : "문의가 접수되었습니다.").replaceAll("__RECEIPT_COPY__", "운영자가 문의를 검토합니다. 문의만으로 참여 자격이나 초대가 생기지 않으며, 참여하려면 기존 회원의 확인된 소개와 운영자 승인이 필요합니다.").replaceAll("__WITHDRAW_FORM__", withdrawForm), { headers: { "content-type": "text/html;charset=UTF-8" } });
+    } else if (request.method === "POST" && interestWithdrawal) response = await withdrawInterest(request, env, interestWithdrawal[1]);
     else if (request.method === "GET" && receipt) {
       const html = await assetHtml(env, request, "receipt.html");
       const withdrawn = url.searchParams.get("withdrawn") === "1";
       const withdrawForm = withdrawn ? "" : `<form action="/receipt/${receipt[1]}/withdraw" method="post"><input type="hidden" name="withdrawalKey" value="${crypto.randomUUID()}"><button class="button button--quiet" type="submit">신청 철회</button></form>`;
-      response = new Response(html.replaceAll("__RECEIPT_ID__", receipt[1]).replaceAll("__STATUS__", withdrawn ? "신청 철회가 접수되었습니다." : "신청이 안전하게 접수되었습니다.").replaceAll("__WITHDRAW_FORM__", withdrawForm), { headers: { "content-type": "text/html;charset=UTF-8" } });
+      response = new Response(html.replaceAll("__RECEIPT_LABEL__", "신청 영수증").replaceAll("__RECEIPT_ID__", receipt[1]).replaceAll("__STATUS__", withdrawn ? "신청 철회가 접수되었습니다." : "신청이 안전하게 접수되었습니다.").replaceAll("__RECEIPT_COPY__", "운영자가 내용을 직접 확인합니다. 승인되면 Slack 초대를 수동으로 보내며, 초대를 수락해야 참여가 확인됩니다.").replaceAll("__WITHDRAW_FORM__", withdrawForm), { headers: { "content-type": "text/html;charset=UTF-8" } });
     } else if (request.method === "POST" && withdrawal) response = await withdraw(request, env, withdrawal[1]);
     else response = await env.ASSETS.fetch(request);
     return secured(response);

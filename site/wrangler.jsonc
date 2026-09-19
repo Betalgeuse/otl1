@@ -18,7 +18,8 @@
     }
   ],
   "vars": {
-    "TURNSTILE_SITE_KEY": "0x4AAAAAAE83tTpMHyLr4nIv"
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAE83tTpMHyLr4nIv",
+    "PUBLIC_INTEREST_ENABLED": "false"
   },
   "ratelimits": [{ "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }]
 }
