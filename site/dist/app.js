@@ -51,7 +51,7 @@ if (reactionStage instanceof HTMLElement) {
 
 const previewStates = {
   registration: { time: "10:00", message: "오늘의 한 가지를 적었어요. 첫걸음이 분명해졌네요.", garden: "첫 칸에 씨앗을 심었습니다.", cells: ["filled", "", "", ""], emojis: [["ack-yes.png", "네 이모티콘"], ["blob_smiley.png", "웃는 이모티콘"]] },
-  completion: { time: "18:00", message: "오늘의 한 가지를 끝냈네요. 해낸 만큼 쉬어 가요.", garden: "완료한 하루의 잔디가 자랐습니다.", cells: ["filled", "filled", "filled", "filled"], emojis: [["finish_flag.png", "완주 깃발"], ["thumbs-up-cat.png", "따봉 이모티콘"]] },
+  completion: { time: "18:00", message: "오늘의 한 가지를 끝냈네요. 해낸 만큼 쉬어 가요.", garden: "완료한 하루의 잔디가 자랐습니다.", cells: ["filled", "filled", "filled", "filled"], emojis: [["finish_flag.png", "완주 깃발"], ["meow-adorable.png", "고양이 이모티콘"]] },
   rest: { time: "18:00", message: "오늘은 쉬어 가도 괜찮아요. 내일 다시 한 가지에서 시작해요.", garden: "쉬어 간 날도 기록에 남습니다.", cells: ["filled", "rest", "", ""], emojis: [["blob-help.png", "도움 이모티콘"], ["meow-adorable.png", "고양이 이모티콘"]] }
 };
 const previewButtons = document.querySelectorAll("[data-preview-state]");
