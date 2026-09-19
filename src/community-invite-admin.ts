@@ -144,7 +144,30 @@ export async function handleInviteAdminAction(
     now: new Date(Number(input.actionTs) * 1_000).toISOString(),
   };
   if (input.actionId === "community_invite_mark_invited") {
-    await store.markInvited(base);
+    const result = await store.markInvited(base);
+    if (slack) {
+      const text = "수동 초대를 표시했습니다. 초대가 완료되지 않았다면 승인을 취소할 수 있습니다.";
+      await slack.postAdmin({
+        adminId: input.userId,
+        effectKey: `manual-invite:${value.data.requestId}:${result.revision}`,
+        requestId: value.data.requestId,
+        text,
+        blocks: [
+          { type: "section", text: { type: "mrkdwn", text } },
+          {
+            type: "actions",
+            elements: [
+              button(
+                "승인 취소",
+                "community_invite_decline",
+                value.data.requestId,
+                result.revision,
+              ),
+            ],
+          },
+        ],
+      });
+    }
     return true;
   }
   const decision = decisionFromAction(input.actionId);
@@ -169,6 +192,7 @@ export async function handleInviteAdminAction(
               value.data.requestId,
               result.revision,
             ),
+            button("승인 취소", "community_invite_decline", value.data.requestId, result.revision),
           ],
         },
       ],

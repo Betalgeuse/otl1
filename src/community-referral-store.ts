@@ -140,7 +140,12 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
     readonly tokenDigest: string;
     readonly now: string;
   }): Promise<
-    | { readonly kind: "issued"; readonly linkId: string; readonly created: boolean }
+    | {
+        readonly kind: "issued";
+        readonly linkId: string;
+        readonly created: boolean;
+        readonly remaining: number;
+      }
     | { readonly kind: "unavailable" }
   > {
     const value = object(
@@ -148,7 +153,13 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
         JSON.stringify(input),
       ]),
     );
-    return { kind: "issued", linkId: string(value.linkId), created: value.created === true };
+    if (value.kind === "unavailable") return { kind: "unavailable" };
+    return {
+      kind: "issued",
+      linkId: string(value.linkId),
+      created: value.created === true,
+      remaining: integer(value.remaining),
+    };
   }
 
   async submit(input: ReferralSubmit): Promise<ReferralReceipt | { readonly kind: "rejected" }> {

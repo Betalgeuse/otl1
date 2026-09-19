@@ -331,8 +331,8 @@ assert.equal(await deliverInviteAdminReview(env, store, slack), true);
 const adminCard = slackEffects.find((effect) => effect.kind === "admin");
 assert.ok(adminCard);
 assert.match(JSON.stringify(adminCard), /Free Slack 초대는 운영자가 직접/);
-await handleInviteAdminAction({ teamId: "TQA", userId: "UADMIN", actionId: "community_invite_approve", value: JSON.stringify({ requestId: adminCard.requestId, revision: 0 }), actionTs: "100.1" }, env, store, slack);
-await handleInviteAdminAction({ teamId: "TQA", userId: "UADMIN", actionId: "community_invite_mark_invited", value: JSON.stringify({ requestId: adminCard.requestId, revision: 1 }), actionTs: "100.2" }, env, store);
+await handleInviteAdminAction({ teamId: "TQA", userId: "UADMIN", actionId: "community_invite_approve", value: JSON.stringify({ requestId: adminCard.requestId, revision: 0 }), actionTs: "1700000000.1" }, env, store, slack);
+await handleInviteAdminAction({ teamId: "TQA", userId: "UADMIN", actionId: "community_invite_mark_invited", value: JSON.stringify({ requestId: adminCard.requestId, revision: 1 }), actionTs: "1700000000.2" }, env, store);
 assert.deepEqual(store.decisions.map((entry) => entry.decision), ["approved", "manual_invite_asserted"]);
 
 const acceptedLostReview = store.reviews.shift();

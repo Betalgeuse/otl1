@@ -10,6 +10,10 @@ import { handleIntroductionChannelMessage } from "./community-introduction-chann
 import { handleLifecycleAdminMessage } from "./community-lifecycle-admin";
 import { lifecycleAdminStore } from "./community-lifecycle-runtime-store";
 import { dispatchCommunityMessage, dispatchFeedbackBugMessage } from "./community-message-router";
+import {
+  handleReferralCapacityAdminMessage,
+  referralCapacityAdminStore,
+} from "./community-referral-capacity-admin";
 import { handleReferralTeamJoin } from "./community-referral-join";
 import { handleReferralLinkMessage } from "./community-referral-link";
 import { referralSlackPort } from "./community-referral-slack";
@@ -79,6 +83,42 @@ export async function handleCommunityEvent(
       },
       env,
       lifecycleAdminStore(env.LIFECYCLE_ADMIN_DATABASE_URL),
+      async (replyText) => {
+        await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
+          channel: userId,
+          text: replyText,
+        });
+      },
+    );
+  }
+  if (
+    typeof event.text === "string" &&
+    (event.text.trim().startsWith("초대 한도 ") || event.text.trim().startsWith("초대 기본 한도 "))
+  ) {
+    if (event.type !== "message" || event.bot_id || event.subtype !== undefined || event.edit_ts)
+      return true;
+    const adminChannel = env.COMMUNITY_CHANNEL_ID;
+    const userId = string(event.user);
+    if (
+      !adminChannel ||
+      adminChannel === env.COMMUNITY_PUBLIC_CHANNEL_ID ||
+      event.channel !== adminChannel ||
+      userId !== env.COMMUNITY_ADMIN_ID
+    )
+      throw new InputError("운영자 전용 기능입니다.");
+    const stamp = Number(string(event.ts));
+    if (!Number.isFinite(stamp) || Math.abs(Date.now() / 1000 - stamp) > 300) return true;
+    return handleReferralCapacityAdminMessage(
+      {
+        teamId: env.SLACK_TEAM_ID,
+        channelId: adminChannel,
+        userId,
+        text: string(event.text).trim(),
+        key: string(data.event_id),
+        now: new Date(stamp * 1_000).toISOString(),
+      },
+      env,
+      referralCapacityAdminStore(env.REFERRAL_ADMIN_DATABASE_URL),
       async (replyText) => {
         await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
           channel: userId,

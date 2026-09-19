@@ -86,7 +86,12 @@ export interface ReferralRuntimeStore {
     readonly tokenDigest: string;
     readonly now: string;
   }): Promise<
-    | { readonly kind: "issued"; readonly linkId: string; readonly created: boolean }
+    | {
+        readonly kind: "issued";
+        readonly linkId: string;
+        readonly created: boolean;
+        readonly remaining?: number;
+      }
     | { readonly kind: "unavailable" }
   >;
   submit(input: ReferralSubmit): Promise<ReferralReceipt | { readonly kind: "rejected" }>;
