@@ -352,8 +352,8 @@ try {
   receipt.checks.freshInstall = { exit: 0, schemaHead: "038" };
   await cleanupDatabases();
   await check("full-check", "bun", ["run", "check"]);
-  if (injection === "build-failure") await check("site-build", join(root, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "missing-site-config.jsonc"]);
-  await check("site-build", join(root, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "site/wrangler.jsonc"]);
+  if (injection === "build-failure") await check("site-build", "bunx", ["wrangler", "deploy", "--dry-run", "-c", "missing-site-config.jsonc"]);
+  await check("site-build", "bunx", ["wrangler", "deploy", "--dry-run", "-c", "site/wrangler.jsonc"]);
   for (const name of focusedQa) {
     if (existingPgOnly && initdbQa.has(name)) continue;
     await check(`qa/${name}`, "bun", [`qa/${name}.mjs`]);
