@@ -5,6 +5,7 @@ import type {
   ReferralReceipt,
   ReferralRuntimeStore,
   ReferralSubmit,
+  ReferralWithdrawal,
 } from "./community-referral-types";
 import { InputError, type Json, object, string } from "./input";
 import type { NeonStore } from "./store";
@@ -91,6 +92,15 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
     );
   }
 
+  async resolveLink(teamId: string, tokenDigest: string): Promise<boolean> {
+    const result = object(
+      await this.db.queryJson("SELECT otl.referral_runtime_execute('resolve',$1::jsonb)", [
+        JSON.stringify({ teamId, tokenDigest }),
+      ]),
+    );
+    return result.available === true;
+  }
+
   async findSubmission(teamId: string, submissionKey: string): Promise<ReferralReceipt | null> {
     const value = await this.db.queryJson(
       `SELECT CASE WHEN r.request_id IS NULL THEN NULL ELSE
@@ -161,6 +171,21 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
     const stored = await this.findSubmission(input.teamId, input.key);
     if (!stored) throw new InputError("Referral submission receipt missing");
     return stored;
+  }
+
+  async withdraw(
+    input: ReferralWithdrawal,
+  ): Promise<ReferralReceipt | { readonly kind: "rejected" }> {
+    try {
+      return receipt(
+        await this.db.queryJson("SELECT otl.referral_runtime_execute('withdraw',$1::jsonb)", [
+          JSON.stringify(input),
+        ]),
+      );
+    } catch (error) {
+      if (error instanceof Error) return { kind: "rejected" };
+      throw error;
+    }
   }
 
   async claimAdminReview(now: string): Promise<InviteAdminReview | null> {

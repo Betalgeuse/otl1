@@ -14,9 +14,12 @@ import {
   type ReferralRuntimeStore,
   referralApplicationSchema,
 } from "./community-referral-types";
+import { handleReferralWithdrawal } from "./community-referral-withdraw";
 import { sign, verify } from "./signing";
 
 const INTAKE_PATH = "/internal/referrals/apply" as const;
+const WITHDRAW_PATH = "/internal/referrals/withdraw" as const;
+const RESOLVE_PATH = "/internal/referrals/resolve" as const;
 const AUTH_WINDOW_SECONDS = 300;
 
 export type ReferralIntakeEnv = {
@@ -98,8 +101,19 @@ function identity(prefix: "REQ" | "RCP"): string {
   return `${prefix}-${crypto.randomUUID().replaceAll("-", "").toUpperCase()}`;
 }
 
-async function withdrawalDigest(): Promise<string> {
-  return sha256(crypto.randomUUID());
+function base64Url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
+}
+
+async function withdrawalCapability(): Promise<{
+  readonly token: string;
+  readonly digest: string;
+}> {
+  const token = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  return { token, digest: await sha256(token) };
 }
 
 export async function handleReferralIntakeRequest(
@@ -108,7 +122,12 @@ export async function handleReferralIntakeRequest(
   store: ReferralRuntimeStore,
 ): Promise<Response> {
   const url = new URL(request.url);
-  if (request.method !== "POST" || url.pathname !== INTAKE_PATH)
+  if (
+    request.method !== "POST" ||
+    (url.pathname !== INTAKE_PATH &&
+      url.pathname !== WITHDRAW_PATH &&
+      url.pathname !== RESOLVE_PATH)
+  )
     return new Response("Not found", { status: 404 });
   if (Number(request.headers.get("content-length") ?? "0") > 8192)
     return new Response("Request too large", { status: 413 });
@@ -124,6 +143,26 @@ export async function handleReferralIntakeRequest(
     if (error instanceof SyntaxError)
       return Response.json({ error: "invalid_request" }, { status: 400 });
     throw error;
+  }
+  if (url.pathname === RESOLVE_PATH) {
+    if (
+      typeof decoded !== "object" ||
+      decoded === null ||
+      !("referralToken" in decoded) ||
+      typeof decoded.referralToken !== "string" ||
+      !/^[A-Za-z0-9_-]{32}$/.test(decoded.referralToken) ||
+      Object.keys(decoded).length !== 1
+    )
+      return Response.json({ available: false });
+    return Response.json({
+      available: await store.resolveLink(
+        env.SLACK_TEAM_ID,
+        await digestReferralToken(decoded.referralToken),
+      ),
+    });
+  }
+  if (url.pathname === WITHDRAW_PATH) {
+    return handleReferralWithdrawal(decoded, env.SLACK_TEAM_ID, store);
   }
   const application = referralApplicationSchema.safeParse(decoded);
   if (!application.success) return Response.json({ error: "invalid_request" }, { status: 400 });
@@ -160,6 +199,7 @@ export async function handleReferralIntakeRequest(
     throw error;
   }
   const privateRef = prepared.ref;
+  const withdrawal = await withdrawalCapability();
   const submission = {
     teamId: env.SLACK_TEAM_ID,
     tokenDigest: await digestReferralToken(application.data.referralToken),
@@ -169,7 +209,7 @@ export async function handleReferralIntakeRequest(
     ),
     requestId,
     receiptId,
-    withdrawalDigest: await withdrawalDigest(),
+    withdrawalDigest: withdrawal.digest,
     consentVersion: INVITE_CONSENT_VERSION,
     consentedAt: application.data.consentedAt,
     key: application.data.submissionKey,
@@ -213,5 +253,10 @@ export async function handleReferralIntakeRequest(
   }
   if (result.requestId !== requestId) await deleteInvitePrivateObject(config, privateRef.opaqueRef);
   await clearInvitePrivateReconciliationMarker(env, marker.key);
-  return Response.json({ receiptId: result.receiptId }, { status: 202 });
+  return Response.json(
+    result.requestId === requestId
+      ? { receiptId: result.receiptId, withdrawalToken: withdrawal.token }
+      : { receiptId: result.receiptId },
+    { status: 202 },
+  );
 }

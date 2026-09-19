@@ -38,4 +38,4 @@ Intersection observers reveal sections only after JavaScript has attached the mo
 
 ## 5. Responsive rules and accepted debt
 
-The nav collapses at 760px, chapter typography scales through `clamp()`, diagrams remain inside their containers, and text wraps naturally without horizontal scrolling at 320px. This static shell intentionally has no application form; the public Turnstile key and private service binding are configuration-only seams for the later, separately authorized intake flow.
+The nav collapses at 760px, chapter typography scales through `clamp()`, diagrams remain inside their containers, and text wraps naturally without horizontal scrolling at 320px. The referral page keeps the same paper, ink, leaf, square controls, and editorial grid. Its form and receipt remain readable when the site's animation script does not run; Turnstile still needs its own script to validate a submission. The site Worker resolves opaque links through the core binding and sends validated applications through a signed request.

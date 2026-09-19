@@ -48,6 +48,14 @@ export type ReferralReceipt = {
   readonly requestId: string;
 };
 
+export type ReferralWithdrawal = {
+  readonly teamId: string;
+  readonly receiptId: string;
+  readonly withdrawalDigest: string;
+  readonly key: string;
+  readonly now: string;
+};
+
 export type ReferralSubmit = {
   readonly teamId: string;
   readonly tokenDigest: string;
@@ -64,6 +72,7 @@ export type ReferralSubmit = {
 
 export interface ReferralRuntimeStore {
   claimServiceNonce(digest: string, expiresAt: string): Promise<boolean>;
+  resolveLink(teamId: string, tokenDigest: string): Promise<boolean>;
   findSubmission(teamId: string, submissionKey: string): Promise<ReferralReceipt | null>;
   findPrivateIntake(
     teamId: string,
@@ -81,6 +90,7 @@ export interface ReferralRuntimeStore {
     | { readonly kind: "unavailable" }
   >;
   submit(input: ReferralSubmit): Promise<ReferralReceipt | { readonly kind: "rejected" }>;
+  withdraw(input: ReferralWithdrawal): Promise<ReferralReceipt | { readonly kind: "rejected" }>;
   claimAdminReview(now: string): Promise<InviteAdminReview | null>;
   finishOutbox(input: {
     readonly outboxId: number;

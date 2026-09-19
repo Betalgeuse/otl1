@@ -19,5 +19,6 @@
   ],
   "vars": {
     "TURNSTILE_SITE_KEY": "1x00000000000000000000AA"
-  }
+  },
+  "ratelimits": [{ "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }]
 }

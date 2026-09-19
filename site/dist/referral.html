@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="지인의 소개로 ONE THING 참여를 신청합니다.">
+  <title>ONE THING · 함께하기</title><link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body class="application-page">
+  <a class="skip-link" href="#application">신청서로 건너뛰기</a>
+  <header class="site-header"><nav class="site-nav" aria-label="주요 탐색"><a class="wordmark" href="/">ONE<br>THING</a><a href="/#rhythm">하루의 리듬</a></nav></header>
+  <main id="application">
+    <section class="application-intro">
+      <p class="eyebrow">지인의 소개로 이어진 한 자리</p><h1>오늘의 한 가지를<br>함께 끝내고 싶다면.</h1>
+      <p>소개자는 신청 경로만 잇습니다. 신청 내용과 심사 결과를 보거나 결정하지 않습니다.</p>
+      <div class="share-panel"><p id="share-copy">__SHARE_TEXT__</p><button type="button" class="button button--quiet" data-copy aria-describedby="copy-status">초대 문구 복사</button><span id="copy-status" class="copy-status" role="status" aria-live="polite"></span></div>
+    </section>
+    <section class="application-form-section" aria-labelledby="form-title">
+      <div class="chapter-label"><span>참여 신청</span><span>04</span></div>
+      <div class="application-grid">
+        <div><h2 id="form-title">한 문장으로<br>시작해 주세요.</h2><p>운영자가 직접 신청을 확인하고 승인합니다. 승인 뒤 Slack 초대는 수동으로 보내며, Slack에서 초대를 수락하면 참여 확인이 끝납니다.</p></div>
+        <form action="/r/__REFERRAL_TOKEN__/apply" method="post" data-application-form>
+          <input type="hidden" name="submissionKey" value="__SUBMISSION_KEY__">
+          <label><span>이메일</span><input name="email" type="email" autocomplete="email" maxlength="320" required aria-describedby="email-help"><small id="email-help">Slack 초대를 받을 이메일을 적어 주세요.</small></label>
+          <label><span>표시 이름</span><input name="displayName" autocomplete="name" maxlength="80" required></label>
+          <label><span>참여하고 싶은 이유 한 문장</span><textarea name="intent" rows="5" maxlength="1000" required></textarea></label>
+          <label class="consent"><input name="consent" type="checkbox" value="invite-consent-v1" required><span>참여 신청 검토와 Slack 초대를 위해 위 정보를 처리하는 데 동의합니다. (invite-consent-v1)</span></label>
+          <div class="cf-turnstile" data-sitekey="__TURNSTILE_SITE_KEY__" data-action="invite-apply" data-size="flexible"></div>
+          <p class="form-status" data-form-status role="status" aria-live="polite"></p>
+          <button class="button" type="submit" data-submit>신청 보내기</button>
+        </form>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><p>ONE THING</p><p>오늘 한 가지를, 함께 끝까지.</p><a href="/">소개 보기</a></footer>
+</body>
+</html>

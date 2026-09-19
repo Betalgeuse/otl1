@@ -179,7 +179,8 @@ try {
   const curl = await run("curl", ["-sS", "-D", "-", "-X", "POST", ...Object.entries(headers).flatMap(([name, value]) => ["-H", `${name}: ${value}`]), "--data-binary", body, `${server.url}internal/referrals/apply`]);
   assert.match(curl.stdout, /HTTP\/1\.1 202/);
   const responseBody = JSON.parse(curl.stdout.split("\r\n\r\n").at(-1));
-  assert.deepEqual(Object.keys(responseBody), ["receiptId"]);
+  assert.deepEqual(Object.keys(responseBody), ["receiptId", "withdrawalToken"]);
+  assert.match(responseBody.withdrawalToken, /^[A-Za-z0-9_-]{43}$/);
 } finally {
   server.stop(true);
 }
