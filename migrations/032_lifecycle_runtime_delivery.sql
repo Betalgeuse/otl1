@@ -11,8 +11,12 @@ DO $$ BEGIN
     CREATE ROLE otl_lifecycle_admin NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
   END IF;
 END $$;
-ALTER ROLE otl_lifecycle_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
-ALTER ROLE otl_lifecycle_admin NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+DO $$ BEGIN
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname IN ('otl_lifecycle_runtime','otl_lifecycle_admin') AND rolsuper)
+    THEN RAISE EXCEPTION 'unsafe elevated lifecycle role'; END IF;
+END $$;
+ALTER ROLE otl_lifecycle_runtime NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+ALTER ROLE otl_lifecycle_admin NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 REVOKE ALL ON SCHEMA otl FROM otl_lifecycle_runtime,otl_lifecycle_admin;
 REVOKE ALL ON ALL TABLES IN SCHEMA otl FROM otl_lifecycle_runtime,otl_lifecycle_admin;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA otl FROM otl_lifecycle_runtime,otl_lifecycle_admin;

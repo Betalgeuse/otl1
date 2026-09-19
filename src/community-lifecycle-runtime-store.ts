@@ -6,7 +6,7 @@ import type {
   LifecycleNoticeKind,
 } from "./community-lifecycle-runtime-types";
 import { date, InputError, type Json, list, object, string } from "./input";
-import type { NeonStore } from "./store";
+import { NeonStore } from "./store";
 
 function integer(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
@@ -168,6 +168,12 @@ export class CommunityLifecycleRuntimeStore {
 export class CommunityLifecycleAdminStore {
   constructor(private readonly db: Pick<NeonStore, "queryJson">) {}
 
+  candidate(teamId: string, channelId: string, userId: string): Promise<Json> {
+    return this.db.queryJson("SELECT otl.lifecycle_admin_candidate($1::jsonb)", [
+      JSON.stringify({ teamId, channelId, userId }),
+    ]);
+  }
+
   restoreError(binding: LifecycleActionBinding, now: string, evidenceKey: string): Promise<Json> {
     if (binding.actionId !== "lifecycle_restore_error")
       throw new InputError("Admin restore action required");
@@ -185,4 +191,20 @@ export class CommunityLifecycleAdminStore {
       }),
     ]);
   }
+}
+
+export function lifecycleAdminStore(
+  connectionString: string | undefined,
+): CommunityLifecycleAdminStore {
+  if (!connectionString) throw new InputError("Lifecycle admin database unavailable");
+  let url: URL;
+  try {
+    url = new URL(connectionString);
+  } catch (error) {
+    if (error instanceof TypeError) throw new InputError("Lifecycle admin database unavailable");
+    throw error;
+  }
+  if (url.username !== "otl_lifecycle_admin_login")
+    throw new InputError("Lifecycle admin database unavailable");
+  return new CommunityLifecycleAdminStore(new NeonStore(connectionString));
 }

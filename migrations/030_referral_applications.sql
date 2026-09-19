@@ -11,8 +11,12 @@ DO $$ BEGIN
     CREATE ROLE otl_referral_admin NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
   END IF;
 END $$;
-ALTER ROLE otl_referral_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
-ALTER ROLE otl_referral_admin NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+DO $$ BEGIN
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname IN ('otl_referral_runtime','otl_referral_admin') AND rolsuper)
+    THEN RAISE EXCEPTION 'unsafe elevated referral role'; END IF;
+END $$;
+ALTER ROLE otl_referral_runtime NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
+ALTER ROLE otl_referral_admin NOLOGIN NOCREATEDB NOCREATEROLE NOINHERIT;
 DO $$ DECLARE membership record; BEGIN
   FOR membership IN
     SELECT parent.rolname parent_name,member.rolname member_name

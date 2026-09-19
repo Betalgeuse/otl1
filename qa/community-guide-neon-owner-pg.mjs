@@ -83,8 +83,33 @@ try {
     ])
   ).stdout.trim();
   assert.equal(matrix, "f:f:t:f:f:t");
+  await psql("postgres", process.env.USER, ["-Atc", "CREATE DATABASE guide_owner_upgrade OWNER guide_owner"]);
+  for (const file of migrations.filter((name) => Number(name.slice(0, 3)) <= 5))
+    await psql("guide_owner_upgrade", "guide_owner", ["-f", `migrations/${file}`]);
+  await psql("guide_owner_upgrade", "guide_owner", [
+    "--single-transaction", "-f", "migrations/006_normalized_foundation.sql", "-f", "migrations/007_normalized_legacy.sql",
+  ]);
+  for (const file of migrations.filter((name) => Number(name.slice(0, 3)) >= 8))
+    await psql("guide_owner_upgrade", "guide_owner", ["-f", `migrations/${file}`]);
+  const latest = (await psql("guide_owner_upgrade", "guide_owner", ["-Atc", "SELECT version FROM otl.schema_migrations ORDER BY version DESC LIMIT 1"])).stdout.trim();
+  assert.equal(latest, "035-lifecycle-admin-login");
+  for (const [role, migration, error] of [
+    ["otl_referral_runtime", "030_referral_applications.sql", "unsafe elevated referral role"],
+    ["otl_lifecycle_runtime", "032_lifecycle_runtime_delivery.sql", "unsafe elevated lifecycle role"],
+    ["otl_lifecycle_admin_login", "035_lifecycle_admin_login.sql", "unsafe lifecycle admin login role"],
+  ]) {
+    await psql("postgres", process.env.USER, ["-Atc", `ALTER ROLE ${role} SUPERUSER`]);
+    try {
+      await assert.rejects(
+        () => psql("guide_owner_upgrade", "guide_owner", ["-f", `migrations/${migration}`]),
+        (failure) => String(failure.stderr).includes(error),
+      );
+    } finally {
+      await psql("postgres", process.env.USER, ["-Atc", `ALTER ROLE ${role} NOSUPERUSER`]);
+    }
+  }
   console.log(
-    "PASS migration 028 applies as a non-superuser CREATEROLE database owner and preserves exact guide capabilities",
+    "PASS non-superuser owner fresh+upgrade 001-035; guide privileges isolated; elevated referral/lifecycle/admin login roles rejected",
   );
 } finally {
   if (started) await run(join(pgBin, "pg_ctl"), ["-D", data, "-m", "fast", "-w", "stop"]);

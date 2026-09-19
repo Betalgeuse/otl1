@@ -22,6 +22,7 @@ export type CommunityEnv = {
   readonly SITE_CORE_HMAC_SECRET?: string;
   readonly INVITE_EMAIL_PEPPER?: string;
   readonly LIFECYCLE_ACTION_SECRET?: string;
+  readonly LIFECYCLE_ADMIN_DATABASE_URL?: string;
   readonly INVITE_PRIVATE_KEK?: string;
   readonly INVITE_PRIVATE_KEK_VERSION?: string;
   readonly REFERRAL_TOKEN_SECRET?: string;

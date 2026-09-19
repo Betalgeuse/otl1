@@ -95,6 +95,33 @@ function safeText(value: FormDataEntryValue | null, max: number): string | null 
   const normalized = value.trim().normalize("NFC");
   return normalized && Array.from(normalized).length <= max ? normalized : null;
 }
+async function boundedForm(request: Request): Promise<FormData | null> {
+  const reader = request.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const part = await reader.read();
+    if (part.done) break;
+    total += part.value.byteLength;
+    if (total > 16_384) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(part.value);
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new Request(request.url, {
+    method: "POST",
+    headers: { "content-type": request.headers.get("content-type") ?? "" },
+    body,
+  }).formData();
+}
 async function verifyTurnstile(request: Request, env: SiteEnv, token: string): Promise<"valid" | "invalid" | "unavailable"> {
   if (!env.TURNSTILE_SECRET || !token || token.length > 2048) return "invalid";
   try {
@@ -135,11 +162,16 @@ async function availableLink(env: SiteEnv, token: string): Promise<boolean> {
 }
 
 async function apply(request: Request, env: SiteEnv, token: string): Promise<Response> {
-  if (!(await env.RATE_LIMITER.limit({ key: `apply:${token}` })).success) return message(GENERIC_ERROR, 429);
+  const applicantIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+  if (!(await env.RATE_LIMITER.limit({ key: `apply:${applicantIp}` })).success) return message(GENERIC_ERROR, 429);
   if (!(await availableLink(env, token))) return message(GENERIC_ERROR, 404);
   if (Number(request.headers.get("content-length") ?? "0") > 16_384) return message(GENERIC_ERROR, 422);
   let form: FormData;
-  try { form = await request.formData(); } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 422); throw error; }
+  try {
+    const parsed = await boundedForm(request);
+    if (!parsed) return message(GENERIC_ERROR, 422);
+    form = parsed;
+  } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 422); throw error; }
   const email = safeText(form.get("email"), 320)?.toLowerCase() ?? null;
   const displayName = safeText(form.get("displayName"), 80);
   const intent = safeText(form.get("intent"), 1000);

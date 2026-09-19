@@ -7,6 +7,8 @@ import { messageDate } from "./community-followup";
 import { deliverWelcomeGuide } from "./community-guide";
 import { incomingMessageBody } from "./community-intake";
 import { handleIntroductionChannelMessage } from "./community-introduction-channel";
+import { handleLifecycleAdminMessage } from "./community-lifecycle-admin";
+import { lifecycleAdminStore } from "./community-lifecycle-runtime-store";
 import { dispatchCommunityMessage, dispatchFeedbackBugMessage } from "./community-message-router";
 import { handleReferralTeamJoin } from "./community-referral-join";
 import { handleReferralLinkMessage } from "./community-referral-link";
@@ -14,6 +16,7 @@ import { referralSlackPort } from "./community-referral-slack";
 import { CommunityReferralStore } from "./community-referral-store";
 import { replayReflectionOutcomeDelivery } from "./community-reflection-outcome";
 import { type CommunityEnv, textReply } from "./community-runtime";
+import { callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
 import { welcomeTownhallMember } from "./community-welcome";
 import { InputError, koreaDate, object, string } from "./input";
@@ -50,6 +53,40 @@ export async function handleCommunityEvent(
   }
   if (rawEvent.type !== "message" && rawEvent.type !== "app_mention") return false;
   const event = messageEvent(rawEvent);
+  if (typeof event.text === "string" && event.text.trim().startsWith("생애주기 ")) {
+    if (event.type !== "message" || event.bot_id || event.subtype !== undefined || event.edit_ts)
+      return true;
+    const adminChannel = env.COMMUNITY_CHANNEL_ID;
+    const userId = string(event.user);
+    if (
+      !adminChannel ||
+      adminChannel === env.COMMUNITY_PUBLIC_CHANNEL_ID ||
+      event.channel !== adminChannel ||
+      userId !== env.COMMUNITY_ADMIN_ID
+    )
+      throw new InputError("운영자 전용 기능입니다.");
+    const source = string(event.ts);
+    const stamp = Number(source);
+    if (!Number.isFinite(stamp) || Math.abs(Date.now() / 1000 - stamp) > 300) return true;
+    return handleLifecycleAdminMessage(
+      {
+        teamId: env.SLACK_TEAM_ID,
+        channelId: adminChannel,
+        userId,
+        text: string(event.text).trim(),
+        key: string(data.event_id),
+        now: new Date(stamp * 1_000).toISOString(),
+      },
+      env,
+      lifecycleAdminStore(env.LIFECYCLE_ADMIN_DATABASE_URL),
+      async (replyText) => {
+        await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
+          channel: userId,
+          text: replyText,
+        });
+      },
+    );
+  }
   if (await deliverWelcomeGuide(event, env)) return true;
   if (await handleIntroductionChannelMessage(event, env)) return true;
   await enrollReminderMember(event, env);

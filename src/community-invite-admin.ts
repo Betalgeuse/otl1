@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { readInvitePrivateObject } from "./community-invite-private";
+import { escapeSlackText } from "./community-messages";
 import type { ReferralRuntimeStore, ReferralSlackPort } from "./community-referral-types";
 import { InputError } from "./input";
 
@@ -64,7 +65,7 @@ export async function deliverInviteAdminReview(
       },
       review.privateRef,
     );
-    const text = `가입 신청 검토\n이름: ${applicant.displayName}\n이메일: ${applicant.email}\n참여 의사: ${applicant.intent}\nFree Slack 초대는 운영자가 직접 보낸 뒤 별도로 표시합니다.`;
+    const text = `가입 신청 검토\n이름: ${escapeSlackText(applicant.displayName)}\n이메일: ${escapeSlackText(applicant.email)}\n참여 의사: ${escapeSlackText(applicant.intent)}\nFree Slack 초대는 운영자가 직접 보낸 뒤 별도로 표시합니다.`;
     await slack.postAdmin({
       adminId,
       effectKey: review.effectKey,

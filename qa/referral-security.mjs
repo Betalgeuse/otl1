@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { handleReferralIntakeRequest, signReferralServiceRequest } from "../src/community-referral-intake.ts";
 import { deliverInviteAdminReview, handleInviteAdminAction } from "../src/community-invite-admin.ts";
+import { writeInvitePrivateObject } from "../src/community-invite-private.ts";
 import { referralManifestRequirements } from "../src/community-referral-manifest.ts";
 import {
   clearInvitePrivateReconciliationMarker,
@@ -63,7 +64,7 @@ const staleStore = {
     throw new Error("must not accept stale test input");
   },
 };
-await assert.rejects(handleInviteAdminAction({ teamId: "TQA", userId: "UADMIN", actionId: "community_invite_approve", value: JSON.stringify({ requestId: "REQ-OPAQUE", revision: 1 }), actionTs: "1.2" }, env, staleStore), /stale referral revision/);
+await assert.rejects(handleInviteAdminAction({ teamId: "TQA", userId: "UADMIN", actionId: "community_invite_approve", value: JSON.stringify({ requestId: "REQ-OPAQUE", revision: 1 }), actionTs: "1700000000.2" }, env, staleStore), /stale referral revision/);
 
 const oversized = JSON.stringify({ ...JSON.parse(body), submissionKey: "security-oversized", intent: "한".repeat(1001) });
 const oversizedNonce = "nonce-oversized-123456";
@@ -120,6 +121,20 @@ const missingPrivateStore = {
 assert.equal(await deliverInviteAdminReview(env, missingPrivateStore, slack), false);
 assert.equal(missingPrivateStore.finished, "failed");
 assert.equal(slackEffects.filter((effect) => effect.kind === "admin").length, 0);
+
+const injectionRef = await writeInvitePrivateObject({ bucket, kek: env.INVITE_PRIVATE_KEK, keyVersion: env.INVITE_PRIVATE_KEK_VERSION }, "REQ-INJECT0001", 0, {
+  email: "injection@example.com", displayName: "<b>지원자</b>", intent: "<!channel> & <script>alert(1)</script>",
+});
+const injectionStore = {
+  ...slackStore,
+  async claimAdminReview() { return { outboxId: 2, effectKey: "review:injection", requestId: "REQ-INJECT0001", revision: 0, privateRef: { ...injectionRef, requestId: "REQ-INJECT0001", revision: 0 } }; },
+  async finishOutbox() { return true; },
+};
+assert.equal(await deliverInviteAdminReview(env, injectionStore, slack), true);
+const injectionCard = slackEffects.find((effect) => effect.kind === "admin");
+assert.ok(injectionCard);
+assert.doesNotMatch(injectionCard.text, /<!channel>|<script>|<b>/);
+assert.match(injectionCard.text, /&lt;!channel&gt;/);
 
 const markerInput = {
   requestId: "REQ-TAMPER0001",
