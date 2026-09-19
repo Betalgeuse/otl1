@@ -1500,7 +1500,6 @@ try {
     {
       env: { ...env, SLACK_SIGNING_SECRET: "signing-secret" },
       store: {},
-      invitations: {},
     },
     {
       waitUntil(effect) {
@@ -2361,7 +2360,6 @@ try {
   const runtime = {
     env: { ...env, COMMUNITY_BOT_USER_ID: "UBOT", SLACK_SIGNING_SECRET: "signing-secret" },
     store: {},
-    invitations: {},
   };
   async function sendFeedbackEvent({ type = "message", text, user = "UMEMBER", suffix, threadTs }) {
     const eventTs = `${timestamp}.${suffix}`;

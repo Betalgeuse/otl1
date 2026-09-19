@@ -564,19 +564,23 @@ BEGIN
   RAISE EXCEPTION 'invalid referral admin operation';
 END $$;
 
-DO $$ BEGIN
-  IF to_regprocedure('otl.member_status(text,text)') IS NOT NULL THEN
-    REVOKE ALL ON FUNCTION otl.member_status(text,text) FROM PUBLIC;
-  END IF;
-  IF to_regprocedure('otl.issue_invite(text,text,text,text,text)') IS NOT NULL THEN
-    REVOKE ALL ON FUNCTION otl.issue_invite(text,text,text,text,text) FROM PUBLIC;
-  END IF;
-  IF to_regprocedure('otl.redeem_invite(text,text,text,text)') IS NOT NULL THEN
-    REVOKE ALL ON FUNCTION otl.redeem_invite(text,text,text,text) FROM PUBLIC;
-  END IF;
-  IF to_regprocedure('otl.check_invite(text,text,text)') IS NOT NULL THEN
-    REVOKE ALL ON FUNCTION otl.check_invite(text,text,text) FROM PUBLIC;
-  END IF;
+DO $$ DECLARE legacy regprocedure; grantee record; BEGIN
+  FOREACH legacy IN ARRAY ARRAY[
+    to_regprocedure('otl.member_status(text,text)'),
+    to_regprocedure('otl.issue_invite(text,text,text,text,text)'),
+    to_regprocedure('otl.redeem_invite(text,text,text,text)'),
+    to_regprocedure('otl.check_invite(text,text,text)')
+  ] LOOP
+    CONTINUE WHEN legacy IS NULL;
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',legacy);
+    FOR grantee IN
+      SELECT rolname FROM pg_roles
+      WHERE NOT rolsuper AND rolname<>current_user
+        AND has_function_privilege(oid,legacy,'EXECUTE')
+    LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',legacy,grantee.rolname);
+    END LOOP;
+  END LOOP;
 END $$;
 
 REVOKE ALL ON TABLE otl.member_referral_links,otl.referral_admins,otl.referral_requests,

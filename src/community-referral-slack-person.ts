@@ -1,6 +1,6 @@
-import { InputError, object, string } from "../input";
-import { SlackError } from "../slack-api";
-import { normalizeEmail } from "./tokens";
+import { inviteEmailSchema } from "./community-referral-types";
+import { InputError, object, string } from "./input";
+import { SlackError } from "./slack-api";
 
 export async function personEmail(
   identity: { readonly workspaceId: string; readonly userId: string },
@@ -36,5 +36,7 @@ export async function personEmail(
   const email = object(user.profile).email;
   if (typeof email !== "string" || !email)
     throw new InputError("Slack 계정 이메일을 확인할 수 없습니다. 운영자에게 문의해 주세요.");
-  return normalizeEmail(string(email));
+  const parsed = inviteEmailSchema.safeParse(string(email));
+  if (!parsed.success) throw new InputError("Slack 계정 이메일 형식이 올바르지 않습니다.");
+  return parsed.data;
 }

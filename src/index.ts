@@ -8,8 +8,6 @@ import type { CommunityEnv } from "./community-runtime";
 import { confirmMention, eventPayload, handleMention, verificationResponse } from "./events";
 import { BodySizeError, InputError, koreaDate, object, readBody } from "./input";
 import { handleIntentPilot, type PilotEnv } from "./intent-pilot";
-import { processInvitation } from "./invitations/process";
-import type { InvitationStore } from "./invitations/store";
 import { paletteModal } from "./palette-modal";
 import { processRecord } from "./process";
 import { renderBoard } from "./render/board";
@@ -28,14 +26,11 @@ export type Env = PilotEnv &
     readonly BOARD_SIGNING_SECRET: string;
     readonly PUBLIC_BASE_URL: string;
     readonly DAILY_SCRUM_CHANNEL_ID: string;
-    readonly INVITE_SIGNING_SECRET?: string;
-    readonly INVITATIONS_ENABLED?: string;
   };
 export type Context = { waitUntil(promise: Promise<unknown>): void };
 export type Runtime = {
   readonly env: Env;
   readonly store: Store;
-  readonly invitations: InvitationStore;
 };
 
 export async function handleRequest(
@@ -153,34 +148,9 @@ export async function handleRequest(
     )
       return new Response("Forbidden", { status: 403 });
     switch (operation.kind) {
-      case "invitation":
-        if (env.INVITATIONS_ENABLED !== "true" || !env.INVITE_SIGNING_SECRET) {
-          return Response.json({
-            response_type: "ephemeral",
-            text: "초대제는 준비 중입니다. 지금은 채널에 ‘내 상태’라고 입력해 잔디를 확인할 수 있습니다.",
-          });
-        }
-        ctx.waitUntil(
-          processInvitation(operation, {
-            store: runtime.invitations,
-            botToken: env.SLACK_BOT_TOKEN,
-            secret: env.INVITE_SIGNING_SECRET,
-          }),
-        );
-        return new Response(null, { status: 200 });
       case "errors":
         return Response.json({ response_action: "errors", errors: operation.errors });
       case "settings":
-        if (
-          env.INVITATIONS_ENABLED === "true" &&
-          !(await runtime.invitations.member(operation.identity.teamId, operation.identity.userId))
-            .admitted
-        ) {
-          return Response.json({
-            response_type: "ephemeral",
-            text: "기존 참여자의 초대를 먼저 수락해 주세요.",
-          });
-        }
         await openView(env.SLACK_BOT_TOKEN, {
           trigger_id: operation.triggerId,
           view: paletteModal(operation.palette, {

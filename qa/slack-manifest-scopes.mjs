@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { personEmail } from "../src/invitations/slack-person.ts";
+import { personEmail } from "../src/community-referral-slack-person.ts";
 
 const run = promisify(execFile);
 const generated = await run(

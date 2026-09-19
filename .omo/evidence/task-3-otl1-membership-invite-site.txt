@@ -60,3 +60,53 @@ Artifact: .omo/evidence/task-3-otl1-membership-invite-site.txt
 
 BOUNDARY
 Migration 030 is additive and un-deployed. Referral tokens preserve provenance and are not admission credentials, quotas, rewards, or inviter access. Approval, manual-invite assertion, and observed Slack join are separate facts. Worker/router/scheduler/site/wrangler/docs/package/runtime binding and production PostgreSQL/R2/Slack operations remain intentionally outside Todo 3.
+
+TODO 3R PRODUCT FIX - RETIRED MONTHLY INVITATION RUNTIME REMOVAL
+Baseline: 433c8f08feb4a9e01bb081a90aa37be807954fd6
+
+SCENARIO baseline disabled behavior and slash retirement
+Invocation: bun run test:unit
+Binary observable: exit 0 before product-fix edits
+Captured output:
+PASS /one retired: signed command changes no records, manifest has no slash command
+Passed 54 isolated synthetic suites.
+Observed defect: canonical index, requests, and worker entry still imported, constructed, and dispatched NeonInvitations and quota-era invitation operations behind INVITATIONS_ENABLED=false.
+
+SCENARIO failing-first canonical runtime absence
+Invocation: bun qa/slash-retirement.mjs
+Binary observable: exit 1 for the intended reachable retired modules
+Captured output:
+AssertionError: expected [] but found src/invitations/process.ts, requests.ts, store.ts, and tokens.ts
+
+SCENARIO canonical runtime and repository absence
+Invocation: bun qa/slash-retirement.mjs
+Binary observable: exit 0
+Captured output:
+PASS /one retired: signed command changes no records; manifest and canonical runtime contain no monthly invitation path
+Observable: signed slash command returns retirement text with zero effects; manifest has no slash command; retired process/request/store/token modules are absent; index, requests, worker entry, Wrangler config, and public-config exporter contain no retired imports, dispatch, flags, SQL operations, or quota/admission semantics.
+
+SCENARIO historical-function permission closure
+Invocation: bun qa/referral-storage-pg.mjs
+Binary observable: exit 0
+Captured output:
+PASS referral storage: fresh+upgrade=001-030 checks=61 concurrent-open=1 concurrent-decision=1 pii-rows=0 roles=isolated rollback=clean legacy=disabled
+Observable: fixture grants all four migrations 002-004 functions to a synthetic legacy runtime before migration 030; migration 030 removes PUBLIC and every non-owner/non-superuser role grant; database-wide role/function checks find zero surviving execute authorities.
+
+SCENARIO preserved current flows
+Invocation: bun qa/private-controls.mjs && bun qa/community-target-date-routing.mjs && bun qa/migration-maintenance.mjs && bun qa/slack-manifest-scopes.mjs && bun qa/invite-private.mjs
+Binary observable: exit 0
+Captured output summary:
+Palette settings, personal settings, signed current routing, maintenance behavior, Slack email scope/person lookup, and invite-private crypto all passed.
+
+SCENARIO product-fix repository gate
+Invocation: bun run check
+Binary observable: exit 0
+Captured output summary:
+Biome checked 112 source files; tsc passed; 54 isolated suites passed; Wrangler dry-run exited normally and exposed no INVITATIONS_ENABLED binding.
+
+SCENARIO strict TypeScript and diff gate
+Invocation: bun /Users/zayden/.codex/plugins/cache/sisyphuslabs/omo/4.19.4/skills/programming/scripts/typescript/check-no-excuse-rules.ts src/index.ts src/requests.ts src/worker-entry.ts src/community-referral-slack-person.ts && git diff --check
+Binary observable: exit 0
+Captured output:
+No violations in 4 file(s).
+git diff --check produced no output.

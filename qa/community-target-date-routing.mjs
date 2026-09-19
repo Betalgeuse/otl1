@@ -158,7 +158,7 @@ const env = {
     },
   },
 };
-const runtime = { env, store: {}, invitations: {} };
+const runtime = { env, store: {} };
 const context = { waitUntil(promise) { effects.push(promise); } };
 
 function signedRequest(payload) {

@@ -1,7 +1,6 @@
 import { BUG_CLOCK_CAPABILITIES } from "./community-bug-clock-client";
 import { communityCron } from "./community-cron";
 import type { Context, Env, Runtime } from "./index";
-import { NeonInvitations } from "./invitations/store";
 import { NeonStore } from "./store";
 
 type RequestHandler = (request: Request, runtime: Runtime, context: Context) => Promise<Response>;
@@ -12,16 +11,14 @@ export function createWorkerHandler(handler: RequestHandler): ExportedHandler<Cl
       await communityCron(env, controller.scheduledTime);
     },
     async fetch(request: Request, env: Env, context: Context): Promise<Response> {
-      const configured =
-        [
-          env.SLACK_TEAM_ID,
-          env.SLACK_SIGNING_SECRET,
-          env.SLACK_BOT_TOKEN,
-          env.DATABASE_URL,
-          env.BOARD_SIGNING_SECRET,
-          env.PUBLIC_BASE_URL,
-        ].every(Boolean) &&
-        (env.INVITATIONS_ENABLED !== "true" || Boolean(env.INVITE_SIGNING_SECRET));
+      const configured = [
+        env.SLACK_TEAM_ID,
+        env.SLACK_SIGNING_SECRET,
+        env.SLACK_BOT_TOKEN,
+        env.DATABASE_URL,
+        env.BOARD_SIGNING_SECRET,
+        env.PUBLIC_BASE_URL,
+      ].every(Boolean);
       if (new URL(request.url).pathname === "/health") {
         return Response.json({ status: "ok", configured, capabilities: BUG_CLOCK_CAPABILITIES });
       }
@@ -32,7 +29,6 @@ export function createWorkerHandler(handler: RequestHandler): ExportedHandler<Cl
           {
             env,
             store: new NeonStore(env.DATABASE_URL),
-            invitations: new NeonInvitations(env.DATABASE_URL),
           },
           context,
         );

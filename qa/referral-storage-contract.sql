@@ -356,6 +356,24 @@ SELECT pg_temp.assert_referral(
   NOT has_function_privilege('public','otl.member_status(text,text)','EXECUTE'),
   'legacy invitation authority remains executable');
 SELECT pg_temp.assert_referral(
+  NOT has_function_privilege('legacy_invitation_runtime','otl.issue_invite(text,text,text,text,text)','EXECUTE') AND
+  NOT has_function_privilege('legacy_invitation_runtime','otl.redeem_invite(text,text,text,text)','EXECUTE') AND
+  NOT has_function_privilege('legacy_invitation_runtime','otl.check_invite(text,text,text)','EXECUTE') AND
+  NOT has_function_privilege('legacy_invitation_runtime','otl.member_status(text,text)','EXECUTE'),
+  'explicit legacy runtime grants survived migration');
+SELECT pg_temp.assert_referral(
+  NOT EXISTS(
+    SELECT 1 FROM pg_roles r
+    CROSS JOIN LATERAL unnest(ARRAY[
+      'otl.member_status(text,text)'::regprocedure,
+      'otl.issue_invite(text,text,text,text,text)'::regprocedure,
+      'otl.redeem_invite(text,text,text,text)'::regprocedure,
+      'otl.check_invite(text,text,text)'::regprocedure
+    ]) legacy
+    WHERE NOT r.rolsuper AND r.rolname<>current_user
+      AND has_function_privilege(r.oid,legacy,'EXECUTE')
+  ),'a non-owner runtime or app role retains legacy execute');
+SELECT pg_temp.assert_referral(
   pg_get_functiondef('otl.referral_runtime_execute(text,jsonb)'::regprocedure) !~
     'issue_invite|redeem_invite|check_invite|member_status|quota_used' AND
   pg_get_functiondef('otl.referral_admin_execute(text,jsonb)'::regprocedure) !~

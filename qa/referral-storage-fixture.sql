@@ -1,4 +1,8 @@
 \set ON_ERROR_STOP on
+CREATE ROLE legacy_invitation_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+GRANT EXECUTE ON FUNCTION otl.member_status(text,text),otl.issue_invite(text,text,text,text,text),
+  otl.redeem_invite(text,text,text,text),otl.check_invite(text,text,text)
+  TO legacy_invitation_runtime;
 INSERT INTO otl.workspaces(team_id) VALUES('TREF'),('TOTHER');
 INSERT INTO otl.workspace_channels(team_id,channel_id) VALUES('TREF','CREF'),('TOTHER','COTHER');
 UPDATE otl.workspaces SET primary_goal_channel_id='CREF' WHERE team_id='TREF';
