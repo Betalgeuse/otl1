@@ -11,15 +11,20 @@ const pg = process.env.PG_BIN ?? "/opt/homebrew/opt/postgresql@17/bin";
 const temp = await mkdtemp(join(tmpdir(), "otl-capacity-"));
 const socket = join(temp, "socket");
 const data = join(temp, "data");
-const env = { ...process.env, PGHOST: socket, PGPORT: String(50000 + Math.floor(Math.random() * 9000)), PGDATABASE: "postgres" };
-const run = (bin, args) => exec(join(pg, bin), args, { cwd: root, env, encoding: "utf8" });
+const clusterEnv = { ...process.env, PGHOST: socket, PGPORT: String(50000 + Math.floor(Math.random() * 9000)), PGDATABASE: "postgres" };
+let dbEnv = clusterEnv;
+const run = (bin, args) => exec(join(pg, bin), args, { cwd: root, env: dbEnv, encoding: "utf8" });
 const sql = async (query) => (await run("psql", ["-X", "-Atq", "-v", "ON_ERROR_STOP=1", "-c", query])).stdout.trim();
 let started = false;
 try {
   await mkdir(socket);
   await run("initdb", ["-D", data, "--no-locale", "--encoding=UTF8", "--auth=trust"]);
-  await run("pg_ctl", ["-D", data, "-o", `-F -k ${socket} -p ${env.PGPORT}`, "-l", join(temp, "pg.log"), "-w", "start"]);
+  await run("pg_ctl", ["-D", data, "-o", `-F -k ${socket} -p ${clusterEnv.PGPORT}`, "-l", join(temp, "pg.log"), "-w", "start"]);
   started = true;
+  await sql("CREATE ROLE otl_capacity_owner LOGIN NOSUPERUSER CREATEDB CREATEROLE NOREPLICATION");
+  await sql("CREATE DATABASE otl_capacity_fresh OWNER otl_capacity_owner");
+  dbEnv = { ...clusterEnv, PGUSER: "otl_capacity_owner", PGDATABASE: "otl_capacity_fresh" };
+  assert.equal(await sql("SELECT rolsuper::text||':'||rolcreaterole::text FROM pg_roles WHERE rolname=current_user"), "false:true");
   const migrations = (await readdir(join(root, "migrations"))).filter((n) => /^\d{3}_.*\.sql$/.test(n)).sort();
   for (const migration of migrations) {
     if (migration.startsWith("006_")) {
@@ -86,20 +91,64 @@ try {
   assert.equal(JSON.parse(await sql(query("status", base))).joined, 1);
   assert.equal(JSON.parse(await sql(query("status", base))).reserved, 0);
   assert.equal(JSON.parse(await sql(query("status", base))).remaining, 2);
+  // Given one lifetime join and one approved reservation at the default maximum of two.
+  for (const n of [0, 7, 8, 9]) await sql(`SELECT otl.referral_runtime_execute('submit','${JSON.stringify(submit(n))}'::jsonb)`);
+  await sql(`SELECT otl.referral_admin_execute('decide','${JSON.stringify({ ...decision(0), key: "capacity-seed-0" })}'::jsonb)`);
+  assert.equal(JSON.parse(await sql(query("set_member", { ...base, maximum: 2, expectedRevision: 4, key: "capacity-gate-two" }))).remaining, 0);
+  const full = JSON.parse(await sql(query("status", base)));
+  assert.deepEqual([full.joined, full.reserved, full.used, full.maximum], [1, 1, 2, 2]);
+  if (process.env.CAPACITY_TEST_MUTANT === "disable_guard")
+    await sql("ALTER TABLE otl.referral_requests DISABLE TRIGGER referral_capacity_guard");
+  const fullRace = await Promise.allSettled([7, 8, 9].map((n) => sql(`SELECT otl.referral_admin_execute('decide','${JSON.stringify({ ...decision(n), key: `capacity-full-${n}` })}'::jsonb)`)));
+  assert.equal(fullRace.filter((r) => r.status === "fulfilled").length, 0, "full-capacity race admitted an invitee");
+  assert.ok(fullRace.every((r) => r.status === "rejected" && /referral capacity unavailable/.test(String(r.reason))));
+  assert.equal(await sql("SELECT count(*) FROM otl.referral_requests WHERE team_id='TREF' AND request_id IN ('REQ-CAPACITY7','REQ-CAPACITY8','REQ-CAPACITY9') AND state='pending'"), "3");
+  assert.equal(await sql("SELECT count(*) FROM otl.referral_request_events WHERE team_id='TREF' AND event_key LIKE 'capacity-full-%'"), "0");
+  assert.equal(await sql("SELECT count(*) FROM otl.referral_outbox WHERE team_id='TREF' AND effect_key LIKE 'decision:capacity-full-%'"), "0");
+  const fullStatus = JSON.parse(await sql(query("status", base)));
+  assert.equal(fullStatus.used, 2);
+  console.log(JSON.stringify({ scenario: "full-capacity-race", owner: await sql("SELECT current_user||':'||rolsuper::text FROM pg_roles WHERE rolname=current_user"),
+    before: [full.joined, full.reserved, full.maximum], approved: 0, after: [fullStatus.joined, fullStatus.reserved, fullStatus.maximum],
+    events: 0, outbox: 0 }));
+  assert.equal(JSON.parse(await sql(query("set_member", { ...base, maximum: 3, expectedRevision: 5, key: "capacity-gate-three" }))).remaining, 1);
+  const openRace = await Promise.allSettled([7, 8, 9].map((n) => sql(`SELECT otl.referral_admin_execute('decide','${JSON.stringify({ ...decision(n), key: `capacity-open-${n}` })}'::jsonb)`)));
+  assert.equal(openRace.filter((r) => r.status === "fulfilled").length, 1, "raised-capacity race did not admit exactly one");
+  assert.equal(JSON.parse(await sql(query("status", base))).used, 3);
+  assert.equal(await sql("SELECT count(*) FROM otl.referral_request_events WHERE team_id='TREF' AND event_key LIKE 'capacity-open-%'"), "1");
+  assert.equal(await sql("SELECT count(*) FROM otl.referral_outbox WHERE team_id='TREF' AND effect_key LIKE 'decision:capacity-open-%'"), "1");
+  console.log(JSON.stringify({ scenario: "raised-capacity-race", approved: 1, denied: 2,
+    status: JSON.parse(await sql(query("status", base))), events: 1, outbox: 1 }));
   await assert.rejects(sql(query("set_member", { ...base, adminId: "UREFERRER", maximum: 99, expectedRevision: 4, key: "self", now: base.now })), /referral admin denied/);
   await assert.rejects(sql(query("set_member", { ...base, teamId: "TOTHER", maximum: 99, expectedRevision: 4, key: "cross", now: base.now })), /referral admin denied/);
   await assert.rejects(sql("SET ROLE otl_referral_runtime; SELECT otl.referral_capacity_admin_execute('status','{}'::jsonb)"), /permission denied/);
   assert.equal(await sql("SELECT has_function_privilege('otl_referral_runtime','otl.referral_runtime_uncapped(text,jsonb)','EXECUTE')"), "f");
   assert.equal(await sql("SELECT has_function_privilege('otl_referral_runtime','otl.referral_capacity_admin_execute(text,jsonb)','EXECUTE')"), "f");
   assert.equal(await sql("SELECT has_function_privilege('otl_referral_admin','otl.referral_capacity_admin_execute(text,jsonb)','EXECUTE')"), "t");
-  await sql("CREATE DATABASE otl_capacity_upgrade");
+  assert.equal(await sql("SELECT has_function_privilege('otl_referral_admin_login','otl.referral_capacity_admin_execute(text,jsonb)','EXECUTE')"), "t");
+  assert.equal(await sql("SELECT has_table_privilege('otl_referral_admin_login','otl.referral_requests','UPDATE')"), "f");
+  assert.equal(await sql("SELECT rolsuper::text||':'||rolcreaterole::text FROM pg_roles WHERE rolname='otl_referral_admin_login'"), "false:false");
+  const freshVersionCount = await sql("SELECT count(*) FROM otl.schema_migrations WHERE version='036-referral-capacity'");
+  await sql("CREATE DATABASE otl_capacity_upgrade OWNER otl_capacity_owner");
   for (const migration of migrations.filter((name) => Number(name.slice(0, 3)) <= 35)) {
     const args = migration.startsWith("006_") ? ["--single-transaction", "-f", `migrations/${migration}`, "-f", "migrations/007_normalized_legacy.sql"] : ["-f", `migrations/${migration}`];
     if (!migration.startsWith("007_")) await run("psql", ["-X", "-d", "otl_capacity_upgrade", "-v", "ON_ERROR_STOP=1", ...args]);
   }
+  dbEnv = clusterEnv;
+  await sql("ALTER ROLE otl_referral_admin_login SUPERUSER");
+  dbEnv = { ...clusterEnv, PGUSER: "otl_capacity_owner", PGDATABASE: "otl_capacity_upgrade" };
+  await assert.rejects(run("psql", ["-X", "-d", "otl_capacity_upgrade", "-v", "ON_ERROR_STOP=1", "-f", "migrations/036_referral_capacity.sql"]), /unsafe referral admin login role/);
+  assert.equal(await sql("SELECT count(*) FROM otl.schema_migrations WHERE version='036-referral-capacity'"), "0");
+  dbEnv = clusterEnv;
+  await sql("ALTER ROLE otl_referral_admin_login NOSUPERUSER");
+  dbEnv = { ...clusterEnv, PGUSER: "otl_capacity_owner", PGDATABASE: "otl_capacity_upgrade" };
   await run("psql", ["-X", "-d", "otl_capacity_upgrade", "-v", "ON_ERROR_STOP=1", "-f", "migrations/036_referral_capacity.sql"]);
-  assert.equal((await run("psql", ["-X", "-d", "otl_capacity_upgrade", "-Atq", "-c", "SELECT count(*) FROM otl.schema_migrations WHERE version='036-referral-capacity'"])).stdout.trim(), "1");
-  console.log("CAPACITY_PG=PASS fresh_upgrade=1 concurrency=2-of-3 join=1 withdrawal=1 expiry=1 override=0,1,2,3 roles=1");
+  const upgradedVersionCount = await sql("SELECT count(*) FROM otl.schema_migrations WHERE version='036-referral-capacity'");
+  assert.equal(freshVersionCount, "1");
+  assert.equal(upgradedVersionCount, "1");
+  console.log(JSON.stringify({ scenario: "non-superuser-migrations", owner: await sql("SELECT rolsuper::text||':'||rolcreaterole::text FROM pg_roles WHERE rolname=current_user"),
+    freshVersionCount, upgradedVersionCount, elevatedLoginRejected: true,
+    loginRole: await sql("SELECT rolsuper::text||':'||rolcreaterole::text FROM pg_roles WHERE rolname='otl_referral_admin_login'") }));
+  console.log("CAPACITY_PG=PASS nonsuperuser_fresh_upgrade=1 elevated_role_rejected=1 full_race=0-of-3 raised_race=1-of-3 joined=1 reservation=1 partial_outbox=0");
 } finally {
   if (started) await run("pg_ctl", ["-D", data, "-m", "fast", "-w", "stop"]);
   await rm(temp, { recursive: true, force: true });
