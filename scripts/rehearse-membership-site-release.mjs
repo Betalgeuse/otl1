@@ -16,8 +16,8 @@ const release = migrations.filter((name) => Number(name.slice(0, 3)) >= 29);
 const protectedTables = [
   "profiles", "goals", "community_days", "community_events", "community_preferences",
   "member_introductions", "guide_versions", "guide_deliveries", "bug_reports",
-  "bug_report_revisions", "bug_artifacts", "bug_private_objects",
-  "workspace_channel_memberships", "community_reminder_audit",
+  "bug_report_revisions", "bug_artifacts", "community_garden_projections",
+  "workspace_channel_memberships",
 ];
 const additiveTables = [
   "referral_capacity_defaults", "referral_capacity_members", "referral_capacity_events",
@@ -118,7 +118,7 @@ async function apply(database, names) {
 async function digest(database, tables = protectedTables) {
   const result = {};
   for (const name of tables) {
-    if (await scalar(database, `SELECT to_regclass('otl.${name}') IS NULL`) === "t") continue;
+    assert.equal(await scalar(database, `SELECT to_regclass('otl.${name}') IS NOT NULL`), "t", `${name} table missing`);
     const value = await scalar(database, `SELECT count(*)||':'||md5(coalesce(string_agg(md5(to_jsonb(t)::text),',' ORDER BY md5(to_jsonb(t)::text)),'') ) FROM otl.${name} t`);
     result[name] = value;
   }
