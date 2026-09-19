@@ -79,3 +79,25 @@ verified_sha=33927681f4dfee235ba26dc6c4b31b64c4070b55
 merge_base=d2ce4812158557b0c6735f44f5a93f4a299fd596
 Changed paths were exactly this evidence file plus migration 029, three lifecycle QA artifacts, and two community-lifecycle TypeScript modules.
 Judgment: every Todo 2 acceptance surface passed on the committed implementation; no PostgreSQL process or temp directory remained.
+
+SECOND STOP-HOOK DIRECT VERIFICATION
+Verified HEAD before this evidence append: a91a6b80b9166766c4c1820df2437d0cab3e1d05
+Invocation: bun qa/member-lifecycle-pg.mjs && bun qa/membership-reminder-audit-pg.mjs && bun qa/community-current-members.mjs && bun run check
+Binary observable: exit 0
+Decisive outputs repeated independently:
+PASS lifecycle storage: 39 machine-counted edges; fresh+upgrade 001-029; KST closure/weekends/evidence; rollout; active/grace/extension/dormant/return; stale/duplicate/concurrent/cross-scope denial; immutable audit; rollback=0
+PASS migration 027: monotonic/empty/atomic membership, opt-out preserving rejoin, 201-member chunks, per-peer retry pruning, ambiguity-before-prune, durable common retry
+PASS current member snapshot: paginated, deduplicated, bounded human classification and partial failure closed
+Checked 113 source files, tsc passed, 54 suites passed, and Wrangler dry-run exited normally.
+
+Invocation: evidence file identity and repository integrity checks
+Binary observable: exit 0
+Exact outputs:
+HEAD=a91a6b80b9166766c4c1820df2437d0cab3e1d05
+STATUS_ROWS=0
+CLEANUP_ROWS=0
+EVIDENCE_BYTES=5820
+WORKTREE_BLOB=35496ed7ddb848e53012a949fed90182bf61183e
+HEAD_BLOB=35496ed7ddb848e53012a949fed90182bf61183e
+git fsck --no-dangling --no-reflogs printed no errors; git diff --check from exact base printed no errors.
+Judgment: the evidence artifact was non-empty, byte-identical to the blob committed at verified HEAD, and backed by a clean repository plus zero disposable PostgreSQL leftovers.
