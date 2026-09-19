@@ -48,18 +48,30 @@ const retiredModules = [
   "src/invitations/tokens.ts",
 ];
 assert.deepEqual(retiredModules.filter(existsSync), []);
-const canonicalSources = [
+const canonicalRuntime = [
   "src/index.ts",
   "src/requests.ts",
   "src/worker-entry.ts",
-  "wrangler.jsonc",
   "scripts/export-public-config.mjs",
 ]
   .map((path) => readFileSync(path, "utf8"))
   .join("\n");
 assert.doesNotMatch(
-  canonicalSources,
+  canonicalRuntime,
   /NeonInvitations|InvitationStore|processInvitation|invitationCommand|INVITATIONS_ENABLED|INVITE_SIGNING_SECRET|kind:\s*["']invitation["']|member_status|issue_invite|redeem_invite|check_invite|quota_used|invitedBy|\bremaining\b|\bfounder\b|\badmitted\b/,
+);
+const configurationSurfaces = [
+  "wrangler.jsonc",
+  "worker-configuration.d.ts",
+  ".dev.vars.example",
+  "slack-manifest.json",
+  "scripts/slack-manifest.mjs",
+]
+  .map((path) => readFileSync(path, "utf8"))
+  .join("\n");
+assert.doesNotMatch(
+  configurationSurfaces,
+  /NeonInvitations|InvitationStore|INVITATIONS_ENABLED|INVITE_SIGNING_SECRET|member_status|issue_invite|redeem_invite|check_invite|quota_used|invitedBy|kind:\s*["']invitation["']/,
 );
 console.log(
   "PASS /one retired: signed command changes no records; manifest and canonical runtime contain no monthly invitation path",

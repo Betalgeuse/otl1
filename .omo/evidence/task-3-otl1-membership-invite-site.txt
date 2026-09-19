@@ -110,3 +110,21 @@ Binary observable: exit 0
 Captured output:
 No violations in 4 file(s).
 git diff --check produced no output.
+
+TODO 3R FINAL CONFIGURATION CLOSURE
+Baseline: 7ee81fafa91e74a004461d474bcbdac6aedaca33
+
+SCENARIO failing-first generated/configuration absence
+Invocation: bun qa/slash-retirement.mjs
+Binary observable: exit 1
+Captured output:
+AssertionError: canonical/configuration surfaces matched retired invitation vocabulary.
+Direct bounded scan identified exactly worker-configuration.d.ts INVITATIONS_ENABLED and INVITE_SIGNING_SECRET declarations plus .dev.vars.example INVITE_SIGNING_SECRET.
+
+SCENARIO generated/configuration absence after correction
+Invocation: bunx wrangler types worker-configuration.d.ts --env-interface CloudflareBindings --env-file .dev.vars.example && bun qa/slash-retirement.mjs
+Binary observable: exit 0
+Captured output:
+Wrangler regenerated worker-configuration.d.ts with hash 688fc524426fc4b851dfbc111d25ddaf and without either retired declaration.
+PASS /one retired: signed command changes no records; manifest and canonical runtime contain no monthly invitation path
+Observable: the retirement contract scans canonical runtime, request parsing, Wrangler config, generated Worker bindings, development env example, Slack manifest/source generator, and public-config exporter. Migrations 002-004 historical definitions and migration 030 revocation/audit references remain intentionally outside this absence scan.
