@@ -105,6 +105,24 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
     return value === null ? null : receipt(value);
   }
 
+  async findPrivateIntake(
+    teamId: string,
+    requestId: string,
+    objectDigest: string,
+  ): Promise<"adopted" | "absent" | "conflict"> {
+    const value = await this.db.queryJson(
+      `SELECT to_jsonb(CASE
+        WHEN EXISTS(SELECT 1 FROM otl.referral_private_payloads
+          WHERE team_id=$1 AND request_id=$2 AND object_digest=$3) THEN 'adopted'
+        WHEN EXISTS(SELECT 1 FROM otl.referral_private_payloads
+          WHERE team_id=$1 AND (request_id=$2 OR object_digest=$3)) THEN 'conflict'
+        ELSE 'absent' END)`,
+      [teamId, requestId, objectDigest],
+    );
+    if (value === "adopted" || value === "absent" || value === "conflict") return value;
+    throw new InputError("Invalid private intake state");
+  }
+
   async issueLink(input: {
     readonly teamId: string;
     readonly userId: string;

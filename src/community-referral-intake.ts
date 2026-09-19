@@ -1,4 +1,13 @@
-import { deleteInvitePrivateObject, writeInvitePrivateObject } from "./community-invite-private";
+import {
+  deleteInvitePrivateObject,
+  prepareInvitePrivateObject,
+  putPreparedInvitePrivateObject,
+} from "./community-invite-private";
+import {
+  clearInvitePrivateReconciliationMarker,
+  createInvitePrivateReconciliationMarker,
+  type InviteReconcileBucket,
+} from "./community-referral-reconcile";
 import { digestNormalizedInviteEmail, digestReferralToken } from "./community-referral-token";
 import {
   INVITE_CONSENT_VERSION,
@@ -14,7 +23,7 @@ export type ReferralIntakeEnv = {
   readonly SITE_CORE_HMAC_SECRET?: string;
   readonly SLACK_TEAM_ID: string;
   readonly INVITE_EMAIL_PEPPER?: string;
-  readonly INVITE_PRIVATE_OBJECTS?: import("./community-invite-private").InvitePrivateBucket;
+  readonly INVITE_PRIVATE_OBJECTS?: InviteReconcileBucket;
   readonly INVITE_PRIVATE_KEK?: string;
   readonly INVITE_PRIVATE_KEK_VERSION?: string;
 };
@@ -130,11 +139,27 @@ export async function handleReferralIntakeRequest(
     kek: env.INVITE_PRIVATE_KEK,
     keyVersion: env.INVITE_PRIVATE_KEK_VERSION,
   };
-  const privateRef = await writeInvitePrivateObject(config, requestId, 0, {
+  const prepared = await prepareInvitePrivateObject(config, requestId, 0, {
     email: application.data.email,
     displayName: application.data.displayName,
     intent: application.data.intent,
   });
+  const createdAt = new Date().toISOString();
+  const marker = await createInvitePrivateReconciliationMarker(env, {
+    requestId,
+    submissionKey: application.data.submissionKey,
+    objectDigest: prepared.ref.objectDigest,
+    opaqueRef: prepared.ref.opaqueRef,
+    now: createdAt,
+  });
+  try {
+    await putPreparedInvitePrivateObject(config, prepared);
+  } catch (error) {
+    if (!(error instanceof Error)) throw error;
+    await clearInvitePrivateReconciliationMarker(env, marker.key);
+    throw error;
+  }
+  const privateRef = prepared.ref;
   const submission = {
     teamId: env.SLACK_TEAM_ID,
     tokenDigest: await digestReferralToken(application.data.referralToken),
@@ -148,7 +173,7 @@ export async function handleReferralIntakeRequest(
     consentVersion: INVITE_CONSENT_VERSION,
     consentedAt: application.data.consentedAt,
     key: application.data.submissionKey,
-    now: new Date().toISOString(),
+    now: createdAt,
     privateRef,
   } as const;
   let result: Awaited<ReturnType<ReferralRuntimeStore["submit"]>>;
@@ -165,8 +190,14 @@ export async function handleReferralIntakeRequest(
           env.SLACK_TEAM_ID,
           application.data.submissionKey,
         );
-        if (reconciled) return Response.json({ receiptId: reconciled.receiptId }, { status: 202 });
+        if (reconciled) {
+          if (reconciled.requestId !== requestId)
+            await deleteInvitePrivateObject(config, privateRef.opaqueRef);
+          await clearInvitePrivateReconciliationMarker(env, marker.key);
+          return Response.json({ receiptId: reconciled.receiptId }, { status: 202 });
+        }
         await deleteInvitePrivateObject(config, privateRef.opaqueRef);
+        await clearInvitePrivateReconciliationMarker(env, marker.key);
         return Response.json({ error: "unavailable" }, { status: 503 });
       } catch (reconciliationError) {
         if (reconciliationError instanceof Error)
@@ -177,8 +208,10 @@ export async function handleReferralIntakeRequest(
   }
   if (result.kind === "rejected") {
     await deleteInvitePrivateObject(config, privateRef.opaqueRef);
+    await clearInvitePrivateReconciliationMarker(env, marker.key);
     return Response.json({ error: "unavailable" }, { status: 503 });
   }
   if (result.requestId !== requestId) await deleteInvitePrivateObject(config, privateRef.opaqueRef);
+  await clearInvitePrivateReconciliationMarker(env, marker.key);
   return Response.json({ receiptId: result.receiptId }, { status: 202 });
 }

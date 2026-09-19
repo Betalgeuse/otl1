@@ -11,6 +11,10 @@ import {
 } from "../src/community-invite-admin.ts";
 import { handleReferralLinkMessage } from "../src/community-referral-link.ts";
 import { handleReferralTeamJoin } from "../src/community-referral-join.ts";
+import {
+  nextInvitePrivateReconciliationDue,
+  reconcileInvitePrivateIntake,
+} from "../src/community-referral-reconcile.ts";
 import { handleReferralSlackRequest } from "../src/community-referral-slack.ts";
 import { sign } from "../src/signing.ts";
 
@@ -22,17 +26,35 @@ class MemoryBucket {
   objects = new Map();
   puts = 0;
   deletes = 0;
-  async put(name, value) {
+  privatePuts = 0;
+  privateDeletes = 0;
+  version = 0;
+  writes = [];
+  async put(name, value, options = {}) {
+    const existing = this.objects.get(name);
+    if (options.onlyIf?.etagDoesNotMatch === "*" && existing) return null;
+    if (options.onlyIf?.etagMatches && existing?.etag !== options.onlyIf.etagMatches) return null;
     this.puts += 1;
-    this.objects.set(name, value.slice(0));
+    if (name.startsWith("invite-private/")) this.privatePuts += 1;
+    this.writes.push(name);
+    const etag = `etag-${++this.version}`;
+    this.objects.set(name, { bytes: value.slice(0), etag });
+    return { etag };
   }
   async get(name) {
     const value = this.objects.get(name);
-    return value ? { arrayBuffer: async () => value.slice(0) } : null;
+    return value ? { key: name, etag: value.etag, arrayBuffer: async () => value.bytes.slice(0) } : null;
   }
   async delete(name) {
     this.deletes += 1;
+    if (name.startsWith("invite-private/")) this.privateDeletes += 1;
     this.objects.delete(name);
+  }
+  async list({ prefix, limit }) {
+    return {
+      objects: [...this.objects.keys()].filter((name) => name.startsWith(prefix)).slice(0, limit).map((key) => ({ key })),
+      truncated: false,
+    };
   }
 }
 
@@ -47,6 +69,10 @@ class MemoryStore {
   failSubmit = false;
   throwSubmit = false;
   responseLostOnce = false;
+  findCalls = 0;
+  failFindOnCall = null;
+  privateIntakes = new Map();
+  privateLookupFails = false;
   active = true;
   async claimServiceNonce(digest) {
     if (this.nonces.has(digest)) return false;
@@ -54,7 +80,15 @@ class MemoryStore {
     return true;
   }
   async findSubmission(_teamId, submissionKey) {
+    this.findCalls += 1;
+    if (this.findCalls === this.failFindOnCall) throw new Error("database reconciliation unavailable");
     return [...this.requestsByEmail.values()].find((entry) => entry.input.key === submissionKey)?.receipt ?? null;
+  }
+  async findPrivateIntake(_teamId, requestId, objectDigest) {
+    if (this.privateLookupFails) throw new Error("database outage during reconciliation");
+    const stored = this.privateIntakes.get(requestId);
+    if (!stored) return "absent";
+    return stored === objectDigest ? "adopted" : "conflict";
   }
   async issueLink(input) {
     if (!this.active) return { kind: "unavailable" };
@@ -72,6 +106,7 @@ class MemoryStore {
     if (existing) return existing.receipt;
     const receipt = { kind: "receipt", receiptId: input.receiptId, state: "pending", revision: 0, requestId: input.requestId };
     this.requestsByEmail.set(input.emailDigest, { input, receipt });
+    this.privateIntakes.set(input.requestId, input.privateRef.objectDigest);
     this.reviews.push({
       outboxId: this.reviews.length + 1,
       effectKey: `review:${input.requestId}`,
@@ -149,13 +184,15 @@ try {
   server.stop(true);
 }
 assert.equal(store.submissions, 1);
-assert.equal(bucket.puts, 1);
+assert.equal(bucket.privatePuts, 1);
+assert.ok(bucket.writes[0].startsWith("invite-private-reconcile/"));
+assert.ok(bucket.writes[1].startsWith("invite-private/"));
 const originalReceipt = [...store.requestsByEmail.values()][0].receipt.receiptId;
 const exactNonce = "nonce-exact-1234567890";
 const exactSignature = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/apply", body, timestamp: now, nonce: exactNonce }, secret);
 const exactResponse = await handleReferralIntakeRequest(new Request("https://core.invalid/internal/referrals/apply", { method: "POST", headers: { ...headers, "x-otl-nonce": exactNonce, "x-otl-signature": exactSignature }, body }), env, store);
 assert.equal((await exactResponse.json()).receiptId, originalReceipt);
-assert.equal(bucket.puts, 1);
+assert.equal(bucket.privatePuts, 1);
 const duplicateBody = JSON.stringify({ ...JSON.parse(body), referralToken: "B".repeat(32), submissionKey: "submission-duplicate" });
 const duplicateNonce = "nonce-duplicate-123456";
 const duplicateSignature = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/apply", body: duplicateBody, timestamp: now, nonce: duplicateNonce }, secret);
@@ -163,7 +200,7 @@ const duplicateResponse = await handleReferralIntakeRequest(new Request("https:/
 assert.equal(duplicateResponse.status, 202);
 assert.equal((await duplicateResponse.json()).receiptId, originalReceipt);
 assert.equal(store.requestsByEmail.size, 1);
-assert.equal(bucket.deletes, 1);
+assert.equal(bucket.privateDeletes, 1);
 
 store.failSubmit = true;
 const failedBody = JSON.stringify({ ...JSON.parse(body), email: "failed@example.com", submissionKey: "submission-failed" });
@@ -171,7 +208,7 @@ const failedNonce = "nonce-failure-12345678";
 const failedSignature = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/apply", body: failedBody, timestamp: now, nonce: failedNonce }, secret);
 const failedResponse = await handleReferralIntakeRequest(new Request("https://core.invalid/internal/referrals/apply", { method: "POST", headers: { ...headers, "x-otl-nonce": failedNonce, "x-otl-signature": failedSignature }, body: failedBody }), env, store);
 assert.equal(failedResponse.status, 503);
-assert.equal(bucket.deletes, 2);
+assert.equal(bucket.privateDeletes, 2);
 store.failSubmit = false;
 
 store.throwSubmit = true;
@@ -180,7 +217,7 @@ const unavailableNonce = "nonce-unavailable-12345";
 const unavailableSignature = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/apply", body: unavailableBody, timestamp: now, nonce: unavailableNonce }, secret);
 const unavailableResponse = await handleReferralIntakeRequest(new Request("https://core.invalid/internal/referrals/apply", { method: "POST", headers: { ...headers, "x-otl-nonce": unavailableNonce, "x-otl-signature": unavailableSignature }, body: unavailableBody }), env, store);
 assert.equal(unavailableResponse.status, 503);
-assert.equal(bucket.deletes, 3);
+assert.equal(bucket.privateDeletes, 3);
 store.throwSubmit = false;
 
 store.responseLostOnce = true;
@@ -189,7 +226,88 @@ const lostNonce = "nonce-lost-12345678901";
 const lostSignature = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/apply", body: lostBody, timestamp: now, nonce: lostNonce }, secret);
 const lostResponse = await handleReferralIntakeRequest(new Request("https://core.invalid/internal/referrals/apply", { method: "POST", headers: { ...headers, "x-otl-nonce": lostNonce, "x-otl-signature": lostSignature }, body: lostBody }), env, store);
 assert.equal(lostResponse.status, 202);
-assert.equal(bucket.deletes, 3);
+assert.equal(bucket.privateDeletes, 3);
+
+async function uncertainIntake(email, submissionKey, requestNonce) {
+  store.throwSubmit = true;
+  store.failFindOnCall = store.findCalls + 2;
+  const requestBody = JSON.stringify({ ...JSON.parse(body), email, submissionKey });
+  const requestSignature = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/apply", body: requestBody, timestamp: now, nonce: requestNonce }, secret);
+  const response = await handleReferralIntakeRequest(new Request("https://core.invalid/internal/referrals/apply", { method: "POST", headers: { ...headers, "x-otl-nonce": requestNonce, "x-otl-signature": requestSignature }, body: requestBody }), env, store);
+  store.throwSubmit = false;
+  store.failFindOnCall = null;
+  return response;
+}
+
+function reconciliationKeys() {
+  return [...bucket.objects.keys()].filter((name) => name.startsWith("invite-private-reconcile/"));
+}
+
+async function markerAt(keyName) {
+  const stored = await bucket.get(keyName);
+  assert.ok(stored);
+  return JSON.parse(new TextDecoder().decode(await stored.arrayBuffer()));
+}
+
+const uncertainAdoptResponse = await uncertainIntake("uncertain-adopt@example.com", "submission-uncertain-adopt", "nonce-uncertain-adopt1");
+assert.equal(uncertainAdoptResponse.status, 503);
+assert.equal(reconciliationKeys().length, 1);
+const adoptMarkerKey = reconciliationKeys()[0];
+const adoptMarker = await markerAt(adoptMarkerKey);
+const adoptMarkerText = JSON.stringify(adoptMarker);
+assert.doesNotMatch(adoptMarkerText, /uncertain-adopt@example\.com|submission-uncertain-adopt|A{32}/);
+assert.ok(bucket.objects.has(adoptMarker.opaqueRef));
+assert.equal(await nextInvitePrivateReconciliationDue(env), adoptMarker.nextAttemptAt);
+store.privateIntakes.set(adoptMarker.requestId, adoptMarker.objectDigest);
+const adopted = await reconcileInvitePrivateIntake(env, store, Date.now() + 1);
+assert.equal(adopted.adopted, 1);
+assert.equal(reconciliationKeys().length, 0);
+assert.ok(bucket.objects.has(adoptMarker.opaqueRef));
+
+const uncertainOrphanResponse = await uncertainIntake("uncertain-orphan@example.com", "submission-uncertain-orphan", "nonce-uncertain-orphan1");
+assert.equal(uncertainOrphanResponse.status, 503);
+const orphanMarkerKey = reconciliationKeys()[0];
+const orphanMarker = await markerAt(orphanMarkerKey);
+const orphaned = await reconcileInvitePrivateIntake(env, store, Date.now() + 16 * 60_000);
+assert.equal(orphaned.deleted, 1);
+assert.equal(reconciliationKeys().length, 0);
+assert.equal(bucket.objects.has(orphanMarker.opaqueRef), false);
+
+const concurrentResponse = await uncertainIntake("uncertain-concurrent@example.com", "submission-uncertain-concurrent", "nonce-uncertain-concurr1");
+assert.equal(concurrentResponse.status, 503);
+const concurrentResults = await Promise.all([
+  reconcileInvitePrivateIntake(env, store, Date.now() + 1),
+  reconcileInvitePrivateIntake(env, store, Date.now() + 1),
+]);
+assert.equal(concurrentResults.reduce((total, result) => total + result.claimed, 0), 1);
+assert.equal(reconciliationKeys().length, 1);
+const concurrentMarker = await markerAt(reconciliationKeys()[0]);
+const concurrentCleanup = await reconcileInvitePrivateIntake(env, store, Date.now() + 16 * 60_000);
+assert.equal(concurrentCleanup.deleted, 1);
+assert.equal(bucket.objects.has(concurrentMarker.opaqueRef), false);
+assert.equal(reconciliationKeys().length, 0);
+
+const outageResponse = await uncertainIntake("uncertain-outage@example.com", "submission-uncertain-outage", "nonce-uncertain-outage1");
+assert.equal(outageResponse.status, 503);
+const outageMarkerKey = reconciliationKeys()[0];
+const outageMarker = await markerAt(outageMarkerKey);
+store.privateLookupFails = true;
+let outageResult;
+for (let attempt = 1; attempt <= 5; attempt += 1) {
+  outageResult = await reconcileInvitePrivateIntake(
+    env,
+    store,
+    Date.now() + (16 + attempt * 16) * 60_000,
+  );
+}
+store.privateLookupFails = false;
+assert.equal(outageResult.deadLettered, 1);
+assert.ok(bucket.objects.has(outageMarkerKey));
+assert.ok(bucket.objects.has(outageMarker.opaqueRef));
+assert.equal(await nextInvitePrivateReconciliationDue(env), null);
+await bucket.delete(outageMarkerKey);
+await bucket.delete(outageMarker.opaqueRef);
+assert.equal(reconciliationKeys().length, 0);
 
 const slackEffects = [];
 const slack = {
@@ -252,4 +370,4 @@ const signedResponse = await handleReferralSlackRequest(new Request("https://cor
 assert.equal(signedResponse.status, 200);
 assert.equal(store.joins.length, 2);
 
-console.log(`PASS referral flow: http=202 db-submissions=${store.submissions} r2-put=${bucket.puts} r2-compensated=${bucket.deletes} exact-duplicate=original-receipt duplicate-email=original-receipt db-response-lost=reconciled slack-response-lost=one-effect slack-effects=${slackEffects.length} stable-private-link=1 dormant-url=0 decisions=2 signed-team-join=200 join-attributions=${store.joins.length}`);
+console.log(`PASS referral flow: http=202 db-submissions=${store.submissions} r2-put=${bucket.privatePuts} r2-compensated=${bucket.privateDeletes} exact-duplicate=original-receipt duplicate-email=original-receipt db-response-lost=reconciled uncertain-marker=discoverable reconciler=adopt+delete concurrent-claim=one db-outage=preserve dead-letter=bounded cleanup=clean slack-response-lost=one-effect slack-effects=${slackEffects.length} stable-private-link=1 dormant-url=0 decisions=2 signed-team-join=200 join-attributions=${store.joins.length}`);

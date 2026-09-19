@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { handleReferralIntakeRequest, signReferralServiceRequest } from "../src/community-referral-intake.ts";
 import { deliverInviteAdminReview, handleInviteAdminAction } from "../src/community-invite-admin.ts";
 import { referralManifestRequirements } from "../src/community-referral-manifest.ts";
+import {
+  clearInvitePrivateReconciliationMarker,
+  createInvitePrivateReconciliationMarker,
+  reconcileInvitePrivateIntake,
+} from "../src/community-referral-reconcile.ts";
 import { handleReferralSlackRequest } from "../src/community-referral-slack.ts";
 import { sign } from "../src/signing.ts";
 
@@ -16,9 +21,30 @@ const store = {
   async decide() { throw new Error("must not reach"); },
   async markInvited() { throw new Error("must not reach"); },
   async findSubmission() { return null; },
+  async findPrivateIntake() { return "absent"; },
   async issueLink() { return { kind: "issued", linkId: "LNK-SECURITY", created: true }; },
 };
-const bucket = { async put() {}, async get() { return null; }, async delete() {} };
+class SecurityBucket {
+  objects = new Map();
+  version = 0;
+  async put(key, value, options = {}) {
+    const existing = this.objects.get(key);
+    if (options.onlyIf?.etagDoesNotMatch === "*" && existing) return null;
+    if (options.onlyIf?.etagMatches && existing?.etag !== options.onlyIf.etagMatches) return null;
+    const etag = `security-${++this.version}`;
+    this.objects.set(key, { bytes: value.slice(0), etag });
+    return { etag };
+  }
+  async get(key) {
+    const value = this.objects.get(key);
+    return value ? { key, etag: value.etag, arrayBuffer: async () => value.bytes.slice(0) } : null;
+  }
+  async delete(key) { this.objects.delete(key); }
+  async list({ prefix, limit }) {
+    return { objects: [...this.objects.keys()].filter((key) => key.startsWith(prefix)).slice(0, limit).map((key) => ({ key })), truncated: false };
+  }
+}
+const bucket = new SecurityBucket();
 const env = { SITE_CORE_HMAC_SECRET: secret, SLACK_TEAM_ID: "TQA", COMMUNITY_ADMIN_ID: "UADMIN", INVITE_EMAIL_PEPPER: Buffer.alloc(32, 3).toString("base64url"), INVITE_PRIVATE_OBJECTS: bucket, INVITE_PRIVATE_KEK: Buffer.alloc(32, 4).toString("base64url"), INVITE_PRIVATE_KEK_VERSION: "invite-kek-2026-01", REFERRAL_TOKEN_SECRET: "referral-secret", PUBLIC_APPLICATION_ORIGIN: "https://otl1.hyuk.me", SLACK_SIGNING_SECRET: "slack-secret", SLACK_BOT_TOKEN: "xoxb-test" };
 const request = async ({ signature, nonce = "nonce-security-123456", timestamp = now, requestBody = body }) => handleReferralIntakeRequest(new Request("https://core.invalid/internal/referrals/apply", { method: "POST", headers: { "content-type": "application/json", "x-otl-timestamp": String(timestamp), "x-otl-nonce": nonce, "x-otl-signature": signature }, body: requestBody }), env, store);
 const signature = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/apply", body, timestamp: now, nonce: "nonce-security-123456" }, secret);
@@ -95,5 +121,36 @@ assert.equal(await deliverInviteAdminReview(env, missingPrivateStore, slack), fa
 assert.equal(missingPrivateStore.finished, "failed");
 assert.equal(slackEffects.filter((effect) => effect.kind === "admin").length, 0);
 
+const markerInput = {
+  requestId: "REQ-TAMPER0001",
+  submissionKey: "tamper-submission",
+  objectDigest: "a".repeat(64),
+  opaqueRef: "invite-private/REQ-TAMPER0001/revision-0-00000000-0000-4000-8000-000000000000.enc",
+  now: new Date().toISOString(),
+};
+const tamperMarker = await createInvitePrivateReconciliationMarker(env, markerInput);
+const tamperStored = bucket.objects.get(tamperMarker.key);
+const tamperedBody = JSON.parse(new TextDecoder().decode(tamperStored.bytes));
+tamperedBody.objectDigest = "b".repeat(64);
+tamperStored.bytes = new TextEncoder().encode(JSON.stringify(tamperedBody)).buffer;
+await bucket.put(markerInput.opaqueRef, new Uint8Array([1, 2, 3]).buffer);
+const tamperedResult = await reconcileInvitePrivateIntake(env, store, Date.now() + 20 * 60_000);
+assert.equal(tamperedResult.tampered, 1);
+assert.ok(bucket.objects.has(tamperMarker.key));
+assert.ok(bucket.objects.has(markerInput.opaqueRef));
+await clearInvitePrivateReconciliationMarker(env, tamperMarker.key);
+await bucket.delete(markerInput.opaqueRef);
+
+const otherEnv = { ...env, SLACK_TEAM_ID: "TOTHER" };
+const crossMarker = await createInvitePrivateReconciliationMarker(otherEnv, {
+  ...markerInput,
+  requestId: "REQ-CROSS000001",
+  opaqueRef: "invite-private/REQ-CROSS000001/revision-0-00000000-0000-4000-8000-000000000000.enc",
+});
+const crossResult = await reconcileInvitePrivateIntake(env, store, Date.now() + 20 * 60_000);
+assert.equal(crossResult.claimed, 0);
+assert.ok(bucket.objects.has(crossMarker.key));
+await clearInvitePrivateReconciliationMarker(otherEnv, crossMarker.key);
+
 assert.deepEqual(referralManifestRequirements(), { botEvents: ["team_join"], botScopes: ["users:read.email"] });
-console.log("PASS referral security: forged-hmac=401 skew=401 replay=401 forged-slack=401 admin-forgery=denied stale-click=denied public-leakage=0 oversized-unicode=400 bot-join=ignored deleted-join=ignored unmatched-join=safe missing-r2=failed legacy-vocabulary=ignored manifest=team_join+users:read.email pii-response=absent");
+console.log("PASS referral security: forged-hmac=401 skew=401 replay=401 forged-slack=401 admin-forgery=denied stale-click=denied public-leakage=0 oversized-unicode=400 bot-join=ignored deleted-join=ignored unmatched-join=safe missing-r2=failed marker-tamper=preserved cross-team-marker=denied legacy-vocabulary=ignored manifest=team_join+users:read.email pii-response=absent");

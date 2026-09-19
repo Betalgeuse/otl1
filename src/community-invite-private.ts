@@ -21,6 +21,11 @@ export type InvitePrivateConfig = {
   readonly keyVersion: string | undefined;
 };
 
+export type PreparedInvitePrivateObject = {
+  readonly ref: InvitePrivateObjectRef;
+  readonly ciphertext: ArrayBuffer;
+};
+
 export class InvitePrivateError extends Error {
   readonly code: "configuration" | "integrity" | "missing" | "invalid_payload";
 
@@ -100,12 +105,12 @@ function configured(config: InvitePrivateConfig): {
   return { bucket: config.bucket, key: decodeKey(config.kek), keyVersion: config.keyVersion };
 }
 
-export async function writeInvitePrivateObject(
+export async function prepareInvitePrivateObject(
   config: InvitePrivateConfig,
   requestId: string,
   revision: number,
   raw: unknown,
-): Promise<InvitePrivateObjectRef> {
+): Promise<PreparedInvitePrivateObject> {
   const parsed = invitePrivatePayloadSchema.safeParse(raw);
   if (!parsed.success) throw new InvitePrivateError("invalid_payload");
   const ready = configured(config);
@@ -127,15 +132,36 @@ export async function writeInvitePrivateObject(
     additionalData,
   });
   const opaqueRef = `invite-private/${requestId}/revision-${revision}-${crypto.randomUUID()}.enc`;
-  await ready.bucket.put(opaqueRef, body);
   return {
-    opaqueRef,
-    objectDigest: await digest(body),
-    envelopeDek: `${base64(envelopeNonce)}.${base64(new Uint8Array(wrapped))}`,
-    keyVersion: ready.keyVersion,
-    nonce: base64(nonce),
-    schemaVersion: INVITE_PRIVATE_SCHEMA_VERSION,
+    ciphertext: body,
+    ref: {
+      opaqueRef,
+      objectDigest: await digest(body),
+      envelopeDek: `${base64(envelopeNonce)}.${base64(new Uint8Array(wrapped))}`,
+      keyVersion: ready.keyVersion,
+      nonce: base64(nonce),
+      schemaVersion: INVITE_PRIVATE_SCHEMA_VERSION,
+    },
   };
+}
+
+export async function putPreparedInvitePrivateObject(
+  config: InvitePrivateConfig,
+  prepared: PreparedInvitePrivateObject,
+): Promise<void> {
+  if (!config.bucket) throw new InvitePrivateError("configuration");
+  await config.bucket.put(prepared.ref.opaqueRef, prepared.ciphertext);
+}
+
+export async function writeInvitePrivateObject(
+  config: InvitePrivateConfig,
+  requestId: string,
+  revision: number,
+  raw: unknown,
+): Promise<InvitePrivateObjectRef> {
+  const prepared = await prepareInvitePrivateObject(config, requestId, revision, raw);
+  await putPreparedInvitePrivateObject(config, prepared);
+  return prepared.ref;
 }
 
 export async function readInvitePrivateObject(

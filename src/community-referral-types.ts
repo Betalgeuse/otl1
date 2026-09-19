@@ -65,6 +65,11 @@ export type ReferralSubmit = {
 export interface ReferralRuntimeStore {
   claimServiceNonce(digest: string, expiresAt: string): Promise<boolean>;
   findSubmission(teamId: string, submissionKey: string): Promise<ReferralReceipt | null>;
+  findPrivateIntake(
+    teamId: string,
+    requestId: string,
+    objectDigest: string,
+  ): Promise<"adopted" | "absent" | "conflict">;
   issueLink(input: {
     readonly teamId: string;
     readonly userId: string;
