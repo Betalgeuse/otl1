@@ -40,7 +40,7 @@ export type ClockInspection = {
 export interface ClockBinding {
   getByName(name: string): {
     refresh(channelId: string): Promise<{ readonly next: number | null }>;
-    armMembershipScan(channelId: string, cursor: string): Promise<void>;
+    armMembershipScan(channelId: string, cursor: string | null): Promise<void>;
     armBugDelivery(input: BugDeliveryArm): Promise<BugDeliveryArmResult>;
     inspect(): Promise<ClockInspection>;
     publishGarden(input: GardenRequest): Promise<string>;

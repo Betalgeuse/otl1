@@ -44,7 +44,11 @@ export async function communityCron(env: CommunityEnv, scheduledTime: number): P
       channel,
       scheduledTime,
     );
-    if (membership.nextCursor && env.COMMUNITY_CLOCK && channel === env.COMMUNITY_PUBLIC_CHANNEL_ID)
+    if (
+      (membership.possiblyMore || membership.nextCursor) &&
+      env.COMMUNITY_CLOCK &&
+      channel === env.COMMUNITY_PUBLIC_CHANNEL_ID
+    )
       await env.COMMUNITY_CLOCK.getByName(`${env.SLACK_TEAM_ID}:${channel}`).armMembershipScan(
         channel,
         membership.nextCursor,

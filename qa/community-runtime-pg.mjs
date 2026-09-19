@@ -43,6 +43,7 @@ let started = false;
 class Bucket {
   objects = new Map();
   version = 0;
+  cursors = new Map();
   privatePuts = 0;
   privateDeletes = 0;
   markerDeletes = 0;
@@ -71,14 +72,21 @@ class Bucket {
   }
   async list({ prefix, limit, cursor }) {
     const keys = [...this.objects.keys()].filter((key) => key.startsWith(prefix)).sort();
-    const start = cursor ? keys.findIndex((key) => key > cursor) : 0;
+    if (cursor && !this.cursors.has(cursor)) throw new Error("Invalid opaque R2 cursor");
+    const after = cursor ? this.cursors.get(cursor) : null;
+    const index = after ? keys.findIndex((key) => key > after) : 0;
+    const start = index < 0 ? keys.length : index;
     const page = keys.slice(start, start + limit);
-    return { objects: page.map((key) => ({ key })), truncated: start + limit < keys.length,
-      ...(start + limit < keys.length ? { cursor: page.at(-1) } : {}) };
+    const truncated = start + limit < keys.length;
+    const nextCursor = truncated ? `opaque-r2-cursor-${this.cursors.size + 1}` : null;
+    if (nextCursor) this.cursors.set(nextCursor, page.at(-1));
+    return { objects: page.map((key) => ({ key })), truncated,
+      ...(nextCursor ? { cursor: nextCursor } : {}) };
   }
 }
 
 const bucket = new Bucket();
+const scanArms = [];
 const slackEffects = [];
 const acceptedClientMessages = new Map();
 let loseAcceptedAdminResponse = false;
@@ -149,6 +157,7 @@ const env = {
   COMMUNITY_CLOCK: { getByName() { return {
     async publishGarden() { return "queued"; }, async refresh() { return { next: null }; },
     async armBugDelivery() { return { role: "bug_delivery", armed: false, next: null }; },
+    async armMembershipScan(channelId, cursor) { scanArms.push({ channelId, cursor }); },
   }; } },
 };
 const jobs = [];
@@ -636,8 +645,20 @@ try {
   await at("2026-10-21T12:00:01Z", (frozen) => runDueGardenDeliveries(env, "CPUBLIC", frozen));
   assert.equal(await scalar("SELECT status FROM otl.community_garden_retirements WHERE team_id='TINT' AND old_message_ts='5000.1'"), "retired");
   assert.equal(slackEffects.filter((effect) => effect.method === "chat.update").length, updatesBefore + 1);
+  for (let i = 1; i <= 12; i += 1) {
+    const markerId = `REQ-LATE${String(i).padStart(4,"0")}`;
+    await createInvitePrivateReconciliationMarker(env, { requestId: markerId,
+      submissionKey: `late-reconcile-${i}`, objectDigest: "9".repeat(64),
+      opaqueRef: `invite-private/${markerId}/revision-0-12345678-1234-1234-1234-123456789012.enc`,
+      now: "2026-10-22T14:30:00Z" });
+  }
+  await at("2026-10-22T15:00:00Z", (frozen) => communityCron(env, frozen));
+  assert.equal((await bucket.list({ prefix: "invite-private-reconcile/v1/", limit: 50 })).objects.length, 2);
+  assert.deepEqual(scanArms.at(-1), { channelId: "CPUBLIC", cursor: null });
+  await at("2026-10-22T15:00:01Z", () => channelClock.alarm());
+  assert.equal((await bucket.list({ prefix: "invite-private-reconcile/v1/", limit: 50 })).objects.length, 0);
   console.log("PASS rollout matrix: review-off legacy root=0 top-level reminder=1; review-on root=1 threaded reminder=1; retirement-off updates=0 retirement-on updates=1");
-  console.log("PASS all-queue saturation: reminder=12 garden=10+2 bug=10+2 lifecycle=10+3 admin-review=10+2 referral-notice=10+2 R2-orphan=10+2 private-purge=10+2; alarm+cron+fetch overlap no duplicate");
+  console.log("PASS all-queue saturation: reminder=12 garden=10+2 bug=10+2 lifecycle=10+3 admin-review=10+2 referral-notice=10+2 R2-orphan=10+2 private-purge=10+2; cron-only R2 backlog arms DO immediately; alarm+cron+fetch overlap no duplicate");
   console.log("PASS adversarial effects: duplicate link/goal/join and admin/lifecycle replay once; stale action denied; accepted Slack response reconciled; DB/R2 failure retried; maintenance/missing binding fail closed");
   console.log(JSON.stringify({ scenario: "signed-link-apply-admin-manual-join-goal-review-garden-grace-extension-closure-return", status: "pass",
     db: { bugSent: Number(await scalar("SELECT count(*) FROM otl.bug_deliveries WHERE team_id='TINT' AND status='sent'")),

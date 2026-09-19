@@ -24,6 +24,13 @@ const PAGE_SIZE = 50;
 const MAX_PAGES_PER_RUN = 10;
 const MAX_CLAIMS_PER_RUN = 10;
 
+class ReconciliationCursorError extends Error {
+  constructor() {
+    super("R2 listing omitted its continuation cursor");
+    this.name = "ReconciliationCursorError";
+  }
+}
+
 export const INVITE_PRIVATE_RECONCILIATION_CAPABILITIES = {
   callable: "reconcileInvitePrivateIntake",
   nextDue: "nextInvitePrivateReconciliationDue",
@@ -89,10 +96,9 @@ export async function reconcileInvitePrivateIntake(
     for (const entry of listed.objects) {
       if (counts.claimed >= MAX_CLAIMS_PER_RUN) {
         counts.possiblyMore = true;
-        counts.nextCursor = cursor ?? null;
+        counts.nextCursor = null;
         return counts;
       }
-      cursor = entry.key;
       const object = await ready.bucket.get(entry.key);
       if (!object) continue;
       const marker = await readMarker(object, env);
@@ -180,7 +186,8 @@ export async function reconcileInvitePrivateIntake(
       }
     }
     if (!listed.truncated) return counts;
-    cursor = listed.cursor ?? cursor;
+    if (!listed.cursor) throw new ReconciliationCursorError();
+    cursor = listed.cursor;
   }
   counts.possiblyMore = true;
   counts.nextCursor = cursor ?? null;
@@ -213,8 +220,8 @@ export async function nextInvitePrivateReconciliationDue(
       if (Number.isFinite(candidate) && (due === null || candidate < due)) due = candidate;
     }
     if (!listed.truncated) return due === null ? null : new Date(due).toISOString();
-    cursor = listed.cursor ?? listed.objects.at(-1)?.key;
-    if (!cursor) break;
+    if (!listed.cursor) throw new ReconciliationCursorError();
+    cursor = listed.cursor;
   }
   return new Date(due ?? Date.now() + 5 * 60_000).toISOString();
 }

@@ -47,9 +47,9 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
     return this.serialize(() => this.refreshSchedule(channelId));
   }
 
-  armMembershipScan(channelId: string, cursor: string): Promise<void> {
+  armMembershipScan(channelId: string, cursor: string | null): Promise<void> {
     return this.serialize(async () => {
-      if (channelId !== this.env.COMMUNITY_PUBLIC_CHANNEL_ID || !cursor)
+      if (channelId !== this.env.COMMUNITY_PUBLIC_CHANNEL_ID || cursor === "")
         throw new InputError("Invalid membership scan scope");
       const role = await this.ctx.storage.get<string>("role");
       const bound = await this.ctx.storage.get<string>("channel");
@@ -58,7 +58,8 @@ export class CommunityClock extends DurableObject<CommunityEnv> {
       if (bound && bound !== channelId) throw new InputError("Clock channel cannot change");
       await this.ctx.storage.put("role", COMMUNITY_SCHEDULE_CLOCK_ROLE);
       await this.ctx.storage.put("channel", channelId);
-      if (!(await this.ctx.storage.get<string>("referralReconcileCursor")))
+      if (cursor === null) await this.ctx.storage.delete("referralReconcileCursor");
+      else if (!(await this.ctx.storage.get<string>("referralReconcileCursor")))
         await this.ctx.storage.put("referralReconcileCursor", cursor);
       const due = Date.now() + 1_000;
       const previous = await this.ctx.storage.getAlarm();
