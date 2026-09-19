@@ -37,6 +37,12 @@ const focusedQa = [
   "referral-capacity-pg", "version-map",
 ];
 const injection = process.argv.find((arg) => arg.startsWith("--inject="))?.slice(9);
+const injections = new Set([
+  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-binding",
+  "missing-bootstrap", "missing-interest-admin-credential", "missing-interest-flag",
+  "missing-interest-secret", "missing-role", "missing-secret", "pii-leak", "rollback-mismatch",
+  "schema-head", "secret-leak", "turnstile-secret-in-vars", "turnstile-secret-leak", "turnstile-test-key",
+]);
 const rollbackReadbackPath = process.argv.find((arg) => arg.startsWith("--rollback-readback="))?.slice(20);
 const receiptPath = resolve(process.argv.find((arg) => arg.startsWith("--receipt="))?.slice(10)
   ?? join(root, ".omo/evidence/task-14-otl1-membership-invite-site.json"));
@@ -105,6 +111,10 @@ async function scalar(database, query) {
 async function scalarAs(database, role, query) {
   return (await run(join(pgBin, "psql"), ["-X", "-Atq", "-d", database, "-v", "ON_ERROR_STOP=1", "-c", query],
     { env: { ...pgEnv, PGUSER: role } })).stdout.trim();
+}
+async function assertSchemaHead(database, expected) {
+  const actual = await scalar(database, "SELECT version FROM otl.schema_migrations ORDER BY version DESC LIMIT 1");
+  assert.equal(actual, expected, "schema head mismatch");
 }
 async function apply(database, names) {
   for (const name of names) {
@@ -188,6 +198,7 @@ function preflight(config, site, vars, siteWorker, releaseNames = release) {
 
 try {
   receipt.sourceSha = (await run("git", ["rev-parse", "HEAD"])).stdout.trim();
+  assert.ok(injection === undefined || injections.has(injection), "unknown release injection");
   const config = JSON.parse(await readFile(join(root, "wrangler.jsonc"), "utf8"));
   const site = JSON.parse(await readFile(join(root, "site/wrangler.jsonc"), "utf8"));
   const vars = await readFile(join(root, ".dev.vars.example"), "utf8");
@@ -207,13 +218,12 @@ try {
   secretVarSite.vars.TURNSTILE_SECRET = fakeSecret;
   const missingInterestFlag = structuredClone(config);
   delete missingInterestFlag.vars.PUBLIC_INTEREST_ENABLED;
-  const missingInterestBinding = structuredClone(config);
-  missingInterestBinding.r2_buckets = [];
+  const missingInterestAdminCredential = vars.replace("INTEREST_ADMIN_DATABASE_URL=", "");
   await expectFailure("missing-binding", async () => preflight(config, alternate, vars, siteWorker));
   await expectFailure("missing-secret", async () => preflight(config, site, vars.replace("INVITE_PRIVATE_KEK=", ""), siteWorker));
   await expectFailure("missing-interest-secret", async () => preflight(config, site, vars.replace("INTEREST_RUNTIME_DATABASE_URL=", ""), siteWorker));
   await expectFailure("missing-interest-flag", async () => preflight(missingInterestFlag, site, vars, siteWorker));
-  await expectFailure("missing-interest-binding", async () => preflight(missingInterestBinding, site, vars, siteWorker));
+  await expectFailure("missing-interest-admin-credential", async () => preflight(config, site, missingInterestAdminCredential, siteWorker));
   await expectFailure("missing-036", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("036_"))));
   await expectFailure("missing-037", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("037_"))));
   await expectFailure("turnstile-test-key", async () => preflight(config, testKeySite, vars, siteWorker));
@@ -222,12 +232,11 @@ try {
   if (injection === "missing-secret") preflight(config, site, vars.replace("INVITE_PRIVATE_KEK=", ""), siteWorker);
   if (injection === "missing-interest-secret") preflight(config, site, vars.replace("INTEREST_RUNTIME_DATABASE_URL=", ""), siteWorker);
   if (injection === "missing-interest-flag") preflight(missingInterestFlag, site, vars, siteWorker);
-  if (injection === "missing-interest-binding") preflight(missingInterestBinding, site, vars, siteWorker);
+  if (injection === "missing-interest-admin-credential") preflight(config, site, missingInterestAdminCredential, siteWorker);
   if (injection === "missing-036") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("036_")));
   if (injection === "missing-037") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("037_")));
   if (injection === "turnstile-test-key") preflight(config, testKeySite, vars, siteWorker);
   if (injection === "turnstile-secret-in-vars") preflight(config, secretVarSite, vars, siteWorker);
-  if (injection === "schema-head") throw new Error("injected schema head mismatch");
   preflight(config, site, vars, siteWorker);
   receipt.manifest = {
     migrations: release, coreWorker: config.name, siteWorker: site.name,
@@ -275,9 +284,13 @@ try {
   await psql(primaryDb, ["-f", "qa/member-lifecycle-upgrade-fixture.sql"]);
   await psql(primaryDb, ["-f", "qa/release-rehearsal-fixture.sql"]);
   await apply(primaryDb, release.filter((name) => Number(name.slice(0, 3)) <= 35));
+  await assertSchemaHead(primaryDb, "035-lifecycle-admin-login");
   const before = await digest(primaryDb);
   await check("snapshot-035", join(pgBin, "pg_dump"), ["-Fc", "--no-owner", "--no-acl", "-f", join(temp, "snapshot.dump"), primaryDb], { env: pgEnv });
   await apply(primaryDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
+  if (injection === "schema-head")
+    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='037-interest-requests'"]);
+  await assertSchemaHead(primaryDb, "037-interest-requests");
   assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-7])-'"), "9");
   const after = await digest(primaryDb);
   assert.deepEqual(after, before, "protected rows changed during upgrade");
@@ -319,10 +332,12 @@ try {
   assert.equal(await scalar(rollbackDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '036-%'"), "0");
   await psql(rollbackDb, ["-c", "DROP TABLE otl.referral_capacity_defaults"]);
   await apply(rollbackDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
+  await assertSchemaHead(rollbackDb, "037-interest-requests");
   assert.deepEqual(await digest(rollbackDb), before, "forward repair changed protected rows");
   assert.deepEqual(await seedAdditive(rollbackDb), additiveBefore, "forward repair changed additive row contract");
   receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "037" };
   await apply(freshDb, migrations);
+  await assertSchemaHead(freshDb, "037-interest-requests");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '037-%'"), "1");
   receipt.checks.freshInstall = { exit: 0, schemaHead: "037" };
   await cleanupDatabases();
