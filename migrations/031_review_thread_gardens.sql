@@ -160,6 +160,7 @@ DECLARE
  current_count integer; before_deliveries integer; after_deliveries integer; enqueued integer:=0;
  row_day otl.community_days; chosen_batch text; lease text:=p->>'leaseToken'; affected integer;
  attempt integer; local_now timestamp; retry_seconds integer; error_code text:=p->>'errorCode';
+ now_at timestamptz;
  from_day date; through_day date; lim integer; dry boolean; request_digest text; result jsonb;
  existing otl.community_review_reconciliations; retirement otl.community_garden_retirements;
  plan_row record;
@@ -359,12 +360,19 @@ BEGIN
  END IF;
 
  IF op='claim_review_garden_restore' THEN
-  IF coalesce(lease,'')='' OR coalesce(p->>'workerId','')='' THEN RAISE EXCEPTION 'restore lease required'; END IF;
-  UPDATE otl.community_garden_retirements SET status='restore_claimed',worker_id=p->>'workerId',lease_token=lease,
-   lease_expires_at=transaction_timestamp()+interval '5 minutes',updated_at=transaction_timestamp()
-   WHERE team_id=t AND channel_id=c AND retirement_id=(p->>'retirementId')::bigint AND status IN ('retired','restore_failed')
-   RETURNING * INTO retirement;
+  IF coalesce(lease,'')='' OR coalesce(p->>'workerId','')='' OR coalesce(p->>'now','')=''
+   THEN RAISE EXCEPTION 'restore lease required'; END IF;
+  now_at:=(p->>'now')::timestamptz;
+  SELECT * INTO retirement FROM otl.community_garden_retirements r
+   WHERE r.team_id=t AND r.channel_id=c AND r.retirement_id=(p->>'retirementId')::bigint
+    AND (r.status IN ('retired','restore_failed')
+      OR (r.status='restore_claimed' AND r.lease_expires_at<=now_at))
+   FOR UPDATE SKIP LOCKED;
   IF NOT FOUND THEN RETURN 'null'::jsonb; END IF;
+  UPDATE otl.community_garden_retirements SET status='restore_claimed',worker_id=p->>'workerId',lease_token=lease,
+   lease_expires_at=now_at+interval '5 minutes',updated_at=now_at
+   WHERE team_id=t AND channel_id=c AND retirement_id=retirement.retirement_id
+   RETURNING * INTO retirement;
   RETURN jsonb_build_object('retirementId',retirement.retirement_id,'messageTs',retirement.old_message_ts,
    'action','update','preserveReplies',true,'restorePayload',retirement.old_payload);
  END IF;

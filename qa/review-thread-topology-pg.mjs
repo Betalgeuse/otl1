@@ -117,9 +117,13 @@ try {
   const retirement = await call("claim_review_garden_retirement", { teamId: "T-REVIEW", channelId: "C-REVIEW", now: "2026-09-18T12:01:00Z", workerId: "qa", leaseToken: "retire-1" });
   assert.deepEqual({ messageTs: retirement.messageTs, replacementMessageTs: retirement.replacementMessageTs, action: retirement.action, preserveReplies: retirement.preserveReplies, payload: retirement.restorePayload.text }, { messageTs: "1700.1", replacementMessageTs: "1800.3", action: "update", preserveReplies: true, payload: "old" });
   await call("finish_review_garden_retirement", { teamId: "T-REVIEW", channelId: "C-REVIEW", retirementId: retirement.retirementId, leaseToken: "retire-1", status: "retired" });
-  const restore = await call("claim_review_garden_restore", { teamId: "T-REVIEW", channelId: "C-REVIEW", retirementId: retirement.retirementId, workerId: "qa", leaseToken: "restore-1" });
-  assert.equal(restore.restorePayload.text, "old");
-  await call("finish_review_garden_restore", { teamId: "T-REVIEW", channelId: "C-REVIEW", retirementId: retirement.retirementId, leaseToken: "restore-1", status: "restored" });
+  const restore = await call("claim_review_garden_restore", { teamId: "T-REVIEW", channelId: "C-REVIEW", retirementId: retirement.retirementId, workerId: "qa-lost", leaseToken: "restore-1", now: "2026-09-18T12:02:00Z" });
+  assert.deepEqual({ messageTs: restore.messageTs, action: restore.action, preserveReplies: restore.preserveReplies, payload: restore.restorePayload.text }, { messageTs: "1700.1", action: "update", preserveReplies: true, payload: "old" });
+  const reclaimedRestore = await call("claim_review_garden_restore", { teamId: "T-REVIEW", channelId: "C-REVIEW", retirementId: retirement.retirementId, workerId: "qa-recovery", leaseToken: "restore-2", now: "2026-09-18T12:07:01Z" });
+  assert.equal(reclaimedRestore.restorePayload.text, "old");
+  assert.equal(await call("finish_review_garden_restore", { teamId: "T-REVIEW", channelId: "C-REVIEW", retirementId: retirement.retirementId, leaseToken: "restore-1", status: "restored" }), false);
+  assert.equal(await call("finish_review_garden_restore", { teamId: "T-REVIEW", channelId: "C-REVIEW", retirementId: retirement.retirementId, leaseToken: "restore-2", status: "restored" }), true);
+  assert.equal(await call("finish_review_garden_restore", { teamId: "T-REVIEW", channelId: "C-REVIEW", retirementId: retirement.retirementId, leaseToken: "restore-2", status: "restored" }), false);
 
   const beforeInvalid = await psql("SELECT count(*) FROM otl.community_review_roots");
   await assert.rejects(call("bind_review_root", { teamId: "T-REVIEW", channelId: "C-REVIEW", userId: "UADMIN", date: "bad", messageTs: "bad" }), /date|timestamp|invalid/i);
