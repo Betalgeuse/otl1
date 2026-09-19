@@ -16,14 +16,20 @@
 | Mist | `--mist` | `#d9ded5` |
 | Leaf | `--leaf` | `#b9d885` |
 | Rule | `--rule` | `rgba(22, 35, 30, .32)` |
+| Return field | `--return-field` | `#d8ddd4` |
+| Preview paper | `--paper-preview` | `#fffdf5` |
+| Focus ink | `--focus-ink` | `#387149` |
+| Muted UI ink | `--ink-muted` / `--ink-subtle` | `#43534b` / `#526158` |
+| Grass illustration | `--grass-dark` / `--grass-mid` / `--grass-bed` | `#39764d` / `#5f9b59` / `#83ad6d` |
+| Inverse rule | `--rule-inverse` / `--rule-inverse-strong` | paper at 40% / 50% |
 | Sans | `--sans` | system Korean UI stack |
 | Display | `--display` | Georgia and Korean serif fallbacks |
 
-The spacing scale is 8, 16, 24, 32, 48, 72, and 112 pixels. Every surface is square and flat; rules describe boundaries instead of cards or shadows.
+The spacing scale is `--space-8`, `--space-16`, `--space-24`, `--space-32`, `--space-48`, `--space-72`, and `--space-112`. Named component increments keep the smaller optical gaps and editorial geometry inspectable without introducing literal values into rules. Every surface is square and flat; rules describe boundaries instead of cards or shadows.
 
 ## 2. Type and layout
 
-Display type uses a tight serif stack at 56–88px desktop and 38–54px mobile. Interface and reading copy use the system Korean UI stack. A maximum 1240px grid holds 12 columns; editorial chapters use a 3-column rail and 7-column reading block, then become one column under 760px.
+Display type uses `--display-hero` and `--display-section`, a tight serif stack at 56–88px desktop and 38–54px mobile. Interface and reading copy use `--type-11` through `--type-21` in the system Korean UI stack; `--type-caption`, `--type-label`, `--type-body`, and `--type-reading` alias the recurring role sizes. A maximum 1240px grid holds 12 columns; editorial chapters use a 3-column rail and 7-column reading block, then become one column under 760px.
 
 ## 3. Primitives
 
