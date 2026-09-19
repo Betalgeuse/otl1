@@ -54,6 +54,12 @@ const env = {
   COMMUNITY_INTRO_CHANNEL_ID: "CINTRO",
   SLACK_TEAM_ID: "TQA",
 };
+const emoji = {
+  otl_cheer: "https://emoji.slack-edge.com/cheer.png",
+  otl_wave: "https://emoji.slack-edge.com/wave.png",
+  otl_star: "https://emoji.slack-edge.com/star.png",
+  otl_dance: "https://emoji.slack-edge.com/dance.png",
+};
 const scope = { teamId: "TQA", channelId: "CINTRO", userId: "UNEW" };
 const context = {
   env,
@@ -66,9 +72,10 @@ const context = {
 };
 const original = globalThis.fetch;
 globalThis.fetch = async (url, options) => {
-  const body = JSON.parse(options.body);
+  const body = options.body ? JSON.parse(options.body) : null;
   const method = new URL(url).pathname.split("/").at(-1);
   calls.push({ method, body });
+  if (method === "emoji.list") return Response.json({ ok: true, emoji });
   return Response.json({ ok: true, ts: "2.000001", message_ts: "2.000001" });
 };
 try {
@@ -134,6 +141,14 @@ try {
   assert.equal(calls.filter((call) => call.method === "chat.postMessage").length, 1);
   assert.equal(current.revision, 1);
   assert.equal(current.messageTs, "2.000001");
+  const reactions = calls.filter((call) => call.method === "reactions.add");
+  assert.equal(reactions.length, 3, "a published introduction receives three custom reactions");
+  assert.equal(new Set(reactions.map((call) => call.body.name)).size, 3);
+  for (const reaction of reactions) {
+    assert.ok(Object.hasOwn(emoji, reaction.body.name));
+    assert.equal(reaction.body.channel, "CINTRO");
+    assert.equal(reaction.body.timestamp, current.messageTs);
+  }
 
   await introductionModal(context, "TRIGGER2");
   modal = calls.at(-1).body.view;
@@ -151,12 +166,17 @@ try {
   assert.equal(current.intro, "데이터 제품과 사람을 연결하는 일을 하고 있어요.");
   assert.equal(current.details, "https://portfolio.example");
   assert.equal(calls.filter((call) => call.method === "chat.postMessage").length, 1);
+  assert.equal(
+    calls.filter((call) => call.method === "reactions.add").length,
+    3,
+    "editing preserves the original three reactions instead of accumulating more",
+  );
 
   await submitIntroduction(context, "STALE", parseIntroduction(edited), 1);
   assert.equal(current.revision, 2, "stale modal cannot overwrite a newer introduction");
   assert.match(calls.at(-1).body.text, /먼저 바뀌었어요/);
   console.log(
-    "PASS self-introduction: 180-char multiline text, optional public info, same-message edit, stale revision block",
+    "PASS self-introduction: multiline text, public info, three custom reactions, edit preserves reactions, stale revision block",
   );
 } finally {
   globalThis.fetch = original;

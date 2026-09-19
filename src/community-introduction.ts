@@ -1,6 +1,7 @@
+import { randomCustomEmoji } from "./community-emoji";
 import { escapeSlackText } from "./community-messages";
 import { type CommunityContext, ephemeral } from "./community-runtime";
-import { callSlack } from "./community-social";
+import { addReactions, callSlack } from "./community-social";
 import type { MemberIntroduction } from "./community-types";
 import { InputError, type Json, object, string } from "./input";
 import { openView } from "./slack-api";
@@ -192,6 +193,12 @@ export async function submitIntroduction(
       messageTs: string(sent.ts),
     });
     if (!result) throw new InputError("자기소개 저장 결과를 확인할 수 없어요.");
+    if (!prepared.messageTs)
+      await addReactions(context.env.SLACK_BOT_TOKEN, {
+        channel: channelId,
+        ts: string(sent.ts),
+        names: await randomCustomEmoji(context.env.SLACK_BOT_TOKEN),
+      });
     await ephemeral(context, {
       text: prepared.messageTs ? "자기소개를 수정했어요." : "자기소개를 올렸어요.",
     });
