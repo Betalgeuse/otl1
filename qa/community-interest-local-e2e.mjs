@@ -9,6 +9,8 @@ import siteWorker from '../site/src/index.ts';
 mock.module('cloudflare:workers', () => ({ DurableObject: class {} }));
 const { handleRequest } = await import('../src/index.ts');
 const { runInterestDue } = await import('../src/community-interest-due.ts');
+const { runMembershipDue } = await import('../src/community-membership-schedule.ts');
+const { NeonStore } = await import('../src/store.ts');
 const { reconcileInterestIntake } = await import('../src/community-interest-reconcile.ts');
 const { openCapability } = await import('../site/src/index.ts');
 const { sign } = await import('../src/signing.ts');
@@ -32,6 +34,7 @@ const messages = [];
 let privateAdminChannel = true;
 let loseSubmitResponse = false;
 let failNextCiphertextPut = false;
+let failDeleteKey = null;
 const bucket = {
   async put(key, bytes, options) {
     if (failNextCiphertextPut && key.startsWith('interest-private/')) {
@@ -46,7 +49,10 @@ const bucket = {
     const bytes = objects.get(key);
     return bytes ? { key, etag: 'one', arrayBuffer: async () => bytes.slice(0) } : null;
   },
-  async delete(key) { objects.delete(key); },
+  async delete(key) {
+    if (key === failDeleteKey) { failDeleteKey = null; throw new Error('R2 unavailable'); }
+    objects.delete(key);
+  },
   async list({ prefix, limit, cursor }) {
     const keys = [...objects.keys()].filter((key) => key.startsWith(prefix) && (!cursor || key > cursor)).sort();
     return { objects: keys.slice(0, limit).map((key) => ({ key })), truncated: keys.length > limit,
@@ -128,10 +134,18 @@ try {
   await sql(`CREATE DATABASE ${database} OWNER ${owner}`);
   sqlEnv = { ...cluster, PGUSER: owner, PGDATABASE: database };
   const migrations = (await readdir(join(root, 'migrations'))).filter((name) => /^\d{3}_.*\.sql$/.test(name)).sort();
-  for (const migration of migrations) {
+  const upgrade = process.env.INTEREST_MIGRATION_MODE === 'upgrade';
+  for (const migration of migrations.filter((name) => !upgrade || !name.startsWith('038_'))) {
     if (migration.startsWith('006_')) await run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-f', `migrations/${migration}`, '-f', 'migrations/007_normalized_legacy.sql']);
     else if (!migration.startsWith('007_')) await run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-f', `migrations/${migration}`]);
   }
+  if (upgrade) {
+    assert.equal(await sql("SELECT count(*) FROM otl.schema_migrations WHERE version='037-interest-requests'"), '1');
+    await assert.rejects(sql(`SELECT otl.interest_retention_next_due(${quote(JSON.stringify({ teamId: "TREF" }))}::jsonb)`),
+      /does not exist/);
+    await run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-f', 'migrations/038_interest_retention_due.sql']);
+  }
+  assert.equal(await sql("SELECT count(*) FROM otl.schema_migrations WHERE version='038-interest-retention-due'"), '1');
   await run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-f', 'qa/referral-storage-fixture.sql']);
   await sql("INSERT INTO otl.referral_admins(team_id,user_id) VALUES('TREF','UADMIN')");
   await sql(`CREATE ROLE ${runtimeRole} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT PASSWORD NULL`);
@@ -144,6 +158,8 @@ try {
   const disabledSite = await siteWorker.fetch(new Request('https://example.com/interest'),
     { ...siteEnv, PUBLIC_INTEREST_ENABLED: 'false' });
   assert.equal(disabledSite.status, 503);
+  assert.equal((await siteWorker.fetch(new Request('https://example.com/interest',
+    { method: 'POST', body: new FormData() }), { ...siteEnv, PUBLIC_INTEREST_ENABLED: 'false' })).status, 503);
   assert.equal((await core.fetch(new Request('https://core.invalid/internal/interest/submit',
     { method: 'POST', body: '{}' }))).status, 401);
   const page = await site('/interest');
@@ -176,6 +192,18 @@ try {
   await reconcileInterestIntake(coreEnv, Date.now()+16*60_000);
   assert.match(receiptPath, /^\/receipt\/INT-/);
   assert.equal(await sql("SELECT count(*) FROM otl.interest_requests WHERE team_id='TREF'"), '1');
+  const dueInput = `${quote(JSON.stringify({ teamId: "TREF" }))}::jsonb`;
+  sqlEnv = { ...cluster, PGUSER: runtimeRole, PGDATABASE: database };
+  const due = JSON.parse(await sql(`SELECT otl.interest_retention_next_due(${dueInput})`));
+  assert.ok(due.nextDue);
+  const crossTeam = JSON.parse(await sql(`SELECT otl.interest_retention_next_due(${quote(JSON.stringify({ teamId: "TOTHER" }))}::jsonb)`));
+  assert.equal(crossTeam.nextDue, null);
+  await assert.rejects(sql("SELECT * FROM otl.interest_requests"));
+  sqlEnv = { ...cluster, PGUSER: "otl_referral_admin_login", PGDATABASE: database };
+  await assert.rejects(sql(`SELECT otl.interest_retention_next_due(${dueInput})`));
+  sqlEnv = { ...cluster, PGUSER: owner, PGDATABASE: database };
+  console.log(JSON.stringify({ scenario: 'interest-due-role-matrix', migration: upgrade ? 'upgrade' : 'fresh',
+    runtimeDue: true, crossTeamEmpty: true, adminDenied: true, tableDenied: true }));
   assert.equal(await sql("SELECT count(*) FROM otl.referral_requests WHERE team_id='TREF'"), '0');
   assert.equal(JSON.parse(await sql("SELECT otl.referral_capacity_status('TREF','UREFERRER')")).reserved, 0);
   assert.equal([...objects.keys()].filter((key) => key.startsWith('interest-private/')).length, 1);
@@ -268,16 +296,63 @@ try {
   await reconcileInterestIntake(coreEnv, Date.now()+16*60_000);
   assert.equal([...objects.keys()].filter((key) => key.startsWith('interest-private-reconcile/')).length, 0);
   const firstObjectRef = await sql("SELECT opaque_ref FROM otl.interest_private_payloads pp JOIN otl.interest_requests ir USING(team_id,interest_id) WHERE ir.team_id='TREF' AND ir.state='withdrawn'");
-  await runInterestDue(coreEnv, Date.now()+25*60*60_000);
+  const referralObjectRef = await sql(`SELECT opaque_ref FROM otl.referral_private_payloads WHERE request_id='${attachedId}'`);
+  assert.equal(objects.has(referralObjectRef), true);
+  const orphanId = 'IREQ-ORPHAN-01';
+  const orphanRef = `interest-private/${orphanId}/revision-0-local`;
+  const orphanBytes = new Uint8Array([11, 22, 33]);
+  const digest = async (bytes) => Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
+  objects.set(orphanRef, orphanBytes.buffer);
+  const orphanMarker = JSON.stringify({ interestId: orphanId, submissionKeyDigest: 'a'.repeat(64),
+    objectDigest: await digest(orphanBytes), opaqueRef: orphanRef,
+    createdAt: new Date(Date.now()+25*60*60_000-20*60_000).toISOString(), status: 'pending' });
+  const orphanMarkerRef = `interest-private-reconcile/v1/${await digest(new TextEncoder().encode('TREF'))}/${orphanId}.json`;
+  objects.set(orphanMarkerRef, new TextEncoder().encode(JSON.stringify({ marker: orphanMarker,
+    signature: await sign(orphanMarker, secret) })).buffer);
+  const closedEnv = { ...coreEnv, PUBLIC_INTEREST_ENABLED: 'false', REFERRALS_ENABLED: 'false' };
+  const purgeAt = Date.now()+25*60*60_000;
+  failDeleteKey = firstObjectRef;
+  const messagesAtRollback = messages.length;
+  const closedTick = await runMembershipDue(closedEnv, new NeonStore(closedEnv.DATABASE_URL),
+    'CREF', purgeAt);
+  assert.equal(objects.has(firstObjectRef), true);
+  assert.equal(await sql("SELECT purge_status FROM otl.interest_private_payloads WHERE opaque_ref='" + firstObjectRef + "'"), 'failed');
+  assert.equal(objects.has(orphanRef), false);
+  assert.equal(objects.has(orphanMarkerRef), false);
+  for (const [missing, envPatch, offset] of [
+    ['kek', { INVITE_PRIVATE_KEK: undefined }, 1],
+    ['r2', { INVITE_PRIVATE_OBJECTS: undefined }, 2],
+    ['db', { INTEREST_RUNTIME_DATABASE_URL: undefined }, 3],
+  ]) {
+    const tickAt = purgeAt+offset*60_000;
+    const retry = await runMembershipDue({ ...closedEnv, ...envPatch },
+      new NeonStore(closedEnv.DATABASE_URL), 'CREF', tickAt);
+    assert.ok(retry.nextDue !== null && retry.nextDue <= tickAt+60_000, missing);
+    assert.equal(objects.has(firstObjectRef), true);
+    assert.equal(await sql("SELECT purge_status FROM otl.interest_private_payloads WHERE opaque_ref='" + firstObjectRef + "'"), 'failed');
+  }
+  await runMembershipDue(closedEnv, new NeonStore(closedEnv.DATABASE_URL), 'CREF', purgeAt+6*60_000);
   assert.equal(objects.has(firstObjectRef), false);
+  assert.equal(objects.has(referralObjectRef), false);
+  assert.equal(await sql(`SELECT purge_status FROM otl.referral_private_payloads WHERE request_id='${attachedId}'`), 'purged');
   assert.equal(await sql("SELECT purge_status FROM otl.interest_private_payloads WHERE opaque_ref='" + firstObjectRef + "'"), 'purged');
+  assert.equal(messages.length, messagesAtRollback);
+  assert.ok(closedTick.nextDue !== null && closedTick.nextDue <= purgeAt+5*60_000+1000);
+  const pendingAt30Days = await runInterestDue(closedEnv, Date.now()+31*24*60*60_000);
+  assert.equal(await sql(`SELECT state FROM otl.interest_requests WHERE interest_id='${falseInterestId}'`), 'expired');
+  assert.equal(pendingAt30Days.processed, 0);
+  await runInterestDue(closedEnv, Date.now()+370*24*60*60_000);
+  assert.equal(await sql("SELECT count(*) FROM otl.interest_requests WHERE team_id='TREF'"), '0');
+  assert.equal(await sql("SELECT count(*) FROM otl.interest_service_nonces WHERE team_id='TREF'"), '0');
+  assert.equal(messages.length, messagesAtRollback);
+
   const dump = (await run('pg_dump', ['--data-only', '--schema=otl', database])).stdout;
   assert.ok(!dump.includes('interest-e2e@example.com') && !dump.includes('<@UVICTIM>')
     && !dump.includes('Learn together'));
   assert.ok(messages.every((entry) => entry.method === '/api/chat.postMessage'));
   console.log(JSON.stringify({ scenario: 'replay-consent-quota-recovery', replay: true, duplicateNoCapability: true,
     falseShareBlocked: true, reservationAfterApproval: 1, releasedAfterWithdrawal: true,
-    recoveredCapability: true, r2MarkerAdopted: true, sqlPiiAbsent: true, r2FailureNoRow: true, retentionObjectPurged: true, defaultOff: true, publicAdminChannelRejected: true }));
+    recoveredCapability: true, r2MarkerAdopted: true, sqlPiiAbsent: true, r2FailureNoRow: true, retentionObjectPurged: true, rollbackExpiryAndAudit: true, referralRollbackPurged: true, r2RetryAndOrphanReconciled: true, missingBindingRetries: true, defaultOff: true, publicAdminChannelRejected: true }));
   console.log(JSON.stringify({ scenario: 'signed-private-introduction-attach-withdraw', prompt: 1, bridge: 1, pending: true, withdrawn: true, adminChannel: 'CADMIN' }));
   console.log('INTEREST_LOCAL_E2E=PASS');
 } finally {

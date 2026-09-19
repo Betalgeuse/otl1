@@ -37,8 +37,15 @@ const focusedQa = [
   "referral-capacity-pg", "version-map",
 ];
 const injection = process.argv.find((arg) => arg.startsWith("--inject="))?.slice(9);
+const existingPgOnly = process.argv.includes("--existing-pg-only");
+const initdbQa = new Set([
+  "member-lifecycle-pg", "lifecycle-delivery-pg", "lifecycle-admin-security",
+  "referral-storage-pg", "referral-retention-pg", "community-runtime-pg",
+  "review-thread-topology-pg", "garden-projection-upgrade-pg",
+  "membership-reminder-audit-pg", "community-guide-security-pg", "referral-capacity-pg",
+]);
 const injections = new Set([
-  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-binding",
+  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-038", "missing-binding",
   "missing-bootstrap", "missing-interest-admin-credential", "missing-interest-flag",
   "missing-interest-secret", "missing-role", "missing-secret", "pii-leak", "rollback-mismatch",
   "schema-head", "secret-leak", "turnstile-secret-in-vars", "turnstile-secret-leak", "turnstile-test-key",
@@ -173,8 +180,8 @@ async function cleanupDatabases() {
   receipt.checks.localCleanup = { exit: 0, observed: "disposable databases and roles removed" };
 }
 function preflight(config, site, vars, siteWorker, releaseNames = release) {
-  assert.equal(migrations.length, 37, "schema head must be 037");
-  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037"]);
+  assert.equal(migrations.length, 38, "schema head must be 038");
+  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038"]);
   assert.equal(site.services?.find((item) => item.binding === "CORE")?.service, config.name, "CORE service binding missing");
   assert.equal(site.assets?.binding, "ASSETS", "ASSETS binding missing");
   assert.ok(config.r2_buckets?.some((item) => item.binding === "INVITE_PRIVATE_OBJECTS"), "invite R2 binding missing");
@@ -226,6 +233,7 @@ try {
   await expectFailure("missing-interest-admin-credential", async () => preflight(config, site, missingInterestAdminCredential, siteWorker));
   await expectFailure("missing-036", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("036_"))));
   await expectFailure("missing-037", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("037_"))));
+  await expectFailure("missing-038", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("038_"))));
   await expectFailure("turnstile-test-key", async () => preflight(config, testKeySite, vars, siteWorker));
   await expectFailure("turnstile-secret-in-vars", async () => preflight(config, secretVarSite, vars, siteWorker));
   if (injection === "missing-binding") preflight(config, alternate, vars, siteWorker);
@@ -235,6 +243,7 @@ try {
   if (injection === "missing-interest-admin-credential") preflight(config, site, missingInterestAdminCredential, siteWorker);
   if (injection === "missing-036") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("036_")));
   if (injection === "missing-037") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("037_")));
+  if (injection === "missing-038") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("038_")));
   if (injection === "turnstile-test-key") preflight(config, testKeySite, vars, siteWorker);
   if (injection === "turnstile-secret-in-vars") preflight(config, secretVarSite, vars, siteWorker);
   preflight(config, site, vars, siteWorker);
@@ -289,12 +298,12 @@ try {
   await check("snapshot-035", join(pgBin, "pg_dump"), ["-Fc", "--no-owner", "--no-acl", "-f", join(temp, "snapshot.dump"), primaryDb], { env: pgEnv });
   await apply(primaryDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
   if (injection === "schema-head")
-    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='037-interest-requests'"]);
-  await assertSchemaHead(primaryDb, "037-interest-requests");
-  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-7])-'"), "9");
+    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='038-interest-retention-due'"]);
+  await assertSchemaHead(primaryDb, "038-interest-retention-due");
+  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-8])-'"), "10");
   const after = await digest(primaryDb);
   assert.deepEqual(after, before, "protected rows changed during upgrade");
-  receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "037", protected: before };
+  receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "038", protected: before };
   if (injection === "missing-role")
     await psql(primaryDb, ["-c", "REVOKE otl_interest_member FROM otl_interest_member_login"]);
   await expectFailure("migration-conflict", () => psql(primaryDb, ["-f", "migrations/037_interest_requests.sql"]));
@@ -332,26 +341,31 @@ try {
   assert.equal(await scalar(rollbackDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '036-%'"), "0");
   await psql(rollbackDb, ["-c", "DROP TABLE otl.referral_capacity_defaults"]);
   await apply(rollbackDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
-  await assertSchemaHead(rollbackDb, "037-interest-requests");
+  await assertSchemaHead(rollbackDb, "038-interest-retention-due");
   assert.deepEqual(await digest(rollbackDb), before, "forward repair changed protected rows");
   assert.deepEqual(await seedAdditive(rollbackDb), additiveBefore, "forward repair changed additive row contract");
-  receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "037" };
+  receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "038" };
   await apply(freshDb, migrations);
-  await assertSchemaHead(freshDb, "037-interest-requests");
+  await assertSchemaHead(freshDb, "038-interest-retention-due");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '037-%'"), "1");
-  receipt.checks.freshInstall = { exit: 0, schemaHead: "037" };
+  assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '038-%'"), "1");
+  receipt.checks.freshInstall = { exit: 0, schemaHead: "038" };
   await cleanupDatabases();
   await check("full-check", "bun", ["run", "check"]);
   if (injection === "build-failure") await check("site-build", join(root, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "missing-site-config.jsonc"]);
   await check("site-build", join(root, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "site/wrangler.jsonc"]);
-  for (const name of focusedQa) await check(`qa/${name}`, "bun", [`qa/${name}.mjs`]);
+  for (const name of focusedQa) {
+    if (existingPgOnly && initdbQa.has(name)) continue;
+    await check(`qa/${name}`, "bun", [`qa/${name}.mjs`]);
+  }
+  receipt.checks.qaScope = { existingPgOnly, omittedInitdbQa: existingPgOnly ? [...initdbQa] : [] };
   const exportDir = join(temp, "public");
   await check("public-export", "node", ["scripts/export-public.mjs", exportDir]);
   for (const name of ["migrations/036_referral_capacity.sql", "migrations/037_interest_requests.sql",
-    "scripts/bootstrap-referral-admin-db-role.mjs", "site/dist/interest.html", "site/dist/receipt.html",
+    "migrations/038_interest_retention_due.sql", "scripts/bootstrap-referral-admin-db-role.mjs", "site/dist/interest.html", "site/dist/receipt.html",
     "site/dist/assets/otl1-emoji/blob_smiley.png"])
     assert.ok((await readFile(join(exportDir, name))).length > 0, `${name} missing from public export`);
-  receipt.checks.publicRequiredFiles = { exit: 0, observed: "036,037,bootstrap,interest,receipt,emoji present" };
+  receipt.checks.publicRequiredFiles = { exit: 0, observed: "036,037,038,bootstrap,interest,receipt,emoji present" };
   receipt.checks.publicLeakScan = { exit: 0, scannedFiles: await scanPublicExport(exportDir) };
   await check("public-check", "bun", ["run", "check"], { cwd: exportDir });
   await check("public-site-build", join(exportDir, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "site/wrangler.jsonc"], { cwd: exportDir });

@@ -56,6 +56,7 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/035_lifecycle_admin_login.sql",
   "migrations/036_referral_capacity.sql",
   "migrations/037_interest_requests.sql",
+  "migrations/038_interest_retention_due.sql",
 ];
 
 // `src` and `site` are copied as directories, but these paths keep the membership

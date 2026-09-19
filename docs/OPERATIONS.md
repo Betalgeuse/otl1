@@ -138,7 +138,7 @@ DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 �
 
 관심 문의가 `introduction_verified`가 된 뒤에만 별도의 일반 pending 소개 신청 하나를 붙일 수 있습니다. 이 단계는 한도를 예약하지 않던 문의를 새 소개 신청으로 바꾸는 것이며, 이후 `approved` 때만 reservation이 생깁니다. 승인 뒤 Slack 초대는 계속 Free Slack UI에서 수동으로 보내고, `team_join` 관찰 전에는 가입으로 쓰지 않습니다.
 
-보존과 정리는 신청 상태별로 실행합니다. pending/approved payload는 30일, rejected/withdrawn payload는 24시간, joined payload는 가입 뒤 7일 안에 R2에서 정리합니다. 비민감 decision/security audit는 12개월만 보존합니다. 암호문·nonce·digest·객체 경로·email·Turnstile token·Slack payload는 운영 로그와 공개 export에 쓰지 않습니다. purge 실패는 재시도 가능한 outbox 상태로 남기고, 삭제가 확인될 때까지 성공으로 쓰지 않습니다.
+보존과 정리는 `PUBLIC_INTEREST_ENABLED` 또는 `REFERRALS_ENABLED`를 닫은 뒤에도 기존 신청에 대해 계속 실행합니다. 롤백 중에도 `INTEREST_RUNTIME_DATABASE_URL`, 일반 runtime DB 연결, 비공개 R2 바인딩, `INVITE_PRIVATE_KEK`, `INVITE_PRIVATE_KEK_VERSION`, `SITE_CORE_HMAC_SECRET`을 유지하고 */5 Cron과 Community Clock을 가동합니다. 누락되거나 DB/R2가 실패하면 정리 작업은 실패로 기록하고 다음 알람에서 재시도합니다. 새 공개 문의·소개 접수와 Slack 알림만 닫힙니다. 기존 신청의 보존 기간은 상태별로 적용합니다. pending/approved payload는 30일, rejected/withdrawn payload는 24시간, joined payload는 가입 뒤 7일 안에 R2에서 정리합니다. 비민감 decision/security audit는 12개월만 보존합니다. 암호문·nonce·digest·객체 경로·email·Turnstile token·Slack payload는 운영 로그와 공개 export에 쓰지 않습니다. purge 실패는 재시도 가능한 outbox 상태로 남기고, 삭제가 확인될 때까지 성공으로 쓰지 않습니다.
 
 장애가 나면 먼저 feature flag를 닫고, 같은 버전의 core/site 이전 배포로 되돌릴 수 있는지와 schema의 forward repair 필요성을 분리합니다. migration은 운영 DB에서 자동 down하지 않습니다. 잘못 분류된 lifecycle은 근거가 있는 관리자 correction만 같은 시즌을 복원할 수 있고, 과거 기록을 지우지 않습니다. canonical 잔디 교체는 새 review-thread 게시를 Slack Web에서 확인한 뒤에만 옛 봇 이미지를 그 메시지의 저장된 payload로 복구하거나 forward repair 합니다. 어떤 복구도 Slack 강퇴·계정 비활성화·공개 초대 링크 발급을 포함하지 않습니다.
 
@@ -150,4 +150,4 @@ DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 �
 
 전용 연결은 Slack 서명이 검증되고, 설정된 workspace·공개 채널과 다른 비공개 admin 채널·지정 관리자 ID가 모두 일치한 `생애주기` 명령에서만 사용합니다. 운영자는 후보를 읽거나 dormant 상태와 revision 및 근거 키가 일치할 때만 `restore_error`를 기록할 수 있습니다. 범용 runtime 관리자 권한, 다른 회원·채널·workspace 조회, 임의 상태 전환 권한은 만들지 않습니다.
 
-롤백은 먼저 lifecycle feature flag와 전용 `LIFECYCLE_ADMIN_DATABASE_URL`, 소개 플래그와 `REFERRAL_ADMIN_DATABASE_URL`, 관심 문의 플래그와 interest 역할 비밀을 닫아 새 관리 호출을 멈춥니다. migration 029–037은 운영 DB에서 down하지 않으며, 필요한 복구는 audit를 보존한 forward repair로만 합니다. 다시 열기 전에는 새 자격증명을 설치하고 비공개 Slack 관리자 gate와 후보·정정 경로를 재검증합니다. 이 절은 v0.0.56–v0.0.66의 미출시 runbook이며, 자격증명 설치만으로 출시를 선언하지 않습니다.
+롤백은 먼저 lifecycle feature flag와 전용 `LIFECYCLE_ADMIN_DATABASE_URL`, 소개 플래그와 `REFERRAL_ADMIN_DATABASE_URL`, 관심 문의 플래그와 interest admin/member 역할 비밀을 닫아 새 관리 호출을 멈춥니다. 정리 전용 interest runtime 자격증명과 R2/KEK/HMAC 바인딩은 기존 암호문·감사 기록의 정리가 끝날 때까지 유지합니다. migration 029–038은 운영 DB에서 down하지 않으며, 필요한 복구는 audit를 보존한 forward repair로만 합니다. 다시 열기 전에는 새 자격증명을 설치하고 비공개 Slack 관리자 gate와 후보·정정 경로를 재검증합니다. 이 절은 v0.0.56–v0.0.66의 미출시 runbook이며, 자격증명 설치만으로 출시를 선언하지 않습니다.

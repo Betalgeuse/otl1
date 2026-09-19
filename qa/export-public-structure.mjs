@@ -30,6 +30,7 @@ assert.deepEqual(PUBLIC_RUNTIME_MIGRATION_PATHS, [
   "migrations/035_lifecycle_admin_login.sql",
   "migrations/036_referral_capacity.sql",
   "migrations/037_interest_requests.sql",
+  "migrations/038_interest_retention_due.sql",
 ]);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-lifecycle-admin-db-role.mjs"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-referral-admin-db-role.mjs"), true);
@@ -42,6 +43,10 @@ assert.doesNotThrow(() => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPO
 assert.throws(
   () => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPORT_SOURCES, (path) => path !== "migrations/036_referral_capacity.sql"),
   /Missing required public export source: migrations\/036_referral_capacity\.sql/,
+);
+assert.throws(
+  () => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPORT_SOURCES, (path) => path !== "migrations/038_interest_retention_due.sql"),
+  /Missing required public export source: migrations\/038_interest_retention_due\.sql/,
 );
 assert.throws(
   () =>

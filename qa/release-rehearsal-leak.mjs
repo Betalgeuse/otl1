@@ -29,6 +29,15 @@ try {
   assert.equal(interestReceipt.checks["missing-binding"].observed, "rejected");
   assert.equal(interestReceipt.checks.localCleanup, undefined);
 
+  const due = spawnSync(process.execPath, [
+    "scripts/rehearse-membership-site-release.mjs", "--inject=missing-038", `--receipt=${path}`,
+  ], { cwd: root, encoding: "utf8", timeout: 10_000 });
+  const dueReceipt = JSON.parse(readFileSync(path, "utf8"));
+  assert.equal(due.status, 1);
+  assert.equal(dueReceipt.status, "failed");
+  assert.equal(dueReceipt.checks["missing-038"].observed, "rejected");
+  assert.equal(dueReceipt.checks.localCleanup, undefined);
+
   const readbackPath = join(temp, "rollback.json");
   writeFileSync(readbackPath, JSON.stringify({
     scenario: "read-only-current-rollback-version-readback", checkedAt: new Date().toISOString(),
@@ -45,7 +54,7 @@ try {
   assert.equal(schemaReceipt.checks.localCleanup.exit, 0);
   assert.equal(schemaReceipt.checks.upgrade, undefined);
   assert.equal(schemaReceipt.checks["full-check"], undefined);
-  console.log("PASS synthetic secret and missing interest admin credential rejected; schema marker mismatch detected in disposable PostgreSQL and cleaned");
+  console.log("PASS synthetic secret, missing interest admin credential and missing 038 rejected; schema marker mismatch detected in disposable PostgreSQL and cleaned");
 } finally {
   rmSync(temp, { recursive: true, force: true });
 }

@@ -54,7 +54,7 @@ export async function reconcileInterestIntake(
   readonly possiblyMore: boolean;
   readonly nextCursor: string | null;
 }> {
-  if (env.PUBLIC_INTEREST_ENABLED !== "true" || env.DATABASE_MAINTENANCE === "true")
+  if (env.DATABASE_MAINTENANCE === "true")
     return { processed: 0, possiblyMore: false, nextCursor: null };
   if (
     !env.INVITE_PRIVATE_OBJECTS ||

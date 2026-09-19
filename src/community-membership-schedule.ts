@@ -125,60 +125,62 @@ export async function runMembershipDue(
         possiblyMore ||= result.possiblyMore;
       });
     }
-    if (env.INVITE_PRIVATE_OBJECTS && env.SITE_CORE_HMAC_SECRET) {
-      await attempt("referral_reconcile", async () => {
-        const reconciled = await reconcileInvitePrivateIntake(env, referral, now, cursor);
-        possiblyMore ||= reconciled.possiblyMore;
-        nextCursor = reconciled.nextCursor;
-      });
-    }
-    const retention = await runRetentionQueues(db, env.SLACK_TEAM_ID, now);
-    possiblyMore ||= retention.possiblyMore;
-    failed ||= retention.failed;
+  }
+  {
+    const referral = new CommunityReferralStore(db, {
+      teamId: env.SLACK_TEAM_ID,
+      channelId,
+      userId: env.COMMUNITY_ADMIN_ID ?? "",
+    });
+    await attempt("referral_reconcile", async () => {
+      const reconciled = await reconcileInvitePrivateIntake(env, referral, now, cursor);
+      possiblyMore ||= reconciled.possiblyMore;
+      nextCursor = reconciled.nextCursor;
+    });
     const bucket = env.INVITE_PRIVATE_OBJECTS;
-    if (bucket) {
-      await attempt("referral_purge", async () => {
-        for (let i = 0; i < BATCH; i += 1) {
-          const raw = await db.queryJson(
-            "SELECT otl.referral_runtime_execute('claim_purge',$1::jsonb)",
-            [JSON.stringify({ teamId: env.SLACK_TEAM_ID, now: new Date(now).toISOString() })],
-          );
-          if (raw === null) break;
-          const claimed = object(raw);
-          const requestId = string(claimed.requestId);
-          const claimKey = string(claimed.claimKey);
-          let status: "purged" | "failed" = "purged";
-          try {
-            await bucket.delete(string(claimed.opaqueRef));
-          } catch (error) {
-            if (!(error instanceof Error)) throw error;
-            status = "failed";
-          }
-          await db.queryJson("SELECT otl.referral_runtime_execute('finish_purge',$1::jsonb)", [
-            JSON.stringify({
-              teamId: env.SLACK_TEAM_ID,
-              requestId,
-              key: claimKey,
-              status,
-              now: new Date(now).toISOString(),
-            }),
-          ]);
-          if (i === BATCH - 1) possiblyMore = true;
+    await attempt("referral_purge", async () => {
+      if (!bucket) throw new InputError("Referral retention bucket unavailable");
+      for (let i = 0; i < BATCH; i += 1) {
+        const raw = await db.queryJson(
+          "SELECT otl.referral_runtime_execute('claim_purge',$1::jsonb)",
+          [JSON.stringify({ teamId: env.SLACK_TEAM_ID, now: new Date(now).toISOString() })],
+        );
+        if (raw === null) break;
+        const claimed = object(raw);
+        const requestId = string(claimed.requestId);
+        const claimKey = string(claimed.claimKey);
+        let status: "purged" | "failed" = "purged";
+        try {
+          await bucket.delete(string(claimed.opaqueRef));
+        } catch (error) {
+          if (!(error instanceof Error)) throw error;
+          status = "failed";
         }
-      });
-    }
-  }
-  if (env.PUBLIC_INTEREST_ENABLED === "true") {
-    await attempt("interest", async () => {
-      const result = await runInterestDue(env, now);
-      possiblyMore ||= result.possiblyMore;
+        await db.queryJson("SELECT otl.referral_runtime_execute('finish_purge',$1::jsonb)", [
+          JSON.stringify({
+            teamId: env.SLACK_TEAM_ID,
+            requestId,
+            key: claimKey,
+            status,
+            now: new Date(now).toISOString(),
+          }),
+        ]);
+        if (i === BATCH - 1) possiblyMore = true;
+      }
     });
-    await attempt("interest_reconcile", async () => {
-      const result = await reconcileInterestIntake(env, now, interestCursor);
-      possiblyMore ||= result.possiblyMore;
-      interestNextCursor = result.nextCursor;
-    });
   }
+  await attempt("interest", async () => {
+    const result = await runInterestDue(env, now);
+    possiblyMore ||= result.possiblyMore;
+  });
+  await attempt("interest_reconcile", async () => {
+    const result = await reconcileInterestIntake(env, now, interestCursor);
+    possiblyMore ||= result.possiblyMore;
+    interestNextCursor = result.nextCursor;
+  });
+  const retention = await runRetentionQueues(db, env.SLACK_TEAM_ID, now);
+  possiblyMore ||= retention.possiblyMore;
+  failed ||= retention.failed;
   let nextDue: number | null = null;
   await attempt("next_due", async () => {
     nextDue = await nextMembershipDue(env, db, channelId, now);

@@ -2,8 +2,8 @@ import { CommunityLifecycleRuntimeStore } from "./community-lifecycle-runtime-st
 import { nextInvitePrivateReconciliationDue } from "./community-referral-reconcile";
 import { nextRetentionDue } from "./community-retention-schedule";
 import type { CommunityEnv } from "./community-runtime";
-import { InputError, string } from "./input";
-import type { NeonStore } from "./store";
+import { InputError, object, string } from "./input";
+import { NeonStore } from "./store";
 
 function millis(value: string | null): number | null {
   if (value === null) return null;
@@ -57,17 +57,26 @@ export async function nextMembershipDue(
       : null;
   const referral = millis(referralRaw === null ? null : string(referralRaw));
   const marker =
-    env.REFERRALS_ENABLED === "true" && env.INVITE_PRIVATE_OBJECTS && env.SITE_CORE_HMAC_SECRET
+    env.INVITE_PRIVATE_OBJECTS && env.SITE_CORE_HMAC_SECRET
       ? millis(await nextInvitePrivateReconciliationDue(env))
       : null;
-  const retention =
-    env.REFERRALS_ENABLED === "true" ? await nextRetentionDue(db, env.SLACK_TEAM_ID, now) : null;
+  const retention = await nextRetentionDue(db, env.SLACK_TEAM_ID, now);
+  if (!env.INTEREST_RUNTIME_DATABASE_URL)
+    throw new InputError("Interest retention database unavailable");
+  const interestRaw = await new NeonStore(env.INTEREST_RUNTIME_DATABASE_URL).queryJson(
+    "SELECT otl.interest_retention_next_due($1::jsonb)",
+    [JSON.stringify({ teamId: env.SLACK_TEAM_ID })],
+  );
+  const interestRow = object(interestRaw);
+  const interest = millis(interestRow.nextDue === null ? null : string(interestRow.nextDue));
   return earliest(
     lifecycle,
     deadline,
     referral,
     marker,
     retention,
+    interest,
+    now + 5 * 60_000,
     env.LIFECYCLE_MODE === "disabled" || env.LIFECYCLE_MODE === undefined ? null : nextServiceDay,
   );
 }
