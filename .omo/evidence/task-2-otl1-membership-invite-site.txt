@@ -1,0 +1,59 @@
+TASK 2 EVIDENCE - lifecycle and grass-season storage contract
+Base: d2ce4812158557b0c6735f44f5a93f4a299fd596
+Worktree: /Users/zayden/Documents/otl1-worktrees/membership-lifecycle-storage
+Date: 2026-09-19 Asia/Seoul
+
+SCENARIO baseline preservation on unchanged base
+Invocation: bun qa/membership-reminder-audit-pg.mjs && bun qa/community-current-members.mjs
+Binary observable: exit 0
+Captured output:
+PASS migration 027: monotonic/empty/atomic membership, opt-out preserving rejoin, 201-member chunks, per-peer retry pruning, ambiguity-before-prune, durable common retry
+PASS current member snapshot: paginated, deduplicated, bounded human classification and partial failure closed
+Artifact: .omo/evidence/task-2-otl1-membership-invite-site.txt
+
+SCENARIO failing-first lifecycle contract before migration implementation
+Invocation: LIFECYCLE_RED=1 bun qa/member-lifecycle-pg.mjs
+Binary observable: exit 1 for the intended missing storage boundary
+Captured PostgreSQL error:
+ERROR: function otl.lifecycle_execute(unknown, jsonb) does not exist
+Artifact: .omo/evidence/task-2-otl1-membership-invite-site.txt
+
+SCENARIO disposable PostgreSQL lifecycle driver and typed-store readback
+Invocation: bun qa/member-lifecycle-pg.mjs
+Binary observable: exit 0 and an exact machine-counted edge total
+Captured output:
+PASS lifecycle storage: 39 machine-counted edges; fresh+upgrade 001-029; KST closure/weekends/evidence; rollout; active/grace/extension/dormant/return; stale/duplicate/concurrent/cross-scope denial; immutable audit; rollback=0
+Coverage observable: rollout current-human seeding, preserved community rows/events, one open season, no retroactive candidate, exact KST close boundary, weekend exclusion, prompt outage, snapshot outage, seven eligible weekdays, all four grace-preserving signals, seven-calendar-day extension and cap, early/actual expiry, dormant rest denial, backdated no-transition, current-goal return, malformed date, missing clock, stale revision/time, exact retry, idempotency collision, cross-team/user denial, immutable event/inviter, transactional rollback, and concurrent one-winner extension.
+State readback observable: CommunityLifecycleStore read active revision 4 with one returned open season; replayed eligible service date read changed=false.
+Cleanup observable: the driver stopped PostgreSQL in finally and recursively removed its unique otl-member-lifecycle-* directory.
+Artifact: .omo/evidence/task-2-otl1-membership-invite-site.txt
+
+SCENARIO repository quality gate
+Invocation: bun run check
+Binary observable: exit 0
+Captured output summary:
+Biome checked 113 source files; tsc --noEmit passed; 54 isolated synthetic suites passed; wrangler deploy --dry-run exited 0.
+Artifact: .omo/evidence/task-2-otl1-membership-invite-site.txt
+
+SCENARIO preserved normalization/current-membership contracts after implementation
+Invocation: bun qa/membership-reminder-audit-pg.mjs && bun qa/community-current-members.mjs
+Binary observable: exit 0
+Captured output:
+PASS migration 027: monotonic/empty/atomic membership, opt-out preserving rejoin, 201-member chunks, per-peer retry pruning, ambiguity-before-prune, durable common retry
+PASS current member snapshot: paginated, deduplicated, bounded human classification and partial failure closed
+Artifact: .omo/evidence/task-2-otl1-membership-invite-site.txt
+
+SCENARIO exact scope, diff integrity, and disposable-resource cleanup
+Invocation: find "$task_tmp_root" -maxdepth 1 -name 'otl-member-lifecycle-*' -print; git diff --check; git status --short; non-empty checks for every owned file
+Binary observable: exit 0; cleanup find printed zero paths; git diff --check printed zero errors; all owned artifacts were non-empty.
+Changed paths before evidence:
+migrations/029_member_lifecycle.sql
+qa/member-lifecycle-contract.sql
+qa/member-lifecycle-pg.mjs
+qa/member-lifecycle-upgrade-fixture.sql
+src/community-lifecycle-store.ts
+src/community-lifecycle-types.ts
+Artifact: .omo/evidence/task-2-otl1-membership-invite-site.txt
+
+RISK AND BOUNDARY
+LIFECYCLE_MODE runtime wiring, scheduler behavior, Slack effects, referrals, site code, and deployment are intentionally outside Todo 2. Migration 029 is additive and un-deployed. Its tables deny direct PUBLIC access; later runtime-role grants and runtime integration remain downstream tasks.
