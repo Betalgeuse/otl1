@@ -42,11 +42,23 @@ const store = {
   async claimReminderBatch() {
     return null;
   },
+  async claimReviewReminderBatch() {
+    return null;
+  },
+  async claimGoalReminderBatch() {
+    return null;
+  },
   async pruneReminderBatch() {
     return null;
   },
   async finishReminderBatch() {
     return false;
+  },
+  async finishReviewReminderBatch() {
+    return false;
+  },
+  async finishReviewRoot() {
+    return true;
   },
 };
 let profileName = "Observed at 21";

@@ -31,6 +31,7 @@ export function reminderBatch(value: unknown): ReminderBatch | null {
     leaseToken: string(input.leaseToken),
     attempt: input.attempt,
     firstAttemptAt,
+    ...(input.threadTs === undefined ? {} : { threadTs: string(input.threadTs) }),
     jobs: list(input.jobs).map(reminderJob),
   };
 }

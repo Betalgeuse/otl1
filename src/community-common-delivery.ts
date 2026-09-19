@@ -6,7 +6,7 @@ import { InputError, string } from "./input";
 
 type CommonStore = Pick<
   CommunityStore,
-  "putRecord" | "claimCommonDelivery" | "finishCommonDelivery"
+  "putRecord" | "claimCommonDelivery" | "finishCommonDelivery" | "finishReviewRoot"
 >;
 
 async function finishSent(
@@ -32,6 +32,15 @@ async function finishSent(
     kind: "prompt",
     body: { date: delivery.date, kind: delivery.kind, ts: messageTs },
   });
+  if (delivery.kind === "review") {
+    await store.finishReviewRoot({
+      ...scope,
+      leaseToken: delivery.leaseToken,
+      date: delivery.date,
+      messageTs,
+    });
+    return;
+  }
   await store.finishCommonDelivery({
     ...scope,
     leaseToken: delivery.leaseToken,

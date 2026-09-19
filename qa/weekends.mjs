@@ -45,8 +45,12 @@ const store = {
   async reminderTriggerDue() { dueCalls += 1; return false; },
   async reconcileChannelMembers() { return true; },
   async claimReminderBatch() { return null; },
+  async claimReviewReminderBatch() { return null; },
+  async claimGoalReminderBatch() { return null; },
   async pruneReminderBatch() { return null; },
   async finishReminderBatch() { return false; },
+  async finishReviewReminderBatch() { return false; },
+  async finishReviewRoot() { return true; },
 };
 const original = globalThis.fetch;
 globalThis.fetch = async (url, options) => {

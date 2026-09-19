@@ -25,10 +25,14 @@ type ScheduleStore = Pick<
   | "reconcileChannelMembers"
   | "reminderTriggerDue"
   | "claimReminderBatch"
+  | "claimReviewReminderBatch"
+  | "claimGoalReminderBatch"
   | "finishReminderBatch"
+  | "finishReviewReminderBatch"
   | "pruneReminderBatch"
   | "claimCommonDelivery"
   | "finishCommonDelivery"
+  | "finishReviewRoot"
 >;
 type Kind = "goal" | "review";
 type Schedule = {

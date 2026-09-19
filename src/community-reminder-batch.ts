@@ -1,9 +1,17 @@
+import { deliverReviewReminder } from "./community-review-reminder";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { ReminderBatch, ReminderBatchFinish, ReminderJob } from "./community-types";
 import { list, object, string } from "./input";
 
 export type ReminderBatchStore = {
-  claimReminderBatch(input: {
+  claimReviewReminderBatch(input: {
+    readonly teamId: string;
+    readonly channelId: string;
+    readonly now: string;
+    readonly workerId: string;
+    readonly leaseToken: string;
+  }): Promise<ReminderBatch | null>;
+  claimGoalReminderBatch(input: {
     readonly teamId: string;
     readonly channelId: string;
     readonly now: string;
@@ -11,6 +19,9 @@ export type ReminderBatchStore = {
     readonly leaseToken: string;
   }): Promise<ReminderBatch | null>;
   finishReminderBatch(input: ReminderBatchFinish): Promise<boolean>;
+  finishReviewReminderBatch(
+    input: ReminderBatchFinish & { readonly messageTs?: string },
+  ): Promise<boolean>;
   pruneReminderBatch(input: {
     readonly teamId: string;
     readonly channelId: string;
@@ -112,7 +123,23 @@ export async function sendReminderBatch(input: {
   readonly store: ReminderBatchStore;
 }): Promise<number> {
   const leaseToken = crypto.randomUUID();
-  let batch = await input.store.claimReminderBatch({
+  const review = await input.store.claimReviewReminderBatch({
+    teamId: input.teamId,
+    channelId: input.channelId,
+    now: input.now,
+    workerId: "community-scheduler",
+    leaseToken,
+  });
+  if (review)
+    return deliverReviewReminder({
+      token: input.token,
+      teamId: input.teamId,
+      channelId: input.channelId,
+      batch: review,
+      store: input.store,
+      render: renderReminderBatch,
+    });
+  let batch = await input.store.claimGoalReminderBatch({
     teamId: input.teamId,
     channelId: input.channelId,
     now: input.now,

@@ -41,7 +41,10 @@ const store = {
   async finishCommonDelivery() {
     return true;
   },
-  async claimReminderBatch(input) {
+  async claimReviewReminderBatch() {
+    return null;
+  },
+  async claimGoalReminderBatch(input) {
     if (reminderClaimed) return null;
     reminderClaimed = true;
     return {
@@ -64,6 +67,12 @@ const store = {
     return null;
   },
   async finishReminderBatch() {
+    return true;
+  },
+  async finishReviewReminderBatch() {
+    return true;
+  },
+  async finishReviewRoot() {
     return true;
   },
 };

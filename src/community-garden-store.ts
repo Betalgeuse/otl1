@@ -20,6 +20,14 @@ export type GardenDelivery = {
   readonly routeKind: "interaction" | "goal_prompt" | "review_prompt";
   readonly routeProvenance: "recorded" | "daily_prompt_fallback";
 };
+export type GardenRetirement = {
+  readonly retirementId: number;
+  readonly messageTs: string;
+  readonly replacementMessageTs?: string;
+  readonly action: "update";
+  readonly preserveReplies: true;
+  readonly restorePayload: Json;
+};
 
 type Scope = { readonly teamId: string; readonly channelId: string };
 
@@ -77,6 +85,25 @@ function delivery(value: Json): GardenDelivery | null {
   };
 }
 
+function retirement(value: Json): GardenRetirement | null {
+  if (value === null) return null;
+  const item = object(value);
+  if (typeof item.retirementId !== "number" || !Number.isSafeInteger(item.retirementId))
+    throw new InputError("Invalid garden retirement");
+  if (item.action !== "update" || item.preserveReplies !== true)
+    throw new InputError("Invalid garden retirement action");
+  return {
+    retirementId: item.retirementId,
+    messageTs: string(item.messageTs),
+    ...(item.replacementMessageTs === undefined
+      ? {}
+      : { replacementMessageTs: string(item.replacementMessageTs) }),
+    action: item.action,
+    preserveReplies: item.preserveReplies,
+    restorePayload: json(item.restorePayload),
+  };
+}
+
 export class GardenDeliveryStore {
   constructor(private readonly db: Pick<NeonStore, "queryJson">) {}
 
@@ -125,5 +152,47 @@ export class GardenDeliveryStore {
     },
   ): Promise<boolean> {
     return (await this.call("finish_garden_delivery", input)) === true;
+  }
+  async claimRetirement(
+    input: Scope & {
+      readonly workerId: string;
+      readonly leaseToken: string;
+      readonly now: string;
+    },
+  ): Promise<GardenRetirement | null> {
+    if (!Number.isFinite(Date.parse(input.now))) throw new InputError("Invalid retirement time");
+    return retirement(await this.call("claim_review_garden_retirement", input));
+  }
+  async finishRetirement(
+    input: Scope & {
+      readonly retirementId: number;
+      readonly leaseToken: string;
+      readonly status: "retired" | "failed";
+      readonly errorCode?: string;
+      readonly retryAfter?: string;
+    },
+  ): Promise<boolean> {
+    return (await this.call("finish_review_garden_retirement", input)) === true;
+  }
+  async claimRestore(
+    input: Scope & {
+      readonly retirementId: number;
+      readonly workerId: string;
+      readonly leaseToken: string;
+      readonly now: string;
+    },
+  ): Promise<GardenRetirement | null> {
+    if (!Number.isFinite(Date.parse(input.now))) throw new InputError("Invalid restore time");
+    return retirement(await this.call("claim_review_garden_restore", input));
+  }
+  async finishRestore(
+    input: Scope & {
+      readonly retirementId: number;
+      readonly leaseToken: string;
+      readonly status: "restored" | "restore_failed";
+      readonly errorCode?: string;
+    },
+  ): Promise<boolean> {
+    return (await this.call("finish_review_garden_restore", input)) === true;
   }
 }

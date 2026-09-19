@@ -4,6 +4,7 @@ import { readdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
+import { CommunityStore } from "../src/community-store.ts";
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -21,6 +22,17 @@ const psql = async (sql, database = "upgrade") =>
 const payload = (value) => Buffer.from(JSON.stringify(value)).toString("base64");
 const call = async (op, value, database = "upgrade") =>
   JSON.parse(await psql(`SELECT otl.community_execute('${op}',convert_from(decode('${payload(value)}','base64'),'UTF8')::jsonb)`, database));
+const runtimeDb = {
+  async queryJson(query, params) {
+    let bound = query;
+    for (let index = params.length; index > 0; index -= 1)
+      bound = bound.replaceAll(
+        `$${index}`,
+        `convert_from(decode('${Buffer.from(params[index - 1]).toString("base64")}','base64'),'UTF8')`,
+      );
+    return JSON.parse(await psql(bound));
+  },
+};
 const migrationFiles = (await readdir(join(root, "migrations")))
   .filter((name) => /^\d{3}_.*\.sql$/.test(name))
   .sort();
@@ -59,6 +71,90 @@ try {
     UPDATE otl.community_garden_projections p SET published_revision=d.day_revision,message_ts=d.message_ts,payload_digest=d.payload_digest FROM otl.community_garden_deliveries d WHERE d.projection_key=p.projection_key AND d.message_ts='1700.1'`);
   await run(join(pgBin, "psql"), ["-X", "-v", "ON_ERROR_STOP=1", "-f", "migrations/031_review_thread_gardens.sql"], "upgrade");
   assert.equal(await psql("SELECT count(*) FROM otl.community_review_roots"), "0");
+
+  await psql(`INSERT INTO otl.workspace_members(team_id,user_id,display_name,is_bot,is_app_user,slack_deleted,directory_synced_at)
+      VALUES('T-REVIEW','U3','Three',false,false,false,'2026-09-18T08:00:00Z');
+    INSERT INTO otl.workspace_channel_memberships(team_id,channel_id,user_id,is_current,last_seen_at,synced_at)
+      VALUES('T-REVIEW','C-REVIEW','U3',true,'2026-09-18T08:00:00Z','2026-09-18T08:00:00Z');
+    INSERT INTO otl.community_preferences(team_id,channel_id,user_id,enabled,preference_source,eligible_from,goal_time,review_time)
+      VALUES('T-REVIEW','C-REVIEW','U3',true,'default','2026-09-18','11:00','20:00');
+    INSERT INTO otl.member_lifecycles(team_id,channel_id,user_id,state,rollout_at,last_transition_at)
+      VALUES('T-REVIEW','C-REVIEW','U1','active','2026-09-01T00:00:00Z','2026-09-18T00:00:00Z'),
+        ('T-REVIEW','C-REVIEW','U3','active','2026-09-18T00:00:00Z','2026-09-18T00:00:00Z');
+    INSERT INTO otl.grass_seasons(team_id,channel_id,user_id,opened_at,opened_on,opened_reason,closed_at,closed_on,closed_reason)
+      VALUES('T-REVIEW','C-REVIEW','U1','2026-09-01T00:00:00Z','2026-09-01','rollout','2026-09-10T15:00:00Z','2026-09-10','admin_correction');
+    INSERT INTO otl.grass_seasons(team_id,channel_id,user_id,opened_at,opened_on,opened_reason)
+      VALUES('T-REVIEW','C-REVIEW','U1','2026-09-17T15:00:00Z','2026-09-18','admin_restore'),
+        ('T-REVIEW','C-REVIEW','U3','2026-09-17T15:00:00Z','2026-09-18','rollout');
+    INSERT INTO otl.community_days(team_id,channel_id,user_id,day,goal,outcome,reflection,revision)
+      VALUES('T-REVIEW','C-REVIEW','U1','2026-09-05','historical','complete','old',1)`);
+  const runtimeStore = new CommunityStore(runtimeDb);
+  await runtimeStore.putRecord({
+    ...scope,
+    userId: "UADMIN",
+    key: "common:2026-09-19:review",
+    kind: "dispatch",
+    body: { date: "2026-09-19", kind: "review", text: "atomic review root" },
+  });
+  const atomicDelivery = await runtimeStore.claimCommonDelivery({
+    ...scope,
+    userId: "UADMIN",
+    now: "2026-09-19T09:00:00Z",
+    leaseToken: "atomic-review-root",
+  });
+  await runtimeStore.putRecord({
+    ...scope,
+    userId: "UADMIN",
+    key: "common-thread:2026-09-19:review",
+    kind: "prompt",
+    body: { date: "2026-09-19", kind: "review", ts: "1900.1" },
+  });
+  assert.equal(
+    await runtimeStore.finishReviewRoot({
+      ...scope,
+      userId: "UADMIN",
+      leaseToken: atomicDelivery.leaseToken,
+      date: "2026-09-19",
+      messageTs: "1900.1",
+    }),
+    true,
+  );
+  assert.equal(
+    await psql("SELECT status||':'||(body->>'messageTs') FROM otl.community_records WHERE team_id='T-REVIEW' AND record_key='common:2026-09-19:review'"),
+    "sent:1900.1",
+  );
+  assert.equal(
+    await psql("SELECT thread_ts FROM otl.community_review_roots WHERE team_id='T-REVIEW' AND day='2026-09-19'"),
+    "1900.1",
+  );
+  await psql("DELETE FROM otl.community_review_roots WHERE team_id='T-REVIEW' AND day='2026-09-19'; DELETE FROM otl.community_records WHERE team_id='T-REVIEW' AND record_key IN ('common:2026-09-19:review','common-thread:2026-09-19:review')");
+  const currentSeason = await runtimeStore.seasonHistory(scope);
+  assert.equal(currentSeason.openedOn, "2026-09-18");
+  assert.deepEqual(currentSeason.days.map((day) => day.date), ["2026-09-18"]);
+  const closedSeasonId = Number(await psql("SELECT min(season_id) FROM otl.grass_seasons WHERE team_id='T-REVIEW' AND user_id='U1'"));
+  const closedSeason = await runtimeStore.seasonHistory(scope, closedSeasonId);
+  assert.equal(closedSeason.closedOn, "2026-09-10");
+  assert.deepEqual(closedSeason.days.map((day) => day.date), ["2026-09-05"]);
+  const goalBatch = await runtimeStore.claimGoalReminderBatch({
+    teamId: "T-REVIEW",
+    channelId: "C-REVIEW",
+    now: "2026-09-18T02:00:00Z",
+    workerId: "runtime-qa",
+    leaseToken: "runtime-goal",
+  });
+  if (!goalBatch)
+    throw new Error(
+      await psql(`SELECT jsonb_build_object('eligible',otl.reminder_eligible('T-REVIEW','C-REVIEW','U3','goal','2026-09-18 11:00:00'),
+        'records',(SELECT jsonb_agg(jsonb_build_object('user',user_id,'kind',body->>'kind','status',status)) FROM otl.community_records WHERE team_id='T-REVIEW' AND channel_id='C-REVIEW' AND kind='reminder'))`),
+    );
+  assert.equal(goalBatch.jobs.some((job) => job.userId === "U3" && job.kind === "goal"), true);
+  assert.equal(goalBatch.jobs.some((job) => job.kind === "review"), false);
+  await runtimeStore.finishReminderBatch({
+    teamId: "T-REVIEW",
+    channelId: "C-REVIEW",
+    leaseToken: "runtime-goal",
+    status: "cancelled",
+  });
 
   const bound = await call("bind_review_root", { teamId: "T-REVIEW", channelId: "C-REVIEW", userId: "UADMIN", date: "2026-09-18", messageTs: "1800.1" });
   assert.deepEqual({ root: bound.threadTs, enqueued: bound.enqueued }, { root: "1800.1", enqueued: 1 });

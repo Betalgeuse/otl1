@@ -62,10 +62,52 @@ const fakeStore = {
       ],
     };
   },
+  async claimReviewReminderBatch(input) {
+    if (!input.now.endsWith("09:00:00.000Z") || claimedBatchTimes.has(input.now)) return null;
+    claimedBatchTimes.add(input.now);
+    batchClaims.push(input);
+    return {
+      leaseToken: input.leaseToken,
+      attempt: 1,
+      firstAttemptAt: input.now,
+      threadTs: "18.000001",
+      jobs: [
+        {
+          ...input,
+          userId: "UTWO",
+          key: `reminder:${fixtureDate}:review`,
+          date: fixtureDate,
+          kind: "review",
+        },
+      ],
+    };
+  },
+  async claimGoalReminderBatch(input) {
+    if (!input.now.endsWith("01:00:00.000Z") || claimedBatchTimes.has(input.now)) return null;
+    claimedBatchTimes.add(input.now);
+    batchClaims.push(input);
+    return {
+      leaseToken: input.leaseToken,
+      attempt: 1,
+      firstAttemptAt: input.now,
+      jobs: [
+        {
+          ...input,
+          userId: "UONE",
+          key: `reminder:${fixtureDate}:goal`,
+          date: fixtureDate,
+          kind: "goal",
+        },
+      ],
+    };
+  },
   async pruneReminderBatch() {
     return null;
   },
   async finishReminderBatch() {
+    return true;
+  },
+  async finishReviewReminderBatch() {
     return true;
   },
   async claimCommonDelivery() {

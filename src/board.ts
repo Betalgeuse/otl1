@@ -63,10 +63,19 @@ export function buildBoard(snapshot: Snapshot, today: string, anchor = today): B
     const date = isoDate(stamp);
     if (!isWeekend(date) || records.has(date)) elapsed.push(stamp);
   }
-  const calendarDay = current - origin + 1;
-  const count = calendarDay <= 4 ? 4 : 8;
-  const visible = elapsed.slice(-count);
-  for (let stamp = current + 1; calendarDay <= 8 && visible.length < count; stamp += 1) {
+  const eligibleDay = elapsed.length;
+  const count =
+    eligibleDay <= 4
+      ? 4
+      : eligibleDay <= 8
+        ? 8
+        : eligibleDay <= 16
+          ? 16
+          : eligibleDay <= 32
+            ? 32
+            : eligibleDay;
+  const visible = [...elapsed];
+  for (let stamp = current + 1; visible.length < count; stamp += 1) {
     const date = isoDate(stamp);
     if (!isWeekend(date) || records.has(date)) visible.push(stamp);
   }

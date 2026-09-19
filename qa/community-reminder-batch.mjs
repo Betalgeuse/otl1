@@ -14,8 +14,10 @@ try {
   const failed = [];
   globalThis.fetch = async () => new Response("", { status: 429, headers: { "Retry-After": "17" } });
   const retryStore = {
-    async claimReminderBatch() { return { leaseToken: "retry", attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", jobs: [job("U1")] }; },
+    async claimReviewReminderBatch() { return null; },
+    async claimGoalReminderBatch() { return { leaseToken: "retry", attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", jobs: [job("U1")] }; },
     async finishReminderBatch(input) { failed.push(input); return true; },
+    async finishReviewReminderBatch() { return true; },
   };
   assert.equal(await sendReminderBatch({ token: "token", teamId: "TQA", channelId: "CPUBLIC", now: "2026-09-17T09:00:00Z", store: retryStore }), 0);
   assert.deepEqual(failed, [{ teamId: "TQA", channelId: "CPUBLIC", leaseToken: "retry", status: "failed", errorCode: "rate_limited", retryAfterSeconds: 17 }]);
@@ -37,15 +39,18 @@ try {
     throw new Error(`unexpected ${url}`);
   };
   const ambiguityStore = {
-    async claimReminderBatch(input) {
+    async claimReviewReminderBatch() { return null; },
+    async claimGoalReminderBatch(input) {
       claims += 1;
-      return { leaseToken: input.leaseToken, attempt: claims, firstAttemptAt: "2026-09-17T09:00:00Z", jobs: [job("U1"), job("U2", "review")] };
+      return { leaseToken: input.leaseToken, attempt: claims, firstAttemptAt: "2026-09-17T09:00:00Z", jobs: [job("U1"), job("U2")] };
     },
+    async pruneReminderBatch(input) { return { leaseToken: input.leaseToken, attempt: claims, firstAttemptAt: "2026-09-17T09:00:00Z", jobs: [job("U1"), job("U2")] }; },
     async finishReminderBatch(input) {
       if (firstFinish) { firstFinish = false; throw new Error("db finish unavailable"); }
       finishes.push(input);
       return true;
     },
+    async finishReviewReminderBatch() { return true; },
   };
   await assert.rejects(
     () => sendReminderBatch({ token: "token", teamId: "TQA", channelId: "CPUBLIC", now: "2026-09-17T09:00:00Z", store: ambiguityStore }),
@@ -60,8 +65,10 @@ try {
   const oversizedFinish = [];
   globalThis.fetch = async () => { oversizedPosts += 1; return Response.json({ ok: true }); };
   const oversizedStore = {
-    async claimReminderBatch() { return { leaseToken: "large", attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", jobs: Array.from({ length: 101 }, (_, index) => job(`U${index}`)) }; },
+    async claimReviewReminderBatch() { return null; },
+    async claimGoalReminderBatch() { return { leaseToken: "large", attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", jobs: Array.from({ length: 101 }, (_, index) => job(`U${index}`)) }; },
     async finishReminderBatch(input) { oversizedFinish.push(input); return true; },
+    async finishReviewReminderBatch() { return true; },
   };
   assert.equal(await sendReminderBatch({ token: "token", teamId: "TQA", channelId: "CPUBLIC", now: "2026-09-17T09:00:00Z", store: oversizedStore }), 0);
   assert.equal(oversizedPosts, 0);

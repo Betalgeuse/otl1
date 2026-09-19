@@ -16,11 +16,14 @@ const store = {
   async finishRecord() { return false; },
   async reminderTriggerDue() { return true; },
   async reconcileChannelMembers(_scope, snapshot) { reconciled += 1; assert.equal(snapshot.members.length, 4); },
-  async claimReminderBatch() { if (reminderClaimed) return null; reminderClaimed = true; return { leaseToken: "lease-1", attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", jobs }; },
+  async claimReviewReminderBatch() { return null; },
+  async claimGoalReminderBatch() { if (reminderClaimed) return null; reminderClaimed = true; return { leaseToken: "lease-1", attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", jobs: jobs.filter((job) => job.kind === "goal") }; },
   async pruneReminderBatch() { throw new Error("unexpected prune"); },
   async finishReminderBatch(input) { finished.push(input); return true; },
+  async finishReviewReminderBatch() { return true; },
   async claimCommonDelivery() { return null; },
   async finishCommonDelivery() { return false; },
+  async finishReviewRoot() { return true; },
 };
 const env = {
   SLACK_TEAM_ID: "TQA",
@@ -48,16 +51,16 @@ try {
     }
     throw new Error(`unexpected ${url}`);
   };
-  assert.deepEqual(await runCommunitySchedule(env, store, new Date("2026-09-17T09:00:00Z")), { common: 0, personal: 3 });
+  assert.deepEqual(await runCommunitySchedule(env, store, new Date("2026-09-17T09:00:00Z")), { common: 0, personal: 2 });
   assert.equal(reconciled, 1);
   assert.equal(posts.length, 1);
   assert.equal((posts[0].text.match(/<@U1>/g) ?? []).length, 1);
   assert.equal((posts[0].text.match(/<@U2>/g) ?? []).length, 1);
-  assert.equal((posts[0].text.match(/<@U3>/g) ?? []).length, 1);
+  assert.equal((posts[0].text.match(/<@U3>/g) ?? []).length, 0);
   assert.match(posts[0].text, /아직 안 적은 분/);
-  assert.match(posts[0].text, /후기를 기다리는 분/);
+  assert.doesNotMatch(posts[0].text, /후기를 기다리는 분/);
   assert.deepEqual(finished, [{ teamId: "TQA", channelId: "CPUBLIC", leaseToken: "lease-1", status: "sent" }]);
-  console.log("PASS batched reminders: one complete snapshot and one post for goal and review members");
+  console.log("PASS batched reminders: one complete snapshot, one goal post, and review held without a root");
 } finally {
   globalThis.fetch = originalFetch;
 }

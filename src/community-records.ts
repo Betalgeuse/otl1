@@ -18,9 +18,8 @@ export async function statusMessage(
   undoKey: string | null,
 ) {
   const boardDate = koreaDate(Date.now() / 1000);
-  const history = (await context.store.history(context.scope)).filter(
-    (item) => item.goal && item.date <= boardDate,
-  );
+  const season = await context.store.seasonHistory(context.scope);
+  const history = (season?.days ?? []).filter((item) => item.goal && item.date <= boardDate);
   const legacy = await new NeonStore(context.env.DATABASE_URL).execute({
     teamId: context.scope.teamId,
     userId: context.scope.userId,
@@ -31,20 +30,28 @@ export async function statusMessage(
     palette: DEFAULT_PALETTE,
     eventTime: Date.now() / 1000,
   });
-  const snapshot = {
-    startDate: history[0]?.date ?? boardDate,
-    palette: legacy.palette,
-    goals: history.map((item) => ({
-      date: item.date,
-      text: item.goal,
-      completed: item.outcome === "complete",
-    })),
-  };
-  const url = await boardLink(buildBoard(snapshot, boardDate, boardDate), {
-    baseUrl: context.env.PUBLIC_BASE_URL,
-    secret: context.env.BOARD_SIGNING_SECRET,
-    today: boardDate,
-  });
+  const url = season
+    ? await boardLink(
+        buildBoard(
+          {
+            startDate: season.openedOn,
+            palette: legacy.palette,
+            goals: history.map((item) => ({
+              date: item.date,
+              text: item.goal,
+              completed: item.outcome === "complete",
+            })),
+          },
+          boardDate,
+          boardDate,
+        ),
+        {
+          baseUrl: context.env.PUBLIC_BASE_URL,
+          secret: context.env.BOARD_SIGNING_SECRET,
+          today: boardDate,
+        },
+      )
+    : undefined;
   return communityStatusMessage({
     earlierNotice: await earlierDayNotice(context, history, boardDate),
     boardDate,
@@ -55,7 +62,7 @@ export async function statusMessage(
     reflection: day.reflection || null,
     rest: day.resting,
     undoValue: undoKey ? scopedValue(context.scope, undoKey) : null,
-    boardUrl: url,
+    ...(url ? { boardUrl: url } : {}),
     statusValue: scopedValue(context.scope, day.date),
     settingsValue: scopedValue(context.scope, day.date),
   });

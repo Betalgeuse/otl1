@@ -40,10 +40,10 @@ assert.deepEqual(
 const history = weekdays("2026-09-10", "2026-09-17").filter((goal) => goal.date !== "2026-09-14");
 history.push({ date: "2026-09-18", text: "today", completed: false });
 const day9 = buildBoard({ startDate: "2026-09-10", palette, goals: history }, "2026-09-18");
-assert.ok(day9.cells.length <= 8);
-assert.equal(day9.cells.at(-1).date, "2026-09-18");
-assert.equal(day9.cells.at(-1).status, "written");
-assert.equal(day9.cells.at(-1).today, true);
+assert.equal(day9.cells.length, 8);
+assert.equal(day9.cells.at(-1).date, "2026-09-21");
+assert.equal(day9.cells.at(-1).future, true);
+assert.equal(day9.cells.find((cell) => cell.today)?.status, "written");
 assert.ok(day9.cells.some((c) => c.date === "2026-09-15" && c.status === "complete"));
 assert.ok(day9.cells.some((c) => c.date === "2026-09-14" && c.status === "empty"));
 const completedToday = buildBoard(
@@ -56,8 +56,7 @@ const completedToday = buildBoard(
   },
   "2026-09-18",
 );
-assert.equal(completedToday.cells.at(-1).status, "complete");
-assert.ok(day9.cells.every((c) => c.date <= "2026-09-18"));
+assert.equal(completedToday.cells.find((cell) => cell.today)?.status, "complete");
 assert.deepEqual(
   day9.cells.map((c) => c.date),
   day9.cells.map((c) => c.date).toSorted(),
@@ -87,5 +86,5 @@ const png = await renderBoard(decoded);
 assert.deepEqual([...png.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
 assert.ok(png.length > 1000);
 console.log(
-  "PASS continuous garden grows 4-to-8, rolls without reset, keeps weekend participation, signs and renders PNG",
+  "PASS seasonal garden grows 4-to-8 without rolling, keeps weekend participation, signs and renders PNG",
 );

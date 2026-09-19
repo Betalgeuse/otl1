@@ -54,11 +54,17 @@ try {
     throw new Error(`unexpected ${url}`);
   };
   const store = {
-    async claimReminderBatch() {
+    async claimReviewReminderBatch() {
+      return null;
+    },
+    async claimGoalReminderBatch() {
       return claims.shift() ?? null;
     },
     async finishReminderBatch(input) {
       finishes.push(input);
+      return true;
+    },
+    async finishReviewReminderBatch() {
       return true;
     },
   };

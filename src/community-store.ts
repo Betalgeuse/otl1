@@ -6,6 +6,7 @@ import type {
   CommunityScope,
   DayChange,
   DayScope,
+  GardenSeason,
   MemberIntroduction,
   Outcome,
 } from "./community-types";
@@ -61,6 +62,19 @@ function introduction(value: unknown): MemberIntroduction | null {
   };
 }
 
+function gardenSeason(value: Json): GardenSeason | null {
+  if (value === null) return null;
+  const input = object(value);
+  if (typeof input.seasonId !== "number" || !Number.isSafeInteger(input.seasonId))
+    throw new InputError("Invalid garden season");
+  return {
+    seasonId: input.seasonId,
+    openedOn: date(input.openedOn),
+    closedOn: input.closedOn === null ? null : date(input.closedOn),
+    days: list(input.days).map(day),
+  };
+}
+
 export class CommunityStore extends CommunityScheduleStore {
   private introductionCall(operation: string, payload: Json): Promise<Json> {
     return this.db.queryJson("SELECT otl.introduction_execute($1,$2::jsonb)", [
@@ -85,6 +99,30 @@ export class CommunityStore extends CommunityScheduleStore {
   }
   async history(input: CommunityScope): Promise<readonly CommunityDay[]> {
     return list(await this.call("history", input)).map(day);
+  }
+  async seasonHistory(input: CommunityScope, seasonId?: number): Promise<GardenSeason | null> {
+    if (seasonId !== undefined && (!Number.isSafeInteger(seasonId) || seasonId < 1))
+      throw new InputError("Invalid garden season");
+    return gardenSeason(
+      await this.db.queryJson(
+        `SELECT coalesce((SELECT jsonb_build_object(
+          'seasonId',s.season_id,'openedOn',s.opened_on,'closedOn',s.closed_on,
+          'days',coalesce((SELECT jsonb_agg(otl.community_day_json(d) ORDER BY d.day)
+            FROM otl.community_days d WHERE d.team_id=s.team_id AND d.channel_id=s.channel_id
+              AND d.user_id=s.user_id AND d.day>=s.opened_on
+              AND (s.closed_on IS NULL OR d.day<=s.closed_on)),'[]'::jsonb))
+          FROM otl.grass_seasons s WHERE s.team_id=$1 AND s.channel_id=$2 AND s.user_id=$3
+            AND (nullif($4,'') IS NULL OR s.season_id=nullif($4,'')::bigint)
+            AND (nullif($4,'') IS NOT NULL OR s.closed_at IS NULL)
+          ORDER BY s.season_id DESC LIMIT 1),'null'::jsonb)`,
+        [
+          input.teamId,
+          input.channelId,
+          input.userId,
+          seasonId === undefined ? "" : String(seasonId),
+        ],
+      ),
+    );
   }
   async listRecords(input: CommunityScope, kind: string): Promise<readonly CommunityRecord[]> {
     const values = await this.call("list_records", { ...input, kind });
@@ -134,8 +172,9 @@ export class CommunityStore extends CommunityScheduleStore {
       throw new InputError("ONE THING은 1~200자로 적어 주세요.");
     if (input.action === "reflection" && (!input.text?.trim() || [...input.text].length > 2000))
       throw new InputError("후기는 1~2000자로 적어 주세요.");
-    const v = object(await this.call("change", input));
-    return {
+    const { delivery, ...change } = input;
+    const v = object(await this.call("change", change));
+    const result: ChangeResult = {
       day: day(v.day),
       changed: bool(v.changed),
       conflict: bool(v.conflict),
@@ -143,9 +182,24 @@ export class CommunityStore extends CommunityScheduleStore {
       firstRegistration: v.firstRegistration === true,
       firstReflection: bool(v.firstReflection),
       undoKey: string(v.undoKey),
-      ...(typeof v.gardenDeliveryKey === "string"
-        ? { gardenDeliveryKey: v.gardenDeliveryKey }
-        : {}),
     };
+    if (
+      !result.changed ||
+      result.conflict ||
+      delivery === undefined ||
+      (result.day.outcome === "pending" && result.day.reflection === "")
+    )
+      return result;
+    const season = await this.seasonHistory(input);
+    if (!season || result.day.date < season.openedOn) return result;
+    const routed = await this.call("route_review_garden", {
+      teamId: input.teamId,
+      channelId: input.channelId,
+      userId: input.userId,
+      date: result.day.date,
+      sourceTs: delivery.source,
+    });
+    if (routed === null) return result;
+    return { ...result, gardenDeliveryKey: string(object(routed).deliveryKey) };
   }
 }

@@ -14,6 +14,12 @@ export type CommunityDay = DayScope & {
   readonly resting: boolean;
   readonly revision: number;
 };
+export type GardenSeason = {
+  readonly seasonId: number;
+  readonly openedOn: string;
+  readonly closedOn: string | null;
+  readonly days: readonly CommunityDay[];
+};
 export type DayChange = DayScope & {
   readonly syncLegacy?: boolean;
   readonly preserveOutcome?: boolean;
@@ -85,6 +91,7 @@ export type ReminderBatch = {
   readonly leaseToken: string;
   readonly attempt: number;
   readonly firstAttemptAt: string;
+  readonly threadTs?: string;
   readonly jobs: readonly ReminderJob[];
 };
 export type CommonDelivery = {

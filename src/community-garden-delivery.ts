@@ -4,6 +4,7 @@ import {
   postPreparedGarden,
   prepareGardenPublication,
 } from "./community-garden";
+import { runDueGardenRetirements } from "./community-garden-retirement";
 import { type GardenDelivery, GardenDeliveryStore } from "./community-garden-store";
 import { type CommunityContext, type CommunityEnv, payloadRecord } from "./community-runtime";
 import { CommunitySlackError } from "./community-social";
@@ -108,6 +109,7 @@ async function deliverClaimed(
     await finishGardenPublication(context, publication, claimed.date, claimed.undoKey);
     return { messageTs: publication.sent, nextDue: null };
   } catch (error) {
+    if (!(error instanceof Error)) throw error;
     const nextDue = claimed.attempts < 3 ? now + 60_000 : null;
     await deliveries.finish({
       teamId: claimed.teamId,
@@ -185,6 +187,9 @@ export async function runDueGardenDeliveries(
     processed += 1;
     if (result.nextDue !== null) nextDue = Math.min(nextDue ?? result.nextDue, result.nextDue);
   }
+  await runDueGardenRetirements(env, channelId, now, async (retirementDue) => {
+    nextDue = Math.min(nextDue ?? retirementDue, retirementDue);
+  });
   if (nextDue !== null && observeDue) await observeDue(nextDue);
   return { processed, nextDue };
 }

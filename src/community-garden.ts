@@ -132,17 +132,9 @@ export async function publishGardenNow(
   forDate: string,
   undoKey: string | null,
 ): Promise<string> {
-  const projectionKey = `direct:${context.scope.userId}:${forDate}:${context.thread}`;
   const day = await context.store.day({ ...context.scope, date: forDate });
-  const publication = await postGarden(
-    context,
-    forDate,
-    `garden_direct_${context.key}`,
-    projectionKey,
-    day.revision,
-  );
-  await finishGardenPublication(context, publication, forDate, undoKey);
-  return publication.sent;
+  const message = payloadRecord(await statusMessage(context, day, undoKey));
+  return ephemeral(context, message);
 }
 
 export async function retireGardenCards(
