@@ -138,7 +138,7 @@ async function digest(database, tables = protectedTables) {
   for (const name of tables) {
     assert.equal(await scalar(database, `SELECT to_regclass('otl.${name}') IS NOT NULL`), "t", `${name} table missing`);
     const row = name === "guide_versions" ? "to_jsonb(t)-'source_origin'" : name === "member_introductions" ? "to_jsonb(t)-'confirmed_name'-'name_prefill'-'pending_confirmed_name'" : "to_jsonb(t)";
-    const value = await scalar(database, `SELECT count(*)||':'||md5(coalesce(string_agg(md5(${row}::text),',' ORDER BY md5(${row}::text)),'') ) FROM otl.${name} t`);
+    const value = await scalar(database, `SELECT count(*)||':'||md5(coalesce(string_agg(md5((${row})::text),',' ORDER BY md5((${row})::text)),'') ) FROM otl.${name} t`);
     result[name] = value;
   }
   return result;

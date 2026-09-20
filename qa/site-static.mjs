@@ -81,7 +81,7 @@ assert.match(css, /@keyframes rise-reaction/);
 assert.match(css, /reaction-stage\.is-paused \.rise/);
 assert.match(css, /prefers-reduced-motion:reduce[^}]*\.has-motion \.rise/);
 assert.match(script, /visibilitychange/);
-assert.match(css, /#home-title \{ font-size:2\.45rem; word-break:keep-all/);
+assert.match(css, /#home-title \{ font-size:var\(--display-mobile-section\); word-break:keep-all/);
 assert.match(css, /body \{[^}]*word-break:keep-all/);
 
 const mobile = observations.viewports?.["320"];
