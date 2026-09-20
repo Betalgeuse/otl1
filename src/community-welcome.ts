@@ -45,7 +45,7 @@ export async function welcomeTownhallMember(
     text: renderedText,
     blocks: [
       { type: "section", text: { type: "mrkdwn", text: renderedText } },
-      { type: "actions", elements: [introductionButton(userId)] },
+      { type: "actions", elements: [introductionButton()] },
     ],
     unfurl_links: false,
   });

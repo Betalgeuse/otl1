@@ -88,6 +88,11 @@ try {
     welcomes[0].body.blocks[1].elements.map((element) => element.action_id),
     ["community_introduction", "community_introduction_directory"],
   );
+  assert.equal(
+    JSON.parse(welcomes[0].body.blocks[1].elements[0].value).ownerId,
+    "actor",
+    "new public introduction prompts are scoped to whoever clicks them",
+  );
 
   const context = {
     env,

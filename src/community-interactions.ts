@@ -208,7 +208,9 @@ export async function communityInteraction(
   const key = string(value.key);
   const resolvedOwnerId = ownerId === "actor" ? scope.userId : ownerId;
   if (
-    !["community_shoutout", "community_introduction_directory"].includes(id) &&
+    !["community_shoutout", "community_introduction", "community_introduction_directory"].includes(
+      id,
+    ) &&
     resolvedOwnerId !== scope.userId
   )
     throw new InputError("본인 기록만 변경할 수 있어요.");

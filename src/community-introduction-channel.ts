@@ -62,7 +62,7 @@ export async function welcomeIntroductionMember(
         {
           type: "actions",
           elements: [
-            introductionButton(userId, existing ? "내 소개 수정" : "자기소개 쓰기"),
+            introductionButton(undefined, existing ? "자기소개 수정" : "자기소개 쓰기"),
             introductionDirectoryButton(),
           ],
         },

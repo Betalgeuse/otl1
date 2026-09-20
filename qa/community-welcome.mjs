@@ -17,6 +17,6 @@ try{
  await handleCommunityEvent({...event,event:{...event.event,type:'member_joined_channel',subtype:undefined}},env);
  assert.equal(posts.length,1,'duplicates across event types must not repeat welcome');
  for(const e of [{...event,team_id:'TOTHER'},{...event,event:{...event.event,channel:'COTHER'}},{...event,event:{...event.event,user:'UBOT'}}])await handleCommunityEvent(e,env);
- assert.equal(posts.length,1);assert.match(posts[0].text,/<@UNEW>/);assert.equal(posts[0].channel,'CTOWN');assert.equal(posts[0].blocks[1].elements[0].action_id,'community_introduction');assert.match(posts[0].blocks[1].elements[0].value,/UNEW/);
+ assert.equal(posts.length,1);assert.match(posts[0].text,/<@UNEW>/);assert.equal(posts[0].channel,'CTOWN');assert.equal(posts[0].blocks[1].elements[0].action_id,'community_introduction');assert.match(posts[0].blocks[1].elements[0].value,/actor/);
  console.log('PASS welcome routing: first join, duplicate, both event types, bot, wrong channel/team; no real Slack');
 }finally{globalThis.fetch=original;}
