@@ -68,15 +68,17 @@ try {
   await runCommunitySchedule(env, store, new Date("2026-09-12T01:00:00Z"));
   await runCommunitySchedule(env, store, new Date("2026-09-12T09:00:00Z"));
   await runCommunitySchedule(env, store, new Date("2026-09-13T01:00:00Z"));
-  assert.equal(sent.length, 1);
+  assert.equal(sent.length, 2, "Sunday 10:00 KST must publish its optional ONE THING prompt");
   assert.doesNotMatch(sent[0].text, /<!channel>|<!here>|<@/);
+  assert.doesNotMatch(sent[1].text, /<!channel>|<!here>|<@/);
   assert.match(sent[0].text, /선택|멘션 없이/);
+  assert.match(sent[1].text, /선택|멘션 없이/);
   assert.equal(dueCalls, 0);
   await runCommunitySchedule(env, store, new Date("2026-09-14T01:00:00Z"));
-  assert.equal(sent.length, 2);
+  assert.equal(sent.length, 3);
   assert.match(sent.at(-1).text, /<@UQA>/);
   assert.equal(dueCalls, 1);
-  console.log("PASS KST weekend: Saturday optional 10 once/no mention, Sunday none, no personal/review, Monday current-member common flow");
+  console.log("PASS KST weekend: Saturday and Sunday optional 10 once/no mention, no personal/review, Monday current-member common flow");
 } finally {
   globalThis.fetch = original;
 }

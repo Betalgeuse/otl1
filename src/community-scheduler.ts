@@ -89,9 +89,12 @@ export async function runCommunitySchedule(
   const schedule = settings ? parseSchedule(settings.body) : null;
   const scheduledKinds = (["goal", "review"] as const).filter((kind) => {
     if (!schedule?.enabled) return false;
-    const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
-    if (weekday === 0 || (weekday === 6 && kind === "review")) return false;
-    const due = weekday === 6 ? "10:00" : kind === "goal" ? schedule.goalTime : schedule.reviewTime;
+    if (isWeekend(date) && kind === "review") return false;
+    const due = isWeekend(date)
+      ? "10:00"
+      : kind === "goal"
+        ? schedule.goalTime
+        : schedule.reviewTime;
     const late = minutes(minute) - minutes(due);
     return late >= 0 && late <= 5;
   });
