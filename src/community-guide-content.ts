@@ -55,6 +55,18 @@ export function guideBlocks(userId: string, guide: WelcomeGuideContent) {
   return [
     ...sections,
     {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "친구 초대하기" },
+          action_id: "community_referral_link",
+          value: JSON.stringify({ ownerId: "actor", key: "referral_link" }),
+          accessibility_label: "내 초대 링크 받기",
+        },
+      ],
+    },
+    {
       type: "image",
       slack_file: { id: guide.orderedFileIds[0] },
       alt_text: "OT1L 로고",

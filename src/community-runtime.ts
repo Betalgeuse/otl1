@@ -92,6 +92,7 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
     "community_introduction_submit",
     "community_introduction_directory",
   ].includes(actionId);
+  const referralLinkAction = actionId === "community_referral_link";
   const expandedChannelAllowed =
     (bugAction &&
       [
@@ -100,11 +101,13 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
         env.COMMUNITY_FEEDBACK_CHANNEL_ID,
       ].includes(channelId)) ||
     (introductionAction &&
-      [env.COMMUNITY_RELEASE_CHANNEL_ID, env.COMMUNITY_INTRO_CHANNEL_ID].includes(channelId));
+      [env.COMMUNITY_RELEASE_CHANNEL_ID, env.COMMUNITY_INTRO_CHANNEL_ID].includes(channelId)) ||
+    (referralLinkAction && channelId === env.COMMUNITY_WELCOME_CHANNEL_ID);
   const feedbackActionDenied = channelId === env.COMMUNITY_FEEDBACK_CHANNEL_ID && !bugAction;
   if (
     teamId !== env.SLACK_TEAM_ID ||
     feedbackActionDenied ||
+    (referralLinkAction && channelId !== env.COMMUNITY_WELCOME_CHANNEL_ID) ||
     (![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) &&
       !expandedChannelAllowed) ||
     (channelId === env.COMMUNITY_CHANNEL_ID && userId !== env.COMMUNITY_ADMIN_ID) ||

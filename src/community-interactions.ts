@@ -12,6 +12,7 @@ import { escapeSlackText } from "./community-messages";
 import { openCommunityPalette, submitCommunityPalette } from "./community-palette";
 import { authorizeCommunityAction } from "./community-permissions";
 import { processRecordAction } from "./community-record-interactions";
+import { handleReferralLinkMessage } from "./community-referral-link";
 import { referralSlackPort } from "./community-referral-slack";
 import { CommunityReferralStore } from "./community-referral-store";
 import {
@@ -67,6 +68,64 @@ export async function communityInteraction(
     );
     if (env.COMMUNITY_PUBLIC_CHANNEL_ID)
       waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+    return new Response(null, { status: 200 });
+  }
+  if (data.type === "block_actions" && action && id === "community_referral_link") {
+    const scope = actionIdentity(data, env, id);
+    authorizeCommunityAction(id, scope, env);
+    const value = object(JSON.parse(string(action.value)));
+    if (string(value.ownerId) !== "actor" || string(value.key) !== "referral_link")
+      throw new InputError("이 동작은 사용할 수 없습니다.");
+    const slack = referralSlackPort(env);
+    waitUntil(
+      (async () => {
+        if (env.REFERRALS_ENABLED !== "true" || env.PUBLIC_APPLICATIONS_ENABLED !== "true") {
+          await slack.postEphemeral({
+            channelId: scope.channelId,
+            userId: scope.userId,
+            text: "지금은 초대 링크를 사용할 수 없어요. 운영자에게 문의해 주세요.",
+          });
+          return;
+        }
+        const store = new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+          teamId: env.SLACK_TEAM_ID,
+          channelId: env.COMMUNITY_PUBLIC_CHANNEL_ID ?? "",
+          userId: env.COMMUNITY_ADMIN_ID ?? "",
+        });
+        await handleReferralLinkMessage(
+          {
+            teamId: scope.teamId,
+            channelId: scope.channelId,
+            userId: scope.userId,
+            text: "내 초대 링크",
+          },
+          env,
+          store,
+          slack,
+        );
+      })().catch(async (error: unknown) => {
+        console.error(
+          JSON.stringify({
+            event: "community.referral_link.failed",
+            type: error instanceof Error ? error.name : "Unknown",
+          }),
+        );
+        try {
+          await slack.postEphemeral({
+            channelId: scope.channelId,
+            userId: scope.userId,
+            text: "초대 링크를 확인하지 못했어요. 잠시 후 다시 눌러 주세요.",
+          });
+        } catch (replyError: unknown) {
+          console.error(
+            JSON.stringify({
+              event: "community.referral_link.failure_notice_failed",
+              type: replyError instanceof Error ? replyError.name : "Unknown",
+            }),
+          );
+        }
+      }),
+    );
     return new Response(null, { status: 200 });
   }
   if (data.type === "block_actions" && action && id.startsWith("lifecycle_")) {
