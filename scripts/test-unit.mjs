@@ -57,6 +57,7 @@ const suites = [
   "community-reminder-batch",
   "community-batched-reminders",
   "community-reminder-audit",
+  "community-membership-store-error-code",
   "community-common-delivery",
   "community-schedule-overlap",
   "dormant-shoutout",

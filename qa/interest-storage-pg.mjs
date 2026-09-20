@@ -15,7 +15,8 @@ const freshDb = `otl_i_${tag}_fresh`;
 const upgradeDb = `otl_i_${tag}_upgrade`;
 const ownerRole = `otl_i_${tag}_owner`;
 const runtimeProbeRole = `otl_i_${tag}_runtime`;
-const clusterEnv = { ...process.env, PGHOST: '127.0.0.1', PGPORT: '5432', PGDATABASE: 'postgres' };
+const clusterEnv = { ...process.env, PGHOST: process.env.OTL_REHEARSAL_PGHOST ?? '127.0.0.1',
+  PGPORT: process.env.OTL_REHEARSAL_PGPORT ?? '5432', PGDATABASE: 'postgres' };
 let dbEnv = clusterEnv;
 const run = (bin, args) => exec(join(pg, bin), args, { cwd: root, env: dbEnv, encoding: 'utf8' });
 const sql = async (query) => (await run('psql', ['-X', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c', query])).stdout.trim();

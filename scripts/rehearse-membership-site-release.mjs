@@ -34,7 +34,7 @@ const focusedQa = [
   "membership-invite-security", "site-intake", "site-static", "export-public-structure",
   "referral-capacity-slack", "community-interest-intake", "community-interest-admin",
   "community-interest-local-e2e", "interest-private", "interest-storage-pg",
-  "referral-capacity-pg", "real-name-pg", "version-map",
+  "referral-capacity-pg", "real-name-pg", "community-membership-store-error-code", "version-map",
 ];
 const injection = process.argv.find((arg) => arg.startsWith("--inject="))?.slice(9);
 const existingPgOnly = process.argv.includes("--existing-pg-only");

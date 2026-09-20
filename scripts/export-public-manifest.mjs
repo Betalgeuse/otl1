@@ -185,6 +185,7 @@ export const PUBLIC_QA_NAMES = [
   "version-map.mjs",
   "community-common-delivery.mjs",
   "community-schedule-overlap.mjs",
+  "community-membership-store-error-code.mjs",
   "membership-reminder-audit-pg.mjs",
   "current-member-reminders.sql",
   "community-bug-delivery.mjs",
