@@ -31,6 +31,8 @@ assert.deepEqual(PUBLIC_RUNTIME_MIGRATION_PATHS, [
   "migrations/036_referral_capacity.sql",
   "migrations/037_interest_requests.sql",
   "migrations/038_interest_retention_due.sql",
+  "migrations/039_bot_owned_welcome_guide.sql",
+  "migrations/040_real_name_introductions.sql",
 ]);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-lifecycle-admin-db-role.mjs"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-referral-admin-db-role.mjs"), true);
@@ -40,6 +42,8 @@ assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("src/community-interest-int
 assert.equal(PUBLIC_QA_NAMES.includes("referral-capacity-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("interest-storage-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("interest-dead-alert.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("real-name-pg.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("real-name-storage.sql"), true);
 assert.throws(
   () =>
     assertRequiredPublicExportSources(
@@ -75,6 +79,7 @@ assert.throws(
 );
 assert.equal(PUBLIC_QA_NAMES.includes("community-guide-security-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("version-map.mjs"), true);
+assert.throws(() => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPORT_SOURCES, (path) => path !== "migrations/040_real_name_introductions.sql"), /Missing required public export source: migrations\/040_real_name_introductions\.sql/);
 assert.equal(PUBLIC_DOC_NAMES.includes("GUIDE_DATABASE_SECURITY.md"), true);
 assert.throws(() => assertPublicExportPaths(["site/dist/index.html", "site/dist/app.js", "src/index.ts"]));
 assert.throws(() => assertPublicExportPaths(["site/dist/index.html", "site/dist/app.js", "site/dist/styles.css", "src/index.ts", ".github/workflows/publish.yml"]));

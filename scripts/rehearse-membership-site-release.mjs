@@ -34,7 +34,7 @@ const focusedQa = [
   "membership-invite-security", "site-intake", "site-static", "export-public-structure",
   "referral-capacity-slack", "community-interest-intake", "community-interest-admin",
   "community-interest-local-e2e", "interest-private", "interest-storage-pg",
-  "referral-capacity-pg", "version-map",
+  "referral-capacity-pg", "real-name-pg", "version-map",
 ];
 const injection = process.argv.find((arg) => arg.startsWith("--inject="))?.slice(9);
 const existingPgOnly = process.argv.includes("--existing-pg-only");
@@ -42,10 +42,10 @@ const initdbQa = new Set([
   "member-lifecycle-pg", "lifecycle-delivery-pg", "lifecycle-admin-security",
   "referral-storage-pg", "referral-retention-pg", "community-runtime-pg",
   "review-thread-topology-pg", "garden-projection-upgrade-pg",
-  "membership-reminder-audit-pg", "community-guide-security-pg", "referral-capacity-pg",
+  "membership-reminder-audit-pg", "community-guide-security-pg", "referral-capacity-pg", "real-name-pg",
 ]);
 const injections = new Set([
-  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-038", "missing-binding",
+  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-038", "missing-039", "missing-040", "missing-binding",
   "missing-bootstrap", "missing-interest-admin-credential", "missing-interest-flag",
   "missing-interest-secret", "missing-role", "missing-secret", "pii-leak", "rollback-mismatch",
   "schema-head", "secret-leak", "turnstile-secret-in-vars", "turnstile-secret-leak", "turnstile-test-key",
@@ -95,7 +95,8 @@ const ownerRole = `otl_r_${tag}_owner`;
 const primaryDb = `otl_r_${tag}_main`;
 const rollbackDb = `otl_r_${tag}_rollback`;
 const freshDb = `otl_r_${tag}_fresh`;
-const serviceEnv = { ...process.env, PGHOST: "127.0.0.1", PGPORT: "5432", PGDATABASE: "postgres" };
+const serviceEnv = { ...process.env, PGHOST: process.env.OTL_REHEARSAL_PGHOST ?? "127.0.0.1",
+  PGPORT: process.env.OTL_REHEARSAL_PGPORT ?? "5432", PGDATABASE: "postgres" };
 let created = false;
 let pgEnv;
 
@@ -120,7 +121,7 @@ async function scalarAs(database, role, query) {
     { env: { ...pgEnv, PGUSER: role } })).stdout.trim();
 }
 async function assertSchemaHead(database, expected) {
-  const actual = await scalar(database, "SELECT version FROM otl.schema_migrations ORDER BY version DESC LIMIT 1");
+  const actual = await scalar(database, "SELECT version FROM otl.schema_migrations ORDER BY regexp_replace(version, '-.*$', '')::integer DESC LIMIT 1");
   assert.equal(actual, expected, "schema head mismatch");
 }
 async function apply(database, names) {
@@ -136,7 +137,8 @@ async function digest(database, tables = protectedTables) {
   const result = {};
   for (const name of tables) {
     assert.equal(await scalar(database, `SELECT to_regclass('otl.${name}') IS NOT NULL`), "t", `${name} table missing`);
-    const value = await scalar(database, `SELECT count(*)||':'||md5(coalesce(string_agg(md5(to_jsonb(t)::text),',' ORDER BY md5(to_jsonb(t)::text)),'') ) FROM otl.${name} t`);
+    const row = name === "guide_versions" ? "to_jsonb(t)-'source_origin'" : name === "member_introductions" ? "to_jsonb(t)-'confirmed_name'-'name_prefill'-'pending_confirmed_name'" : "to_jsonb(t)";
+    const value = await scalar(database, `SELECT count(*)||':'||md5(coalesce(string_agg(md5(${row}::text),',' ORDER BY md5(${row}::text)),'') ) FROM otl.${name} t`);
     result[name] = value;
   }
   return result;
@@ -180,8 +182,8 @@ async function cleanupDatabases() {
   receipt.checks.localCleanup = { exit: 0, observed: "disposable databases and roles removed" };
 }
 function preflight(config, site, vars, siteWorker, releaseNames = release) {
-  assert.equal(migrations.length, 38, "schema head must be 038");
-  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038"]);
+  assert.equal(migrations.length, 40, "schema head must be 040");
+  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038", "039", "040"]);
   assert.equal(site.services?.find((item) => item.binding === "CORE")?.service, config.name, "CORE service binding missing");
   assert.equal(site.assets?.binding, "ASSETS", "ASSETS binding missing");
   assert.ok(config.r2_buckets?.some((item) => item.binding === "INVITE_PRIVATE_OBJECTS"), "invite R2 binding missing");
@@ -234,6 +236,8 @@ try {
   await expectFailure("missing-036", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("036_"))));
   await expectFailure("missing-037", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("037_"))));
   await expectFailure("missing-038", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("038_"))));
+  await expectFailure("missing-039", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("039_"))));
+  await expectFailure("missing-040", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("040_"))));
   await expectFailure("turnstile-test-key", async () => preflight(config, testKeySite, vars, siteWorker));
   await expectFailure("turnstile-secret-in-vars", async () => preflight(config, secretVarSite, vars, siteWorker));
   if (injection === "missing-binding") preflight(config, alternate, vars, siteWorker);
@@ -244,6 +248,8 @@ try {
   if (injection === "missing-036") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("036_")));
   if (injection === "missing-037") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("037_")));
   if (injection === "missing-038") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("038_")));
+  if (injection === "missing-039") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("039_")));
+  if (injection === "missing-040") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("040_")));
   if (injection === "turnstile-test-key") preflight(config, testKeySite, vars, siteWorker);
   if (injection === "turnstile-secret-in-vars") preflight(config, secretVarSite, vars, siteWorker);
   preflight(config, site, vars, siteWorker);
@@ -298,12 +304,12 @@ try {
   await check("snapshot-035", join(pgBin, "pg_dump"), ["-Fc", "--no-owner", "--no-acl", "-f", join(temp, "snapshot.dump"), primaryDb], { env: pgEnv });
   await apply(primaryDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
   if (injection === "schema-head")
-    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='038-interest-retention-due'"]);
-  await assertSchemaHead(primaryDb, "038-interest-retention-due");
-  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-8])-'"), "10");
+    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='040-real-name-introductions'"]);
+  await assertSchemaHead(primaryDb, "040-real-name-introductions");
+  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-9]|40)-'"), "12");
   const after = await digest(primaryDb);
   assert.deepEqual(after, before, "protected rows changed during upgrade");
-  receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "038", protected: before };
+  receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "040", protected: before };
   if (injection === "missing-role")
     await psql(primaryDb, ["-c", "REVOKE otl_interest_member FROM otl_interest_member_login"]);
   await expectFailure("migration-conflict", () => psql(primaryDb, ["-f", "migrations/037_interest_requests.sql"]));
@@ -316,6 +322,8 @@ try {
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_referral_runtime','otl.interest_admin_execute(text,jsonb)','EXECUTE')"), "f");
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_member_login','otl.interest_member_confirm(jsonb)','EXECUTE')"), "t", "interest member role binding missing");
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_referral_admin_login','otl.referral_capacity_admin_execute(text,jsonb)','EXECUTE')"), "t", "referral admin role binding missing");
+  assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_referral_runtime','otl.referral_resolve_named(jsonb)','EXECUTE')"), "t", "named referral runtime role binding missing");
+  assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_member_login','otl.referral_resolve_named(jsonb)','EXECUTE')"), "f", "named referral lookup leaked to interest member");
   receipt.checks.roleMatrix = { exit: 0, observed: "direct interest/quota table grants and admin execute denied" };
   assert.equal(await scalarAs(primaryDb, "otl_interest_member_login", "SELECT current_user"), "otl_interest_member_login");
   assert.equal(await scalarAs(primaryDb, "otl_referral_admin_login", "SELECT current_user"), "otl_referral_admin_login");
@@ -341,15 +349,17 @@ try {
   assert.equal(await scalar(rollbackDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '036-%'"), "0");
   await psql(rollbackDb, ["-c", "DROP TABLE otl.referral_capacity_defaults"]);
   await apply(rollbackDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
-  await assertSchemaHead(rollbackDb, "038-interest-retention-due");
+  await assertSchemaHead(rollbackDb, "040-real-name-introductions");
   assert.deepEqual(await digest(rollbackDb), before, "forward repair changed protected rows");
   assert.deepEqual(await seedAdditive(rollbackDb), additiveBefore, "forward repair changed additive row contract");
-  receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "038" };
+  receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "040" };
   await apply(freshDb, migrations);
-  await assertSchemaHead(freshDb, "038-interest-retention-due");
+  await assertSchemaHead(freshDb, "040-real-name-introductions");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '037-%'"), "1");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '038-%'"), "1");
-  receipt.checks.freshInstall = { exit: 0, schemaHead: "038" };
+  assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '039-%'"), "1");
+  assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '040-%'"), "1");
+  receipt.checks.freshInstall = { exit: 0, schemaHead: "040" };
   await cleanupDatabases();
   await check("full-check", "bun", ["run", "check"]);
   if (injection === "build-failure") await check("site-build", "bunx", ["wrangler", "deploy", "--dry-run", "-c", "missing-site-config.jsonc"]);
@@ -362,10 +372,10 @@ try {
   const exportDir = join(temp, "public");
   await check("public-export", "node", ["scripts/export-public.mjs", exportDir]);
   for (const name of ["migrations/036_referral_capacity.sql", "migrations/037_interest_requests.sql",
-    "migrations/038_interest_retention_due.sql", "scripts/bootstrap-referral-admin-db-role.mjs", "site/dist/interest.html", "site/dist/receipt.html",
+    "migrations/038_interest_retention_due.sql", "migrations/039_bot_owned_welcome_guide.sql", "migrations/040_real_name_introductions.sql", "qa/real-name-pg.mjs", "qa/real-name-storage.sql", "scripts/bootstrap-referral-admin-db-role.mjs", "site/dist/interest.html", "site/dist/receipt.html",
     "site/dist/assets/otl1-emoji/blob_smiley.png"])
     assert.ok((await readFile(join(exportDir, name))).length > 0, `${name} missing from public export`);
-  receipt.checks.publicRequiredFiles = { exit: 0, observed: "036,037,038,bootstrap,interest,receipt,emoji present" };
+  receipt.checks.publicRequiredFiles = { exit: 0, observed: "036–040,real-name QA,bootstrap,interest,receipt,emoji present" };
   receipt.checks.publicLeakScan = { exit: 0, scannedFiles: await scanPublicExport(exportDir) };
   await check("public-check", "bun", ["run", "check"], { cwd: exportDir });
   await check("public-site-build", join(exportDir, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "site/wrangler.jsonc"], { cwd: exportDir });

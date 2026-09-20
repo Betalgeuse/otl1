@@ -43,6 +43,7 @@ const suites = [
   "community-townhall",
   "community-welcome",
   "community-introduction",
+  "version-map",
   "community-introduction-channel",
   "migration-maintenance",
   "weekends",

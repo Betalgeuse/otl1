@@ -58,6 +58,7 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/037_interest_requests.sql",
   "migrations/038_interest_retention_due.sql",
   "migrations/039_bot_owned_welcome_guide.sql",
+  "migrations/040_real_name_introductions.sql",
 ];
 
 // `src` and `site` are copied as directories, but these paths keep the membership
@@ -137,6 +138,8 @@ export const PUBLIC_QA_NAMES = [
   "community-target-date-routing.mjs",
   "community-record-decision.mjs",
   "community-introduction.mjs",
+  "real-name-pg.mjs",
+  "real-name-storage.sql",
   "community-introduction-channel.mjs",
   "community-scheduler.mjs",
   "community-social.mjs",
