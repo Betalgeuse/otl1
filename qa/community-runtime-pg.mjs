@@ -189,14 +189,18 @@ try {
   await psql(`INSERT INTO otl.workspaces(team_id) VALUES('TINT');
     INSERT INTO otl.workspace_channels(team_id,channel_id) VALUES('TINT','CPUBLIC'),('TINT','CADMIN');
     INSERT INTO otl.workspace_members(team_id,user_id,is_bot,is_app_user,slack_deleted)
-      VALUES('TINT','UADMIN',false,false,false),('TINT','UOWNER',false,false,false);
+      VALUES('TINT','UADMIN',false,false,false),('TINT','UOWNER',false,false,false),
+        ('TINT','ULIFECYCLE',false,false,false);
     INSERT INTO otl.workspace_channel_memberships(team_id,channel_id,user_id,is_current,last_seen_at,synced_at)
-      VALUES('TINT','CPUBLIC','UOWNER',true,now(),now());
+      VALUES('TINT','CPUBLIC','UOWNER',true,now(),now()),
+        ('TINT','CPUBLIC','ULIFECYCLE',true,now(),now());
     INSERT INTO otl.member_lifecycles(team_id,channel_id,user_id,state,rollout_at,last_transition_at)
-      VALUES('TINT','CPUBLIC','UOWNER','active',now(),now());
+      VALUES('TINT','CPUBLIC','UOWNER','active',now(),now()),
+        ('TINT','CPUBLIC','ULIFECYCLE','active',now(),now());
     INSERT INTO otl.referral_admins(team_id,user_id) VALUES('TINT','UADMIN');
     INSERT INTO otl.grass_seasons(team_id,channel_id,user_id,opened_at,opened_on,opened_reason)
-      VALUES('TINT','CPUBLIC','UOWNER',now(),(now() AT TIME ZONE 'Asia/Seoul')::date,'rollout');`);
+      VALUES('TINT','CPUBLIC','UOWNER',now(),(now() AT TIME ZONE 'Asia/Seoul')::date,'rollout'),
+        ('TINT','CPUBLIC','ULIFECYCLE',now(),(now() AT TIME ZONE 'Asia/Seoul')::date,'rollout');`);
   const ts = `${Math.floor(Date.now()/1000)}.001`;
   assert.equal((await slackRequest("/slack/events", { type: "event_callback", team_id: "TINT", event_id: "EvLink1",
     event: { type: "message", channel: "CPUBLIC", user: "UOWNER", ts, text: "내 초대 링크" } })).status, 200);
@@ -308,48 +312,48 @@ try {
     await at(`${day}T15:00:01Z`, (frozen) => runMembershipDue(env, db, "CPUBLIC", frozen));
   }
   assert.equal(await scalar("SELECT state FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='UOWNER'"), "active");
-  assert.equal(await scalar("SELECT count(*) FROM otl.lifecycle_runtime_evaluations WHERE team_id='TINT' AND mode='shadow' AND candidate"), "1");
+  assert.equal(await scalar("SELECT count(*) FROM otl.lifecycle_runtime_evaluations WHERE team_id='TINT' AND user_id='ULIFECYCLE' AND mode='shadow' AND candidate"), "1");
   env.LIFECYCLE_MODE = "enforce";
   await at("2026-09-29T15:00:01Z", (frozen) => runMembershipDue(env, db, "CPUBLIC", frozen));
-  assert.equal(await scalar("SELECT state FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='UOWNER'"), "grace");
+  assert.equal(await scalar("SELECT state FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='ULIFECYCLE'"), "grace");
   const graceNotice = slackEffects.findLast((effect) => effect.method === "chat.postMessage" &&
     effect.payload.blocks?.some((block) => block.block_id?.startsWith("lifecycle_notice:")));
   assert.ok(graceNotice);
   const extend = graceNotice.payload.blocks.find((block) => block.type === "actions").elements.find((item) => item.action_id === "lifecycle_extend");
   await at("2026-09-30T01:00:00Z", async () => {
     assert.equal((await slackRequest("/slack/interactions", { type: "block_actions", team: { id: "TINT" },
-      user: { id: "UOWNER" }, container: { channel_id: "DPRIVATE" },
+      user: { id: "ULIFECYCLE" }, container: { channel_id: "DPRIVATE" },
       actions: [{ ...extend, action_ts: `${Math.floor(Date.now()/1000)}.123` }] })).status, 200);
   });
-  assert.equal(await scalar("SELECT extension_used::text FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='UOWNER'"), "true");
+  assert.equal(await scalar("SELECT extension_used::text FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='ULIFECYCLE'"), "true");
   await at("2026-09-30T01:01:00Z", async () => {
     assert.equal((await slackRequest("/slack/interactions", { type: "block_actions", team: { id: "TINT" },
-      user: { id: "UOWNER" }, container: { channel_id: "DPRIVATE" },
+      user: { id: "ULIFECYCLE" }, container: { channel_id: "DPRIVATE" },
       actions: [{ ...extend, action_ts: `${Math.floor(Date.parse("2026-09-30T01:00:00Z")/1000)}.123` }] })).status, 200);
   });
-  assert.equal(await scalar("SELECT count(*) FROM otl.lifecycle_runtime_actions WHERE team_id='TINT' AND user_id='UOWNER' AND action_type='lifecycle_extend'"), "1");
+  assert.equal(await scalar("SELECT count(*) FROM otl.lifecycle_runtime_actions WHERE team_id='TINT' AND user_id='ULIFECYCLE' AND action_type='lifecycle_extend'"), "1");
 
   const staleStop = await signLifecycleAction({ actionId: "lifecycle_stop", teamId: "TINT",
-    channelId: "CPUBLIC", ownerId: "UOWNER", revision: 1, key: "stale-stop" }, env.LIFECYCLE_ACTION_SECRET);
+    channelId: "CPUBLIC", ownerId: "ULIFECYCLE", revision: 1, key: "stale-stop" }, env.LIFECYCLE_ACTION_SECRET);
   await at("2026-09-30T01:02:00Z", async () => {
     const stale = await slackRequest("/slack/interactions", { type: "block_actions",
-      team: { id: "TINT" }, user: { id: "UOWNER" }, container: { channel_id: "DPRIVATE" },
+      team: { id: "TINT" }, user: { id: "ULIFECYCLE" }, container: { channel_id: "DPRIVATE" },
       actions: [{ action_id: "lifecycle_stop", value: staleStop,
         action_ts: `${Math.floor(Date.now()/1000)}.123` }] });
     assert.equal(stale.status, 503);
   });
-  assert.equal(await scalar("SELECT count(*) FROM otl.lifecycle_runtime_actions WHERE team_id='TINT' AND user_id='UOWNER'"), "1");
+  assert.equal(await scalar("SELECT count(*) FROM otl.lifecycle_runtime_actions WHERE team_id='TINT' AND user_id='ULIFECYCLE'"), "1");
   await at("2026-10-14T15:00:01Z", (frozen) => runMembershipDue(env, db, "CPUBLIC", frozen));
-  assert.equal(await scalar("SELECT state FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='UOWNER'"), "dormant");
-  assert.equal(await scalar("SELECT count(*) FROM otl.grass_seasons WHERE team_id='TINT' AND user_id='UOWNER' AND closed_reason='grace_expired'"), "1");
+  assert.equal(await scalar("SELECT state FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='ULIFECYCLE'"), "dormant");
+  assert.equal(await scalar("SELECT count(*) FROM otl.grass_seasons WHERE team_id='TINT' AND user_id='ULIFECYCLE' AND closed_reason='grace_expired'"), "1");
   await at("2026-10-15T01:30:00Z", async () => {
     const returnTs = `${Math.floor(Date.now()/1000)}.001`;
     assert.equal((await slackRequest("/slack/events", { type: "event_callback", team_id: "TINT", event_id: "EvReturn1",
-      event: { type: "message", channel: "CPUBLIC", user: "UOWNER", ts: returnTs,
+      event: { type: "message", channel: "CPUBLIC", user: "ULIFECYCLE", ts: returnTs,
         text: "원씽: 새 시즌으로 돌아오기" } })).status, 200);
   });
-  assert.equal(await scalar("SELECT state FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='UOWNER'"), "active");
-  assert.equal(await scalar("SELECT count(*) FROM otl.grass_seasons WHERE team_id='TINT' AND user_id='UOWNER' AND closed_at IS NULL"), "1");
+  assert.equal(await scalar("SELECT state FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='ULIFECYCLE'"), "active");
+  assert.equal(await scalar("SELECT count(*) FROM otl.grass_seasons WHERE team_id='TINT' AND user_id='ULIFECYCLE' AND closed_at IS NULL"), "1");
   await psql(`INSERT INTO otl.workspace_members(team_id,user_id,is_bot,is_app_user,slack_deleted)
       SELECT 'TINT','UREM'||lpad(n::text,3,'0'),false,false,false FROM generate_series(1,12)n;
     INSERT INTO otl.workspace_channel_memberships(team_id,channel_id,user_id,is_current,last_seen_at,synced_at)
