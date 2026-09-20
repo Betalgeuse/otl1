@@ -25,13 +25,63 @@ const runtimeRole = `otl_i_${tag}_runtime`;
 const cluster = { ...process.env, PGHOST: process.env.OTL_REHEARSAL_PGHOST ?? '127.0.0.1',
   PGPORT: process.env.OTL_REHEARSAL_PGPORT ?? '5432', PGDATABASE: 'postgres' };
 let sqlEnv = cluster;
-const run = (binary, args) => exec(join(pg, binary), args, { cwd: root, env: sqlEnv, encoding: 'utf8' });
-const sql = async (query) => (await run('psql', ['-X', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c', query])).stdout.trim();
+const run = (binary, args, env = sqlEnv) => exec(join(pg, binary), args, { cwd: root, env, encoding: 'utf8' });
+const sql = async (query, env = sqlEnv) => (
+  await run('psql', ['-X', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c', query], env)
+).stdout.trim();
+const deferred = () => {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+};
+const assertOverlappingSqlCallsKeepTheirRole = async (runtimeEnv, ownerEnv) => {
+  const saved = sqlEnv;
+  const runtimeStarted = deferred();
+  const ownerStarted = deferred();
+  const releaseRuntime = deferred();
+  const releaseOwner = deferred();
+  const runAfterOverlap = async (env, started, release) => {
+    const previous = sqlEnv;
+    sqlEnv = env;
+    started.resolve();
+    try {
+      await release.promise;
+      return sql('SELECT current_user', env);
+    } finally {
+      sqlEnv = previous;
+    }
+  };
+  const runtime = runAfterOverlap(runtimeEnv, runtimeStarted, releaseRuntime);
+  await runtimeStarted.promise;
+  const owner = runAfterOverlap(ownerEnv, ownerStarted, releaseOwner);
+  await ownerStarted.promise;
+  try {
+    releaseRuntime.resolve();
+    assert.equal(await runtime, runtimeEnv.PGUSER,
+      'overlapping SQL must retain the runtime request role at its call boundary');
+    releaseOwner.resolve();
+    assert.equal(await owner, ownerEnv.PGUSER,
+      'overlapping SQL must retain the owner request role at its call boundary');
+  } finally {
+    releaseRuntime.resolve();
+    releaseOwner.resolve();
+    await Promise.allSettled([runtime, owner]);
+    sqlEnv = saved;
+  }
+};
 const quote = (value) => `'${value.replaceAll("'", "''")}'`;
 const secret = Buffer.alloc(32, 3).toString('base64url');
 const signing = 'local-slack-signing';
 const objects = new Map();
 const messages = [];
+const sqlFailures = [];
+let sqlRequestSequence = 0;
+const sqlOperation = (query) => query.match(/\botl\.([a-z_]+)\s*\(/)?.[1] ?? 'statement';
+const sqlState = (error) => {
+  const stderr = error && typeof error === 'object' && 'stderr' in error && typeof error.stderr === 'string'
+    ? error.stderr : '';
+  return stderr.match(/\b[0-9A-Z]{5}\b/)?.[0] ?? 'psql-error';
+};
 let privateAdminChannel = true;
 let loseSubmitResponse = false;
 let failNextCiphertextPut = false;
@@ -94,18 +144,25 @@ globalThis.fetch = async (url, init) => {
     const role = connection.username;
     const body = JSON.parse(init.body);
     const rendered = body.params.reduce((statement, value, index) => statement.replaceAll(`$${index+1}`, quote(value)), body.query);
-    const previous = sqlEnv;
-    sqlEnv = { ...cluster, PGDATABASE: database, PGUSER: role };
+    const request = {
+      sequence: ++sqlRequestSequence,
+      role,
+      database,
+      operation: sqlOperation(rendered),
+    };
+    const requestEnv = Object.freeze({ ...cluster, PGDATABASE: database, PGUSER: role });
     try {
-      const value = await sql(rendered);
+      const value = await sql(rendered, requestEnv);
       if (loseSubmitResponse && rendered.includes("interest_runtime_execute('submit'")) {
         loseSubmitResponse = false;
         return Response.json({ code: 'XX000' }, { status: 500 });
       }
       return responseRows(value);
     }
-    catch (error) { return Response.json({ code: 'XX000' }, { status: 500 }); }
-    finally { sqlEnv = previous; }
+    catch (error) {
+      sqlFailures.push({ ...request, sqlState: sqlState(error) });
+      return Response.json({ code: 'XX000' }, { status: 500 });
+    }
   }
   return originalFetch(url, init);
 };
@@ -153,6 +210,10 @@ try {
   await sql("INSERT INTO otl.referral_admins(team_id,user_id) VALUES('TREF','UADMIN')");
   await sql(`CREATE ROLE ${runtimeRole} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT PASSWORD NULL`);
   await sql(`GRANT otl_referral_runtime TO ${runtimeRole}`);
+  await assertOverlappingSqlCallsKeepTheirRole(
+    { ...cluster, PGUSER: runtimeRole, PGDATABASE: database },
+    { ...cluster, PGUSER: owner, PGDATABASE: database },
+  );
   await sql(`SELECT otl.referral_runtime_execute('issue','{"teamId":"TREF","userId":"UREFERRER","linkId":"LNK-INTERESTE2E","tokenDigest":"${'1'.repeat(64)}","now":"${new Date().toISOString()}"}'::jsonb)`);
   const disabledCore = await handleRequest(new Request('https://core.invalid/internal/interest/submit', {
     method: 'POST', body: '{}',
@@ -237,7 +298,9 @@ try {
   assert.ok(verified);
   const attach = verified.blocks.flatMap((block) => block.elements ?? []).find((element) => element.action_id.startsWith('community_interest_attach'));
   const attachTs = `${Math.floor(Date.now()/1000)}.456321`;
-  assert.equal((await slackAction(attach, 'UADMIN', 'CADMIN', attachTs)).status, 200);
+  const failuresBeforeAttach = sqlFailures.length;
+  const attached = await slackAction(attach, 'UADMIN', 'CADMIN', attachTs);
+  assert.equal(attached.status, 200, `attach fake-SQL diagnostics: ${JSON.stringify(sqlFailures.slice(failuresBeforeAttach))}`);
   assert.equal((await slackAction(attach, 'UADMIN', 'CADMIN', attachTs)).status, 200);
   assert.equal(await sql("SELECT state FROM otl.interest_requests WHERE team_id='TREF'"), 'attached');
   assert.equal(await sql("SELECT count(*) FROM otl.interest_referral_bridges WHERE team_id='TREF'"), '1');
