@@ -136,3 +136,5 @@ main > section { scroll-margin-top:82px; }
 @media (max-width:760px) { #collective-title { font-size:var(--display-mobile-section-compact); } }
 @media (max-width:340px) { .narrow-break { display:block; } #collective-title { font-size:var(--display-mobile-section-tight); } }
 @media (max-width:760px) { html:not(.has-js) main > section { scroll-margin-top:170px; } }
+
+.application-intro h1{overflow-wrap:anywhere}

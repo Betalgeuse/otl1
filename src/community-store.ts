@@ -53,6 +53,7 @@ function introduction(value: unknown): MemberIntroduction | null {
   return {
     teamId: string(v.teamId),
     userId: string(v.userId),
+    confirmedName: v.confirmedName === null ? null : string(v.confirmedName),
     intro: string(v.intro),
     linkedin: v.linkedin === null ? null : string(v.linkedin),
     details: v.details === null ? null : string(v.details),
@@ -162,6 +163,7 @@ export class CommunityStore extends CommunityScheduleStore {
   async prepareIntroduction(input: {
     readonly teamId: string;
     readonly userId: string;
+    readonly confirmedName: string;
     readonly intro: string;
     readonly linkedin: string | null;
     readonly details: string | null;

@@ -92,13 +92,22 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
     );
   }
 
-  async resolveLink(teamId: string, tokenDigest: string): Promise<boolean> {
+  async resolveLink(
+    teamId: string,
+    tokenDigest: string,
+  ): Promise<{ readonly available: boolean; readonly inviterName: string | null }> {
     const result = object(
-      await this.db.queryJson("SELECT otl.referral_runtime_execute('resolve',$1::jsonb)", [
+      await this.db.queryJson("SELECT otl.referral_resolve_named($1::jsonb)", [
         JSON.stringify({ teamId, tokenDigest }),
       ]),
     );
-    return result.available === true;
+    return {
+      available: result.available === true,
+      inviterName:
+        result.available === true && result.inviterName !== null
+          ? string(result.inviterName)
+          : null,
+    };
   }
 
   async findSubmission(teamId: string, submissionKey: string): Promise<ReferralReceipt | null> {

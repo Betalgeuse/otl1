@@ -72,7 +72,10 @@ export type ReferralSubmit = {
 
 export interface ReferralRuntimeStore {
   claimServiceNonce(digest: string, expiresAt: string): Promise<boolean>;
-  resolveLink(teamId: string, tokenDigest: string): Promise<boolean>;
+  resolveLink(
+    teamId: string,
+    tokenDigest: string,
+  ): Promise<{ readonly available: boolean; readonly inviterName: string | null }>;
   findSubmission(teamId: string, submissionKey: string): Promise<ReferralReceipt | null>;
   findPrivateIntake(
     teamId: string,

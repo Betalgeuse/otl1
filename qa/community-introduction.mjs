@@ -19,7 +19,8 @@ const store = {
       current ?? {
         teamId: input.teamId,
         userId: input.userId,
-        intro: "",
+      intro: "",
+        confirmedName: null,
         linkedin: null,
         details: null,
         channelId: null,
@@ -34,6 +35,7 @@ const store = {
       teamId: input.teamId,
       userId: input.userId,
       intro: pending.intro,
+      confirmedName: pending.confirmedName,
       linkedin: pending.linkedin,
       details: pending.details,
       channelId: input.channelId,
@@ -117,11 +119,14 @@ try {
   await introductionModal(context, "TRIGGER1");
   let modal = calls.at(-1).body.view;
   assert.equal(modal.title.text, "자기소개");
-  assert.equal(modal.blocks[1].element.multiline, true);
-  assert.equal(modal.blocks[1].element.max_length, 180);
+  assert.equal(modal.blocks[2].element.multiline, true);
+  assert.equal(modal.blocks[2].element.max_length, 180);
   assert.match(modal.blocks[0].text.text, /공개/);
+  assert.equal(modal.blocks[1].block_id, "confirmed_name");
+  assert.equal(modal.blocks[1].element.multiline, undefined);
 
   const values = {
+    confirmed_name: { value: { value: "홍길동" } },
     intro: { value: { value: "데이터 제품을 만들고 커뮤니티 운영을 배우고 있어요." } },
     linkedin: {
       value: { value: "https://kr.linkedin.com/in/example-name/?trk=test#about" },
@@ -129,12 +134,14 @@ try {
     details: { value: { value: "https://example.com · @example" } },
   };
   assert.deepEqual(parseIntroduction(values), {
+    confirmedName: "홍길동",
     intro: "데이터 제품을 만들고 커뮤니티 운영을 배우고 있어요.",
     linkedin: "https://kr.linkedin.com/in/example-name/",
     details: "https://example.com · @example",
   });
   const multiline = "첫 문장입니다.\n둘째 줄도 자유롭게 적습니다.";
   assert.deepEqual(parseIntroduction({ ...values, intro: { value: { value: multiline } } }), {
+    confirmedName: "홍길동",
     intro: multiline,
     linkedin: "https://kr.linkedin.com/in/example-name/",
     details: "https://example.com · @example",
@@ -143,6 +150,10 @@ try {
     assert.deepEqual(parseIntroduction({ ...values, intro: { value: { value: intro } } }), {
       errors: { intro: "자기소개는 1~180자로 적어 주세요." },
     });
+  assert.deepEqual(
+    parseIntroduction({ ...values, confirmed_name: { value: { value: "" } } }),
+    { errors: { confirmed_name: "본명은 1~40자로 적어 주세요." } },
+  );
   assert.deepEqual(
     parseIntroduction({ ...values, linkedin: { value: { value: "https://example.com/in/fake" } } }),
     {
@@ -172,8 +183,9 @@ try {
   await introductionModal(context, "TRIGGER2");
   modal = calls.at(-1).body.view;
   assert.equal(modal.title.text, "자기소개 수정");
-  assert.equal(modal.blocks[1].element.initial_value, current.intro);
+  assert.equal(modal.blocks[2].element.initial_value, current.intro);
   const edited = {
+    confirmed_name: { value: { value: "홍길동" } },
     intro: { value: { value: "데이터 제품과 사람을 연결하는 일을 하고 있어요." } },
     linkedin: { value: { value: "" } },
     details: { value: { value: "https://portfolio.example" } },

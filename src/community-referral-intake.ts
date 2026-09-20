@@ -154,12 +154,11 @@ export async function handleReferralIntakeRequest(
       Object.keys(decoded).length !== 1
     )
       return Response.json({ available: false });
-    return Response.json({
-      available: await store.resolveLink(
-        env.SLACK_TEAM_ID,
-        await digestReferralToken(decoded.referralToken),
-      ),
-    });
+    const resolved = await store.resolveLink(
+      env.SLACK_TEAM_ID,
+      await digestReferralToken(decoded.referralToken),
+    );
+    return Response.json(resolved.available ? resolved : { available: false });
   }
   if (url.pathname === WITHDRAW_PATH) {
     return handleReferralWithdrawal(decoded, env.SLACK_TEAM_ID, store);

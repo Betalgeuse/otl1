@@ -152,24 +152,36 @@ function message(messageText: string, status: number): Response {
 async function referralPage(request: Request, env: SiteEnv, token: string): Promise<Response> {
   const lookupKey = request.headers.get("cf-connecting-ip") ?? token;
   if (!(await env.RATE_LIMITER.limit({ key: `lookup:${lookupKey}` })).success) return message(GENERIC_ERROR, 429);
-  if (!(await availableLink(env, token))) return message(GENERIC_ERROR, 404);
+  const resolved = await availableLink(env, token);
+  if (!resolved.available) return message(GENERIC_ERROR, 404);
   const html = await assetHtml(env, request, "referral.html");
-  return new Response(html.replaceAll("__REFERRAL_TOKEN__", token).replaceAll("__TURNSTILE_SITE_KEY__", env.TURNSTILE_SITE_KEY).replaceAll("__SHARE_TEXT__", SHARE_COPY(token)).replaceAll("__SUBMISSION_KEY__", crypto.randomUUID()), { headers: { "content-type": "text/html;charset=UTF-8" } });
+  const headline = resolved.inviterName
+    ? `${escapeHtml(resolved.inviterName)} 님이 같이 성장하자고<br>초대했어요!`
+    : "같이 성장하자고<br>초대받았어요!";
+  return new Response(html.replaceAll("__REFERRAL_TOKEN__", token).replaceAll("__TURNSTILE_SITE_KEY__", env.TURNSTILE_SITE_KEY).replaceAll("__SHARE_TEXT__", SHARE_COPY(token)).replaceAll("__SUBMISSION_KEY__", crypto.randomUUID()).replaceAll("__INVITER_HEADLINE__", headline), { headers: { "content-type": "text/html;charset=UTF-8" } });
 }
 
-async function availableLink(env: SiteEnv, token: string): Promise<boolean> {
+function escapeHtml(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+
+async function availableLink(env: SiteEnv, token: string): Promise<{ readonly available: boolean; readonly inviterName: string | null }> {
   try {
     const response = await coreRequest(env, RESOLVE_PATH, { referralToken: token });
-    if (!response.ok) return false;
+    if (!response.ok) return { available: false, inviterName: null };
     const result: unknown = await response.json();
-    return typeof result === "object" && result !== null && "available" in result && result.available === true;
-  } catch (error) { if (error instanceof Error) return false; throw error; }
+    if (typeof result !== "object" || result === null || !("available" in result) || result.available !== true)
+      return { available: false, inviterName: null };
+    const inviterName = "inviterName" in result && typeof result.inviterName === "string" && [...result.inviterName].length <= 40 && result.inviterName.trim() && !Array.from(result.inviterName).some((character) => character.charCodeAt(0) < 32)
+      ? result.inviterName : null;
+    return { available: true, inviterName };
+  } catch (error) { if (error instanceof Error) return { available: false, inviterName: null }; throw error; }
 }
 
 async function apply(request: Request, env: SiteEnv, token: string): Promise<Response> {
   const applicantIp = request.headers.get("cf-connecting-ip") ?? "unknown";
   if (!(await env.RATE_LIMITER.limit({ key: `apply:${applicantIp}` })).success) return message(GENERIC_ERROR, 429);
-  if (!(await availableLink(env, token))) return message(GENERIC_ERROR, 404);
+  if (!(await availableLink(env, token)).available) return message(GENERIC_ERROR, 404);
   if (Number(request.headers.get("content-length") ?? "0") > 16_384) return message(GENERIC_ERROR, 422);
   let form: FormData;
   try {

@@ -123,6 +123,7 @@ export type ReminderBatchFinish = {
 export type MemberIntroduction = {
   readonly teamId: string;
   readonly userId: string;
+  readonly confirmedName: string | null;
   readonly intro: string;
   readonly linkedin: string | null;
   readonly details: string | null;

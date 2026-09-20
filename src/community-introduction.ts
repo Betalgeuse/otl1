@@ -7,6 +7,7 @@ import { InputError, type Json, object, string } from "./input";
 import { openView } from "./slack-api";
 
 export type IntroductionInput = {
+  readonly confirmedName: string;
   readonly intro: string;
   readonly linkedin: string | null;
   readonly details: string | null;
@@ -41,10 +42,13 @@ function isValidIntroduction(value: string): boolean {
 
 export function parseIntroduction(valuesInput: unknown): IntroductionParseResult {
   const values = object(valuesInput);
+  const confirmedName = string(object(object(values.confirmed_name).value).value).trim();
   const intro = string(object(object(values.intro).value).value).trim();
   const rawLinkedIn = string(object(object(values.linkedin).value).value ?? "").trim();
   const details = string(object(object(values.details).value).value ?? "").trim();
   const errors: Record<string, string> = {};
+  if (!confirmedName || [...confirmedName].length > 40 || /[\r\n]/.test(confirmedName))
+    errors.confirmed_name = "본명은 1~40자로 적어 주세요.";
   if (!isValidIntroduction(intro)) errors.intro = "자기소개는 1~180자로 적어 주세요.";
   const linkedin = canonicalLinkedIn(rawLinkedIn);
   if (rawLinkedIn && !linkedin)
@@ -52,7 +56,9 @@ export function parseIntroduction(valuesInput: unknown): IntroductionParseResult
       "본인 LinkedIn 프로필 주소를 https://linkedin.com/in/... 형식으로 입력해 주세요.";
   if ([...details].length > 300 || /[\r\n]/.test(details))
     errors.details = "추가 공개 정보는 줄바꿈 없이 300자 이내로 적어 주세요.";
-  return Object.keys(errors).length ? { errors } : { intro, linkedin, details: details || null };
+  return Object.keys(errors).length
+    ? { errors }
+    : { confirmedName, intro, linkedin, details: details || null };
 }
 
 function targetChannel(context: CommunityContext): string {
@@ -88,7 +94,19 @@ export async function introductionModal(
           type: "section",
           text: {
             type: "plain_text",
-            text: "자기소개와 아래 선택 정보는 공개 채널에 올라가요.",
+            text: "본명과 자기소개는 공개 채널에 올라가고, 본명은 내 초대 페이지에도 보여요. 아래 연결 정보는 선택이에요.",
+          },
+        },
+        {
+          type: "input",
+          block_id: "confirmed_name",
+          label: { type: "plain_text", text: "본명" },
+          element: {
+            type: "plain_text_input",
+            action_id: "value",
+            max_length: 40,
+            ...(existing?.confirmedName ? { initial_value: existing.confirmedName } : {}),
+            placeholder: { type: "plain_text", text: "이름을 적어 주세요" },
           },
         },
         {
@@ -144,7 +162,7 @@ export async function introductionModal(
 }
 
 function publicText(userId: string, parsed: IntroductionInput): string {
-  return `<@${userId}>\n${escapeSlackText(parsed.intro)}${parsed.linkedin ? `\nLinkedIn: <${parsed.linkedin}|프로필 보기>` : ""}${parsed.details ? `\n더 보기: ${escapeSlackText(parsed.details)}` : ""}`;
+  return `<@${userId}> · ${escapeSlackText(parsed.confirmedName)}\n${escapeSlackText(parsed.intro)}${parsed.linkedin ? `\nLinkedIn: <${parsed.linkedin}|프로필 보기>` : ""}${parsed.details ? `\n더 보기: ${escapeSlackText(parsed.details)}` : ""}`;
 }
 
 export async function submitIntroduction(
@@ -160,6 +178,7 @@ export async function submitIntroduction(
   const prepared = await context.store.prepareIntroduction({
     teamId,
     userId,
+    confirmedName: parsed.confirmedName,
     intro: parsed.intro,
     linkedin: parsed.linkedin,
     details: parsed.details,
@@ -268,5 +287,5 @@ export function introductionDirectoryButton(): Json {
 }
 
 export function introductionLine(entry: MemberIntroduction): string {
-  return `<@${entry.userId}> ${escapeSlackText(entry.intro)}${entry.linkedin ? ` · <${entry.linkedin}|LinkedIn>` : ""}${entry.details ? ` · ${escapeSlackText(entry.details)}` : ""}`;
+  return `<@${entry.userId}>${entry.confirmedName ? ` · ${escapeSlackText(entry.confirmedName)}` : ""} ${escapeSlackText(entry.intro)}${entry.linkedin ? ` · <${entry.linkedin}|LinkedIn>` : ""}${entry.details ? ` · ${escapeSlackText(entry.details)}` : ""}`;
 }

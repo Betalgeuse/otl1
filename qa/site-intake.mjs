@@ -30,7 +30,7 @@ const assets = {
   async fetch(request) {
     const path = new URL(request.url).pathname;
     if (path === "/referral.html") {
-      return new Response("<html><body>__REFERRAL_TOKEN__ __TURNSTILE_SITE_KEY__ __SHARE_TEXT__ __SUBMISSION_KEY__</body></html>", {
+      return new Response("<html><body>__REFERRAL_TOKEN__ __TURNSTILE_SITE_KEY__ __SHARE_TEXT__ __SUBMISSION_KEY__ __INVITER_HEADLINE__</body></html>", {
         headers: { "content-type": "text/html;charset=UTF-8" },
       });
     }
@@ -44,11 +44,12 @@ const assets = {
 };
 
 const coreBodies = [];
+let resolveName = "홍길동";
 const core = {
   async fetch(request) {
     const body = await request.text();
     coreBodies.push({ path: new URL(request.url).pathname, body, headers: Object.fromEntries(request.headers) });
-    if (new URL(request.url).pathname.endsWith("resolve")) return Response.json({ available: JSON.parse(body).referralToken === referralToken });
+    if (new URL(request.url).pathname.endsWith("resolve")) return Response.json(JSON.parse(body).referralToken === referralToken ? { available: true, inviterName: resolveName } : { available: false });
     if (body.includes("outage@example.com")) throw new Error("core outage");
     if (body.includes("paused@example.com")) return Response.json({ error: "unavailable" }, { status: 503 });
     if (new URL(request.url).pathname.endsWith("withdraw")) return Response.json({ receiptId, state: "withdrawn" }, { status: 202 });
@@ -117,7 +118,16 @@ try {
   assert.match(pageText, new RegExp(referralToken));
   assert.match(pageText, /1x00000000000000000000AA/);
   assert.match(pageText, /매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야/);
-  assert.doesNotMatch(pageText, /inviter|referrer|소개자.*이름/i);
+  assert.match(pageText, /홍길동 님이 같이 성장하자고/);
+  assert.doesNotMatch(pageText, /__INVITER_HEADLINE__/);
+
+  resolveName = null;
+  assert.match(await (await call(`/r/${referralToken}`)).text(), /같이 성장하자고<br>초대받았어요!/);
+  resolveName = '<script>alert("x")</script>';
+  const escapedPage = await (await call(`/r/${referralToken}`)).text();
+  assert.doesNotMatch(escapedPage, /<script>alert/);
+  assert.match(escapedPage, /&lt;script&gt;/);
+  resolveName = "홍길동";
 
   const invalidSlug = await call("/r/not-enumerable");
   assert.equal(invalidSlug.status, 404);
@@ -248,7 +258,7 @@ class CoreStore {
   async claimServiceNonce(digest) { if (this.nonces.has(digest)) return false; this.nonces.add(digest); return true; }
   async resolveLink(_teamId, tokenDigest) {
     const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(referralToken));
-    return tokenDigest === Buffer.from(bytes).toString("hex");
+    return tokenDigest === Buffer.from(bytes).toString("hex") ? { available: true, inviterName: "홍길동" } : { available: false, inviterName: null };
   }
   async findSubmission(_teamId, key) { return this.submissions.get(key)?.receipt ?? null; }
   async findPrivateIntake() { return "absent"; }
@@ -295,7 +305,7 @@ const signedCore = async (path, body, nonce) => {
   }), coreEnv, coreStore);
 };
 const resolved = await signedCore("/internal/referrals/resolve", JSON.stringify({ referralToken }), "nonce-core-resolve-1234");
-assert.deepEqual(await resolved.json(), { available: true });
+assert.deepEqual(await resolved.json(), { available: true, inviterName: "홍길동" });
 assert.equal((await signedCore("/internal/referrals/resolve", JSON.stringify({ referralToken }), "nonce-core-resolve-1234")).status, 401);
 const unavailable = await signedCore("/internal/referrals/resolve", JSON.stringify({ referralToken: "Z".repeat(32) }), "nonce-core-resolve-5678");
 assert.deepEqual(await unavailable.json(), { available: false });

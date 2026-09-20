@@ -109,7 +109,7 @@ const store = {
     nonceClaims.add(digest);
     return true;
   },
-  async resolveLink() { resolutions += 1; return true; },
+  async resolveLink() { resolutions += 1; return { available: true, inviterName: null }; },
 };
 const signedHeaders = { "x-otl-timestamp": String(timestamp), "x-otl-nonce": nonce, "x-otl-signature": signature };
 const invoke = (path, method, value, headers, serviceSecret = secret) => handleReferralIntakeRequest(
