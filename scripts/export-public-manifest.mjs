@@ -174,6 +174,7 @@ export const PUBLIC_QA_NAMES = [
   "referral-security.mjs",
   "referral-capacity-pg.mjs",
   "referral-capacity-slack.mjs",
+  "referral-empty-queue-null.mjs",
   "community-interest-intake.mjs",
   "community-interest-admin.mjs",
   "community-interest-local-e2e.mjs",

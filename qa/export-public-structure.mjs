@@ -41,6 +41,7 @@ assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("site/dist/interest.html"),
 assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("site/qa/interest-check.mjs"), true);
 assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("src/community-interest-intake.ts"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("referral-capacity-pg.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("referral-empty-queue-null.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("interest-storage-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("interest-dead-alert.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("real-name-pg.mjs"), true);
