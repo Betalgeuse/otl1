@@ -1,5 +1,6 @@
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
+import { WELCOME_GUIDE_RELEASE } from "../src/community-guide-release.ts";
 
 const stores = [];
 const operations = [];
@@ -13,9 +14,9 @@ mock.module("../src/store.ts", () => ({
       if (params[0] === "publish") return JSON.parse(params[1]).hash;
       if (params[0] === "latest" || params[0] === "repair_latest")
         return {
-          version: "v0.0.55",
+          version: WELCOME_GUIDE_RELEASE.version,
           hash: "a".repeat(64),
-          body: "safe",
+          body: WELCOME_GUIDE_RELEASE.body,
           orderedFileIds: ["FLOGO1", "FDAILY2"],
         };
       return true;
@@ -37,6 +38,10 @@ const env = {
   COMMUNITY_BOT_USER_ID: "UBOT",
   COMMUNITY_ADMIN_ID: "UADMIN",
   COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
+  COMMUNITY_PUBLIC_CHANNEL_ID: "CPUBLIC001",
+  COMMUNITY_FEEDBACK_CHANNEL_ID: "CFEEDBACK1",
+  COMMUNITY_RELEASE_CHANNEL_ID: "CTOWNHALL1",
+  COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS: "CDEVELOP01,CENGLISH01,CINVEST001",
 };
 globalThis.fetch = async (url, options) => {
   const parsed = new URL(url);

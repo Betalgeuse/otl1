@@ -16,6 +16,10 @@ const env = {
   COMMUNITY_BOT_USER_ID: "UBOTPROFILE",
   COMMUNITY_ADMIN_ID: "UADMIN",
   COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
+  COMMUNITY_PUBLIC_CHANNEL_ID: "CPUBLIC001",
+  COMMUNITY_FEEDBACK_CHANNEL_ID: "CFEEDBACK1",
+  COMMUNITY_RELEASE_CHANNEL_ID: "CTOWNHALL1",
+  COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS: "CDEVELOP01,CENGLISH01,CINVEST001",
 };
 const preload = new URL("./fixtures/welcome-guide-fetch.mjs", import.meta.url).pathname;
 const applyPreload = new URL("./fixtures/welcome-guide-apply.mjs", import.meta.url).pathname;

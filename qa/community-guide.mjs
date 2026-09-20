@@ -52,6 +52,10 @@ const env = {
   COMMUNITY_WELCOME_CHANNEL_ID: "CWELCOME",
   COMMUNITY_ADMIN_ID: "UADMIN",
   COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
+  COMMUNITY_PUBLIC_CHANNEL_ID: "CPUBLIC001",
+  COMMUNITY_FEEDBACK_CHANNEL_ID: "CFEEDBACK1",
+  COMMUNITY_RELEASE_CHANNEL_ID: "CTOWNHALL1",
+  COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS: "CDEVELOP01,CENGLISH01,CINVEST001",
 };
 
 globalThis.fetch = async (url, options) => {
@@ -91,6 +95,11 @@ const event = { type: "member_joined_channel", channel: "CWELCOME", user: "UNEW"
 await deliverWelcomeGuide(event, env);
 await deliverWelcomeGuide({ ...event, type: "message", subtype: "channel_join" }, env);
 assert.equal(posts.length, 1);
+const sectionText = posts[0].blocks.filter((block) => block.type === "section").map((block) => block.text.text).join("");
+assert.equal(sectionText, posts[0].text);
+assert.equal((posts[0].text.match(/<#[CG]/g) ?? []).length, 8);
+assert.ok(["CPUBLIC001", "CFEEDBACK1", "CTOWNHALL1", "CDEVELOP01", "CENGLISH01", "CINVEST001"].every((id) => posts[0].text.includes(`<#${id}>`)));
+assert.equal((posts[0].text.match(/#chapter-/g) ?? []).length, 0);
 assert.equal(posts[0].blocks.find((block) => block.type === "actions")?.elements[0]?.action_id, "community_referral_link");
 assert.deepEqual(posts[0].blocks.map((block) => block.slack_file?.id).filter(Boolean), inspected.orderedFileIds);
 const repaired = await replaceWelcomeGuideForUser("UREPAIR", env);

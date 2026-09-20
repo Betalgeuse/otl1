@@ -1,3 +1,4 @@
+import type { CommunityEnv } from "./community-runtime";
 import { InputError } from "./input";
 
 const FILE_ID = /^F[A-Z0-9]+$/;
@@ -8,6 +9,58 @@ export type WelcomeGuideContent = {
   readonly orderedFileIds: readonly [string, string];
   readonly hash: string;
 };
+
+type GuideChannelEnv = Pick<
+  CommunityEnv,
+  | "COMMUNITY_PUBLIC_CHANNEL_ID"
+  | "COMMUNITY_FEEDBACK_CHANNEL_ID"
+  | "COMMUNITY_RELEASE_CHANNEL_ID"
+  | "COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS"
+>;
+
+const GUIDE_CHANNEL_LABELS = [
+  "daily-scrum",
+  "all-freetalk-qna-feedback",
+  "townhall",
+  "chapter-developers",
+  "chapter-english",
+  "chapter-investment",
+] as const;
+
+export function renderGuideChannels(body: string, env: GuideChannelEnv): string {
+  const channelIds = [
+    env.COMMUNITY_PUBLIC_CHANNEL_ID,
+    env.COMMUNITY_FEEDBACK_CHANNEL_ID,
+    env.COMMUNITY_RELEASE_CHANNEL_ID,
+    ...(env.COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS?.split(",").map((id) => id.trim()) ?? []),
+  ];
+  if (
+    channelIds.length !== GUIDE_CHANNEL_LABELS.length ||
+    !channelIds.every((id) => typeof id === "string" && /^[CG][A-Z0-9]{8,}$/.test(id)) ||
+    new Set(channelIds).size !== GUIDE_CHANNEL_LABELS.length
+  )
+    throw new InputError("환영 안내 채널 설정을 확인해 주세요.");
+  const channels = new Map<string, string>(
+    GUIDE_CHANNEL_LABELS.map((label, index) => {
+      const id = channelIds[index];
+      if (!id) throw new InputError("환영 안내 채널 설정을 확인해 주세요.");
+      return [label, id] as const;
+    }),
+  );
+  const seen = new Set<string>();
+  const rendered = body.replace(
+    /^([ \t]*(?:▪︎|◦)[ \t]*(?:Slack 사용이 어려우면 )?)#(daily-scrum|all-freetalk-qna-feedback|townhall|chapter-developers|chapter-english|chapter-investment)(?=[:에])/gm,
+    (_match, prefix: string, label: string) => {
+      const id = channels.get(label);
+      if (!id) throw new InputError("환영 안내 채널 설정을 확인해 주세요.");
+      seen.add(label);
+      return `${prefix}<#${id}>`;
+    },
+  );
+  if (seen.size !== GUIDE_CHANNEL_LABELS.length)
+    throw new InputError("환영 안내 채널 표기를 확인해 주세요.");
+  return rendered;
+}
 
 export function parseGuideFileIds(value: string | undefined): readonly [string, string] {
   const ids = value?.split(",").map((id) => id.trim()) ?? [];
@@ -40,18 +93,24 @@ export async function canonicalGuideContent(
   return { body: sanitized, orderedFileIds, hash };
 }
 
-export function guideBlocks(userId: string, guide: WelcomeGuideContent) {
-  const introduction = `<@${userId}> 어서 오세요!!! 처음 오셨다면 이 안내부터 함께 읽어주세요.\n\n${guide.body}`;
-  const sections = Array.from(
-    { length: Math.ceil(introduction.length / SECTION_LIMIT) },
-    (_, index) => ({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: introduction.slice(index * SECTION_LIMIT, (index + 1) * SECTION_LIMIT),
-      },
-    }),
-  );
+export function guideBlocks(userId: string, guide: WelcomeGuideContent, renderedBody: string) {
+  const introduction = `<@${userId}> 어서 오세요!!! 처음 오셨다면 이 안내부터 함께 읽어주세요.\n\n${renderedBody}`;
+  const parts: string[] = [];
+  let remaining = introduction;
+  while (remaining.length > SECTION_LIMIT) {
+    const boundary = remaining.lastIndexOf("\n", SECTION_LIMIT);
+    if (boundary < 0) throw new InputError("환영 안내 문단이 너무 깁니다.");
+    parts.push(remaining.slice(0, boundary + 1));
+    remaining = remaining.slice(boundary + 1);
+  }
+  parts.push(remaining);
+  const sections = parts.map((part) => ({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: part,
+    },
+  }));
   return [
     ...sections,
     {

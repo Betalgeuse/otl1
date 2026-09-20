@@ -45,6 +45,7 @@ export type CommunityEnv = {
   readonly COMMUNITY_RELEASE_CHANNEL_ID?: string;
   readonly COMMUNITY_WELCOME_CHANNEL_ID?: string;
   readonly COMMUNITY_GUIDE_FILE_IDS?: string;
+  readonly COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS?: string;
   readonly COMMUNITY_INTRO_CHANNEL_ID?: string;
   readonly AI?: IntentAI;
   readonly INTENT_RATE_LIMITER?: {

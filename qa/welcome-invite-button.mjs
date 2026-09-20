@@ -31,11 +31,40 @@ mock.module("../src/community-referral-slack.ts", () => ({
   }),
 }));
 
-const { canonicalGuideContent, guideBlocks } = await import("../src/community-guide-content.ts");
+const { canonicalGuideContent, guideBlocks, renderGuideChannels } = await import("../src/community-guide-content.ts");
+const { WELCOME_GUIDE_RELEASE } = await import("../src/community-guide-release.ts");
 const { communityInteraction } = await import("../src/community-interactions.ts");
 
 const guide = await canonicalGuideContent("환영 안내", ["FLOGO1", "FDAILY2"]);
-const blocks = guideBlocks("UNEW", guide);
+const blocks = guideBlocks("UNEW", guide, guide.body);
+const channelEnv = {
+  COMMUNITY_PUBLIC_CHANNEL_ID: "CPUBLIC001",
+  COMMUNITY_FEEDBACK_CHANNEL_ID: "CFEEDBACK1",
+  COMMUNITY_RELEASE_CHANNEL_ID: "CTOWNHALL1",
+  COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS: "CDEVELOP01,CENGLISH01,CINVEST001",
+};
+const rendered = renderGuideChannels(WELCOME_GUIDE_RELEASE.body, channelEnv);
+const expectedIds = ["CPUBLIC001", "CFEEDBACK1", "CTOWNHALL1", "CDEVELOP01", "CENGLISH01", "CINVEST001"];
+assert.equal((WELCOME_GUIDE_RELEASE.body.match(/<#[CG]/g) ?? []).length, 0);
+for (const id of expectedIds) assert.ok(rendered.includes(`<#${id}>`));
+assert.equal((rendered.match(/<#[CG]/g) ?? []).length, 8);
+assert.equal(rendered.includes("#chapter-developers"), false);
+assert.equal(rendered.includes("#chapter-english"), false);
+assert.equal(rendered.includes("#chapter-investment"), false);
+const unrelated = "https://example.com/#daily-scrum: and #chapter-english in prose";
+assert.ok(renderGuideChannels(`${WELCOME_GUIDE_RELEASE.body}\n${unrelated}`, channelEnv).endsWith(unrelated));
+const renderedBlocks = guideBlocks("UNEW", guide, rendered);
+assert.equal(renderedBlocks.filter((block) => block.type === "section").map((block) => block.text.text).join(""), `<@UNEW> 어서 오세요!!! 처음 오셨다면 이 안내부터 함께 읽어주세요.\n\n${rendered}`);
+assert.ok(renderedBlocks.filter((block) => block.type === "section").every((block) => block.text.text.length <= 2900));
+const headerLength = "<@UNEW> 어서 오세요!!! 처음 오셨다면 이 안내부터 함께 읽어주세요.\n\n".length;
+const filler = "A".repeat(2900 - headerLength - rendered.indexOf("<#") - 3);
+const longBlocks = guideBlocks("UNEW", guide, `${filler}${rendered}`)
+  .filter((block) => block.type === "section").map((block) => block.text.text);
+assert.equal(longBlocks.join(""), `<@UNEW> 어서 오세요!!! 처음 오셨다면 이 안내부터 함께 읽어주세요.\n\n${filler}${rendered}`);
+assert.ok(longBlocks.every((text) => text.length <= 2900 && !/<#[^>]*$/.test(text)));
+for (const bad of [undefined, "", "CDEVELOP01,CENGLISH01", "CDEVELOP01,CENGLISH01,CENGLISH01", "FINVALID01,CENGLISH01,CINVEST001"])
+  assert.throws(() => renderGuideChannels(WELCOME_GUIDE_RELEASE.body, { ...channelEnv, COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS: bad }), /안내 채널/);
+assert.throws(() => renderGuideChannels(WELCOME_GUIDE_RELEASE.body, { ...channelEnv, COMMUNITY_RELEASE_CHANNEL_ID: "CFEEDBACK1" }), /안내 채널/);
 const inviteAction = blocks
   .find((block) => block.type === "actions")
   ?.elements.find((element) => element.action_id === "community_referral_link");
