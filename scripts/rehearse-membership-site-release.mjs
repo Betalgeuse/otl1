@@ -34,7 +34,7 @@ const focusedQa = [
   "membership-invite-security", "site-intake", "site-static", "export-public-structure",
   "referral-capacity-slack", "community-interest-intake", "community-interest-admin",
   "community-interest-local-e2e", "interest-private", "interest-storage-pg",
-  "referral-capacity-pg", "real-name-pg", "community-membership-store-error-code", "version-map",
+  "referral-capacity-pg", "real-name-pg", "interest-role-cleanup", "community-membership-store-error-code", "version-map",
   "interest-retention-runtime-grants-pg",
 ];
 const injection = process.argv.find((arg) => arg.startsWith("--inject="))?.slice(9);
@@ -44,7 +44,7 @@ const initdbQa = new Set([
   "referral-storage-pg", "referral-retention-pg", "community-runtime-pg",
   "review-thread-topology-pg", "garden-projection-upgrade-pg",
   "membership-reminder-audit-pg", "community-guide-security-pg", "referral-capacity-pg", "real-name-pg",
-  "interest-retention-runtime-grants-pg",
+  "interest-retention-runtime-grants-pg", "interest-role-cleanup",
 ]);
 const injections = new Set([
   "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-038", "missing-039", "missing-040", "missing-041", "missing-binding",

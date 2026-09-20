@@ -368,7 +368,7 @@ try {
   if (created) {
     await sql(`DROP DATABASE IF EXISTS ${freshDb} WITH (FORCE)`);
     await sql(`DROP DATABASE IF EXISTS ${upgradeDb} WITH (FORCE)`);
-    for (const role of ['otl_interest_member_login','otl_interest_member','otl_referral_admin_login',
+    for (const role of ['otl_interest_runtime_login','otl_interest_member_login','otl_interest_member','otl_referral_admin_login',
       'otl_referral_admin','otl_referral_runtime','otl_lifecycle_admin_login','otl_lifecycle_admin',
       'otl_lifecycle_runtime','otl_guide_admin','otl_guide_runtime','legacy_invitation_runtime',runtimeProbeRole,ownerRole]) {
       await sql(`DROP ROLE IF EXISTS ${role}`);
