@@ -48,7 +48,7 @@ try {
     "-f",
     "migrations/007_normalized_legacy.sql",
   ]);
-  for (const file of migrations.filter((name) => Number(name.slice(0, 3)) >= 8))
+  for (const file of migrations.filter((name) => Number(name.slice(0, 3)) >= 8 && Number(name.slice(0, 3)) < 39))
     await psql(["-f", `migrations/${file}`]);
 
   const body = 'v0.0.55 안내\n"ONE THING" \\ @channel';
@@ -71,6 +71,12 @@ try {
     "INSERT INTO otl.workspaces(team_id) VALUES('TQA'); INSERT INTO otl.workspace_channels(team_id,channel_id) VALUES('TQA','CQA'); INSERT INTO otl.workspace_members(team_id,user_id) VALUES('TQA','UADMIN'); INSERT INTO otl.guide_publishers(team_id,channel_id,user_id) VALUES('TQA','CQA','UADMIN')",
   ]);
   await psql(["-Atc", `SELECT otl.guide_admin_execute('publish',${sqlPayload(published)})`]);
+  await psql(["-f", "migrations/039_bot_owned_welcome_guide.sql"]);
+  const repoBody = "v0.0.56 repo guide";
+  const repoHash = createHash("sha256").update(JSON.stringify({ version: 1, body: repoBody, orderedFileIds: release.orderedFileIds })).digest("hex");
+  const repoRelease = { ...release, version: "v0.0.56", body: repoBody, hash: repoHash, origin: "repo" };
+  delete repoRelease.sourceTs; delete repoRelease.editedTs;
+  await psql(["-Atc", `SELECT otl.guide_admin_execute('publish',${sqlPayload(repoRelease)})`]);
   await psql([
     "-Atc",
     "CREATE ROLE guide_runtime_login LOGIN INHERIT; CREATE ROLE guide_admin_login LOGIN INHERIT; GRANT otl_guide_runtime TO guide_runtime_login; GRANT otl_guide_admin TO guide_admin_login",
@@ -106,7 +112,7 @@ try {
     "-Atc",
     `SET ROLE otl_guide_runtime; SELECT otl.guide_runtime_execute('latest',${sqlPayload({ teamId: "TQA", channelId: "CQA" })})`,
   ]);
-  assert.match(runtimeLatest.stdout, /v0\.0\.55/);
+  assert.match(runtimeLatest.stdout, /v0\.0\.56/);
   assert.match(
     (
       await psqlAs("guide_runtime_login", [
@@ -114,7 +120,7 @@ try {
         `SELECT otl.guide_runtime_execute('latest',${sqlPayload({ teamId: "TQA", channelId: "CQA" })})`,
       ])
     ).stdout,
-    /v0\.0\.55/,
+    /v0\.0\.56/,
   );
   assert.match(
     (
@@ -123,7 +129,7 @@ try {
         `SELECT otl.guide_admin_execute('repair_latest',${sqlPayload({ teamId: "TQA", channelId: "CQA" })})`,
       ])
     ).stdout,
-    /v0\.0\.55/,
+    /v0\.0\.56/,
   );
   await assert.rejects(
     psql([
@@ -139,7 +145,7 @@ try {
   await assert.rejects(
     psql([
       "-Atc",
-      `SET ROLE otl_guide_admin; SELECT otl.guide_runtime_execute('claim',${sqlPayload({ teamId: "TQA", channelId: "CQA", userId: "UNEW", version: "v0.0.55", hash })})`,
+      `SET ROLE otl_guide_admin; SELECT otl.guide_runtime_execute('claim',${sqlPayload({ teamId: "TQA", channelId: "CQA", userId: "UNEW", version: "v0.0.56", hash: repoHash })})`,
     ]),
     /permission denied/,
   );
@@ -150,14 +156,14 @@ try {
   await assert.rejects(
     psql([
       "-Atc",
-      `SELECT otl.guide_admin_execute('publish',${sqlPayload({ ...published, hash: "f".repeat(64) })})`,
+      `SELECT otl.guide_admin_execute('publish',${sqlPayload({ ...repoRelease, hash: "f".repeat(64) })})`,
     ]),
     /Guide canonical hash mismatch/,
   );
   await assert.rejects(
     psql([
       "-Atc",
-      `SELECT otl.guide_admin_execute('publish',${sqlPayload({ ...published, version: "v0.0.56", body: "<!channel> injected", hash: "f".repeat(64), editedTs: "101.200" })})`,
+      `SELECT otl.guide_admin_execute('publish',${sqlPayload({ ...repoRelease, version: "v0.0.57", body: "<!channel> injected", hash: "f".repeat(64) })})`,
     ]),
     /Invalid published guide/,
   );

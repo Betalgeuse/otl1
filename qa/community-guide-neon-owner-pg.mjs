@@ -92,7 +92,7 @@ try {
   for (const file of migrations.filter((name) => Number(name.slice(0, 3)) >= 8))
     await psql("guide_owner_upgrade", "guide_owner", ["-f", `migrations/${file}`]);
   const latest = (await psql("guide_owner_upgrade", "guide_owner", ["-Atc", "SELECT version FROM otl.schema_migrations ORDER BY version DESC LIMIT 1"])).stdout.trim();
-  assert.equal(latest, "035-lifecycle-admin-login");
+  assert.equal(latest, "039-bot-owned-welcome-guide");
   for (const [role, migration, error] of [
     ["otl_referral_runtime", "030_referral_applications.sql", "unsafe elevated referral role"],
     ["otl_lifecycle_runtime", "032_lifecycle_runtime_delivery.sql", "unsafe elevated lifecycle role"],

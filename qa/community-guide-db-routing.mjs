@@ -1,6 +1,5 @@
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
-import { canonicalGuideContent } from "../src/community-guide-content.ts";
 
 const stores = [];
 const operations = [];
@@ -26,8 +25,6 @@ mock.module("../src/store.ts", () => ({
 
 const { deliverWelcomeGuide, executeWelcomeGuideCommand, replaceWelcomeGuideForUser } =
   await import("../src/community-guide.ts");
-const body = "v0.0.55 안내 <#CDAILY> <!channel>";
-const hash = (await canonicalGuideContent(body, ["FLOGO1", "FDAILY2"])).hash;
 const env = {
   SLACK_TEAM_ID: "TQA",
   SLACK_BOT_TOKEN: "xoxb",
@@ -39,11 +36,6 @@ const env = {
   COMMUNITY_WELCOME_CHANNEL_ID: "CWELCOME",
   COMMUNITY_BOT_USER_ID: "UBOT",
   COMMUNITY_ADMIN_ID: "UADMIN",
-  COMMUNITY_GUIDE_SOURCE_TS: "123.456",
-  COMMUNITY_GUIDE_SOURCE_EDITED_TS: "123.789",
-  COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
-  COMMUNITY_GUIDE_VERSION: "v0.0.55",
-  COMMUNITY_GUIDE_CONTENT_HASH: hash,
 };
 globalThis.fetch = async (url, options) => {
   const parsed = new URL(url);

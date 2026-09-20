@@ -3,16 +3,9 @@ import { executeWelcomeGuideCommand, replaceWelcomeGuideForUser } from "../src/c
 
 const required = [
   "SLACK_TEAM_ID",
-  "SLACK_BOT_TOKEN",
   "GUIDE_ADMIN_DATABASE_URL",
   "COMMUNITY_WELCOME_CHANNEL_ID",
-  "COMMUNITY_BOT_USER_ID",
   "COMMUNITY_ADMIN_ID",
-  "COMMUNITY_GUIDE_SOURCE_TS",
-  "COMMUNITY_GUIDE_SOURCE_EDITED_TS",
-  "COMMUNITY_GUIDE_FILE_IDS",
-  "COMMUNITY_GUIDE_VERSION",
-  "COMMUNITY_GUIDE_CONTENT_HASH",
 ];
 for (const name of required) if (!process.env[name]) throw new Error(`Missing ${name}`);
 
@@ -23,6 +16,8 @@ const replaceUser = replaceAt >= 0 ? args[replaceAt + 1] : undefined;
 const recognized = new Set(["--apply", "--replace-user", replaceUser]);
 if (args.some((arg) => !recognized.has(arg)) || (replaceAt >= 0 && !replaceUser))
   throw new Error("Usage: bun scripts/publish-welcome-guide.mjs [--apply] [--replace-user U...]");
+if (replaceUser && (!process.env.SLACK_BOT_TOKEN || !process.env.COMMUNITY_BOT_USER_ID))
+  throw new Error("Targeted delivery requires SLACK_BOT_TOKEN and COMMUNITY_BOT_USER_ID");
 if (replaceUser && !/^[UW][A-Z0-9]+$/.test(replaceUser))
   throw new Error("Invalid replacement user ID");
 
@@ -33,11 +28,6 @@ const env = {
   COMMUNITY_WELCOME_CHANNEL_ID: process.env.COMMUNITY_WELCOME_CHANNEL_ID,
   COMMUNITY_BOT_USER_ID: process.env.COMMUNITY_BOT_USER_ID,
   COMMUNITY_ADMIN_ID: process.env.COMMUNITY_ADMIN_ID,
-  COMMUNITY_GUIDE_SOURCE_TS: process.env.COMMUNITY_GUIDE_SOURCE_TS,
-  COMMUNITY_GUIDE_SOURCE_EDITED_TS: process.env.COMMUNITY_GUIDE_SOURCE_EDITED_TS,
-  COMMUNITY_GUIDE_FILE_IDS: process.env.COMMUNITY_GUIDE_FILE_IDS,
-  COMMUNITY_GUIDE_VERSION: process.env.COMMUNITY_GUIDE_VERSION,
-  COMMUNITY_GUIDE_CONTENT_HASH: process.env.COMMUNITY_GUIDE_CONTENT_HASH,
 };
 
 const release = await executeWelcomeGuideCommand({ kind: "publish", apply }, env);

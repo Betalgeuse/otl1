@@ -20,11 +20,6 @@ COMMUNITY_FEEDBACK_CHANNEL_ID=
 # Exactly two ordered Slack file IDs: logo first, daily scrum screen second.
 COMMUNITY_WELCOME_CHANNEL_ID=
 COMMUNITY_ADMIN_ID=
-COMMUNITY_GUIDE_SOURCE_TS=
-COMMUNITY_GUIDE_SOURCE_EDITED_TS=
-COMMUNITY_GUIDE_FILE_IDS=
-COMMUNITY_GUIDE_VERSION=v0.0.55
-COMMUNITY_GUIDE_CONTENT_HASH=
 
 # Invite/lifecycle secrets: create separately in the Core Worker before enabling rollout flags.
 SITE_CORE_HMAC_SECRET=

@@ -3,10 +3,10 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import { canonicalGuideContent } from "../src/community-guide-content.ts";
+import { WELCOME_GUIDE_RELEASE } from "../src/community-guide-release.ts";
 
 const run = promisify(execFile);
-const body = "v0.0.55 안내 <#CDAILY> <!channel>";
-const contentHash = (await canonicalGuideContent(body, ["FLOGO1", "FDAILY2"])).hash;
+const contentHash = (await canonicalGuideContent(WELCOME_GUIDE_RELEASE.body, WELCOME_GUIDE_RELEASE.orderedFileIds)).hash;
 const env = {
   ...process.env,
   SLACK_TEAM_ID: "TQA",
@@ -15,11 +15,6 @@ const env = {
   COMMUNITY_WELCOME_CHANNEL_ID: "CWELCOME",
   COMMUNITY_BOT_USER_ID: "UBOTPROFILE",
   COMMUNITY_ADMIN_ID: "UADMIN",
-  COMMUNITY_GUIDE_SOURCE_TS: "123.456",
-  COMMUNITY_GUIDE_SOURCE_EDITED_TS: "123.789",
-  COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
-  COMMUNITY_GUIDE_VERSION: "v0.0.55",
-  COMMUNITY_GUIDE_CONTENT_HASH: contentHash,
 };
 const preload = new URL("./fixtures/welcome-guide-fetch.mjs", import.meta.url).pathname;
 const applyPreload = new URL("./fixtures/welcome-guide-apply.mjs", import.meta.url).pathname;
@@ -30,7 +25,7 @@ const dryRun = await run("bun", ["--preload", preload, "scripts/publish-welcome-
 });
 assert.deepEqual(JSON.parse(dryRun.stdout), {
   mode: "publish",
-  version: "v0.0.55",
+  version: "v0.0.56",
   contentHash,
   publicationCount: 0,
 });
@@ -44,7 +39,7 @@ const repairDryRun = await run(
 const targetDigest = createHash("sha256").update("guide-target:UNEW").digest("hex");
 assert.deepEqual(JSON.parse(repairDryRun.stdout), {
   mode: "targeted-repair",
-  version: "v0.0.55",
+  version: "v0.0.56",
   contentHash,
   targetDigest,
   deliveryCount: 0,
@@ -64,7 +59,7 @@ const repairApplied = await run(
 );
 assert.deepEqual(JSON.parse(repairApplied.stdout), {
   mode: "targeted-repair",
-  version: "v0.0.55",
+  version: "v0.0.56",
   contentHash,
   targetDigest,
   messageDigest: createHash("sha256").update("guide-message:456.789").digest("hex"),

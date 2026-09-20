@@ -24,6 +24,7 @@ const suites = [
   "reflection-outcome-flow",
   "slack-message-edit",
   "community-guide",
+  "bot-owned-guide",
   "welcome-invite-button",
   "community-guide-cli",
   "community-guide-db-routing",

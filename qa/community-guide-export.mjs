@@ -12,8 +12,6 @@ const destination = join(tmpdir(), `otl1-guide-export-${randomUUID()}`);
 const privateValues = [
   "1789721925.521149",
   "1789722193.000000",
-  "F0C2S01GE06",
-  "F0C2P2G2DFF",
   "fbef79eaf1840ee8e6c68fa203c2fbde2bbdba70a598cd1dcd23379d55c44b85",
 ];
 const lifecycleAdminSources = [
@@ -63,11 +61,9 @@ try {
   await run("bun", ["scripts/export-public.mjs", destination], { cwd: root, encoding: "utf8" });
   const config = JSON.parse(readFileSync(join(destination, "wrangler.jsonc"), "utf8"));
   assert.equal(config.account_id, undefined);
-  assert.equal(config.vars.COMMUNITY_GUIDE_SOURCE_TS, "0.000001");
-  assert.equal(config.vars.COMMUNITY_GUIDE_SOURCE_EDITED_TS, "0.000002");
-  assert.equal(config.vars.COMMUNITY_GUIDE_FILE_IDS, "FREPLACELOGO,FREPLACEDAILY");
-  assert.equal(config.vars.COMMUNITY_GUIDE_CONTENT_HASH, "0".repeat(64));
   assert.equal(existsSync(join(destination, "migrations", "028_welcome_guide_roles.sql")), true);
+  assert.equal(existsSync(join(destination, "migrations", "039_bot_owned_welcome_guide.sql")), true);
+  assert.equal(existsSync(join(destination, "src", "community-guide-release.ts")), true);
   assert.equal(existsSync(join(destination, "scripts", "bootstrap-guide-db-roles.mjs")), true);
   for (const source of lifecycleAdminSources)
     assert.equal(readFileSync(join(destination, source), "utf8"), readFileSync(join(root, source), "utf8"));

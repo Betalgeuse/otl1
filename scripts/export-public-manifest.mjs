@@ -57,6 +57,7 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/036_referral_capacity.sql",
   "migrations/037_interest_requests.sql",
   "migrations/038_interest_retention_due.sql",
+  "migrations/039_bot_owned_welcome_guide.sql",
 ];
 
 // `src` and `site` are copied as directories, but these paths keep the membership
@@ -115,6 +116,7 @@ export const PUBLIC_QA_NAMES = [
   "reflection-outcome-flow.mjs",
   "slack-message-edit.mjs",
   "community-guide.mjs",
+  "bot-owned-guide.mjs",
   "community-guide-cli.mjs",
   "community-guide-pg.mjs",
   "community-guide-security-pg.mjs",
