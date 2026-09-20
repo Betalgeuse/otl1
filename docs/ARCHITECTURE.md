@@ -107,7 +107,7 @@ welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_r
 
 ## 계획된 membership·site 경계
 
-다음 구조는 v0.0.56–v0.0.66의 미출시 경계입니다. core Worker는 Slack 서명, lifecycle·초대 한도·소개 신청·비소속자 문의 저장, R2 비공개 객체와 Slack 효과를 맡고, 공개 site Worker는 서비스 바인딩 `CORE`로만 core에 요청합니다. site Worker에는 Slack·Neon 자격증명을 두지 않습니다. 현재 core shadow와 migration 036·037은 staged implementation일 뿐 출시가 아닙니다.
+다음 구조는 v0.0.56–v0.0.70의 미출시 경계입니다. core Worker는 Slack 서명, lifecycle·초대 한도·소개 신청·비소속자 문의 저장, R2 비공개 객체와 Slack 효과를 맡고, 공개 site Worker는 서비스 바인딩 `CORE`로만 core에 요청합니다. site Worker에는 Slack·Neon 자격증명을 두지 않습니다. 현재 core shadow와 migration 036·037은 staged implementation일 뿐 출시가 아닙니다.
 
 ```mermaid
 flowchart LR
