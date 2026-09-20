@@ -22,7 +22,8 @@ const tag = randomUUID().replaceAll('-', '').slice(0, 12);
 const database = `otl_i_${tag}_e2e`;
 const owner = `otl_i_${tag}_owner`;
 const runtimeRole = `otl_i_${tag}_runtime`;
-const cluster = { ...process.env, PGHOST: '127.0.0.1', PGPORT: '5432', PGDATABASE: 'postgres' };
+const cluster = { ...process.env, PGHOST: process.env.OTL_REHEARSAL_PGHOST ?? '127.0.0.1',
+  PGPORT: process.env.OTL_REHEARSAL_PGPORT ?? '5432', PGDATABASE: 'postgres' };
 let sqlEnv = cluster;
 const run = (binary, args) => exec(join(pg, binary), args, { cwd: root, env: sqlEnv, encoding: 'utf8' });
 const sql = async (query) => (await run('psql', ['-X', '-Atq', '-v', 'ON_ERROR_STOP=1', '-c', query])).stdout.trim();
