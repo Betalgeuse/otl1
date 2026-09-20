@@ -58,6 +58,7 @@ const suites = [
   "community-batched-reminders",
   "community-reminder-audit",
   "community-membership-store-error-code",
+  "referral-empty-queue-null",
   "community-common-delivery",
   "community-schedule-overlap",
   "dormant-shoutout",

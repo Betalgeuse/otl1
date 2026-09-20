@@ -130,7 +130,9 @@ export class NeonStore implements Store {
       throw new StoreError(record(body) && body.code === "42501" ? "access" : "unavailable");
     if (!record(body) || !Array.isArray(body.rows)) throw new StoreError("response");
     const row: unknown = body.rows[0];
-    if (!Array.isArray(row) || typeof row[0] !== "string") throw new StoreError("response");
+    if (!Array.isArray(row)) throw new StoreError("response");
+    if (row[0] === null) return null;
+    if (typeof row[0] !== "string") throw new StoreError("response");
     return parseJson(row[0]);
   }
 }
