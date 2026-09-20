@@ -51,6 +51,7 @@ const env = {
   GUIDE_ADMIN_DATABASE_URL: "admin",
   COMMUNITY_WELCOME_CHANNEL_ID: "CWELCOME",
   COMMUNITY_ADMIN_ID: "UADMIN",
+  COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
 };
 
 globalThis.fetch = async (url, options) => {
@@ -75,7 +76,7 @@ globalThis.fetch = async (url, options) => {
 const inspected = await inspectWelcomeGuideSource(env);
 assert.equal(inspected.version, "v0.0.56");
 assert.equal(inspected.origin, "repo");
-assert.deepEqual(inspected.orderedFileIds, ["F0C2S01GE06", "F0C2P2G2DFF"]);
+assert.deepEqual(inspected.orderedFileIds, ["FLOGO1", "FDAILY2"]);
 assert.match(inspected.body, /친구 초대하기 버튼/);
 assert.equal((await executeWelcomeGuideCommand({ kind: "publish", apply: false }, env)).applied, false);
 assert.equal(publishCalls, 0);

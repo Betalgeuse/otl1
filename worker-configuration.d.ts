@@ -40,6 +40,7 @@ declare namespace Cloudflare {
 		COMMUNITY_BOT_USER_ID: string;
 		COMMUNITY_FEEDBACK_CHANNEL_ID: string;
 		COMMUNITY_WELCOME_CHANNEL_ID: string;
+		COMMUNITY_GUIDE_FILE_IDS: string;
 		COMMUNITY_ADMIN_ID: string;
 		SITE_CORE_HMAC_SECRET: string;
 		INVITE_EMAIL_PEPPER: string;

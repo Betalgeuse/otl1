@@ -31,7 +31,7 @@ GUIDE_ADMIN_SECRET_SINK_ARGS=<JSON string array>
 sink는 로컬 비밀 관리자에 저장해야 하며 Worker에는 `GUIDE_ADMIN_DATABASE_URL`을 설정하지
 않는다. 저장 명령은 stdin을 받아야 하고 자체적으로 값을 로그에 남기지 않아야 한다.
 
-migration 039부터 안내 원문은 `src/community-guide-release.ts`의 검토된 버전별 본문·이미지 순서로 관리한다. 사람의 Slack 글·편집 시각을 발행 입력으로 쓰지 않는다. 버전을 올리고 코드를 검토한 뒤 발행 CLI의 dry-run을 확인하고 명시적인 `--apply`로 DB에 고정한다. CLI는 등록된 관리자 ID와 본문 버전·채널 알림 정책을 확인하며, DB도 repo origin·등록된 발행자·서로 다른 두 이미지와 canonical SHA-256을 검증한다. 과거 Slack 원문 출처와 전달 이력은 그대로 보존한다.
+migration 039부터 안내 원문은 `src/community-guide-release.ts`의 검토된 버전별 본문과 비공개 `COMMUNITY_GUIDE_FILE_IDS`의 이미지 순서로 관리한다. 사람의 Slack 글·편집 시각을 발행 입력으로 쓰지 않는다. 버전을 올리고 코드를 검토한 뒤 발행 CLI의 dry-run을 확인하고 명시적인 `--apply`로 DB에 고정한다. CLI는 등록된 관리자 ID와 본문 버전·채널 알림 정책을 확인하며, DB도 repo origin·등록된 발행자·서로 다른 두 이미지와 canonical SHA-256을 검증한다. 과거 Slack 원문 출처와 전달 이력은 그대로 보존한다.
 
 Slack의 `users:read.email` 범위는 현재 초대 수신자와 Slack 계정 이메일을 결합하는
 `personEmail` 경로가 실제로 사용하므로 유지한다. 해당 초대 경로가 제거될 때 manifest와

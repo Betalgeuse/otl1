@@ -1,5 +1,5 @@
 import { mock } from "bun:test";
-import { canonicalGuideContent } from "../../src/community-guide-content.ts";
+import { canonicalGuideContent, parseGuideFileIds } from "../../src/community-guide-content.ts";
 import { WELCOME_GUIDE_RELEASE } from "../../src/community-guide-release.ts";
 
 mock.module("../../src/store.ts", () => ({
@@ -9,7 +9,7 @@ mock.module("../../src/store.ts", () => ({
       const payload = JSON.parse(params[1]);
       if (operation === "publish") return payload.hash;
       if (operation === "repair_latest") {
-        const guide = await canonicalGuideContent(WELCOME_GUIDE_RELEASE.body, WELCOME_GUIDE_RELEASE.orderedFileIds);
+        const guide = await canonicalGuideContent(WELCOME_GUIDE_RELEASE.body, parseGuideFileIds(process.env.COMMUNITY_GUIDE_FILE_IDS));
         return { version: WELCOME_GUIDE_RELEASE.version, ...guide };
       }
       return true;

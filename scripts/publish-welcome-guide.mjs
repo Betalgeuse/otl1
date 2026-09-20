@@ -5,6 +5,7 @@ const required = [
   "SLACK_TEAM_ID",
   "GUIDE_ADMIN_DATABASE_URL",
   "COMMUNITY_WELCOME_CHANNEL_ID",
+  "COMMUNITY_GUIDE_FILE_IDS",
   "COMMUNITY_ADMIN_ID",
 ];
 for (const name of required) if (!process.env[name]) throw new Error(`Missing ${name}`);
@@ -26,6 +27,7 @@ const env = {
   SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
   GUIDE_ADMIN_DATABASE_URL: process.env.GUIDE_ADMIN_DATABASE_URL,
   COMMUNITY_WELCOME_CHANNEL_ID: process.env.COMMUNITY_WELCOME_CHANNEL_ID,
+  COMMUNITY_GUIDE_FILE_IDS: process.env.COMMUNITY_GUIDE_FILE_IDS,
   COMMUNITY_BOT_USER_ID: process.env.COMMUNITY_BOT_USER_ID,
   COMMUNITY_ADMIN_ID: process.env.COMMUNITY_ADMIN_ID,
 };

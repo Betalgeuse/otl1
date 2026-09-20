@@ -15,7 +15,7 @@ bun run check
 
 1. `.dev.vars.example`을 `.dev.vars`로 복사하고 로컬 값을 채웁니다. 완성된 파일은 Git에 넣지 않습니다.
 2. `wrangler.jsonc`에 본인 계정의 Worker·관리자·공개 채널·feedback·townhall·welcome·자기소개 채널을 지정합니다. `COMMUNITY_FEEDBACK_CHANNEL_ID`는 버그 제보 전용 채널이며 공개 export에서는 반드시 placeholder로 치환합니다. 관리자 채널은 비공개로 유지합니다.
-3. welcome 안내는 `src/community-guide-release.ts`의 버전·본문·Slack 이미지 파일 ID 두 개를 검토해 변경합니다. 사람의 Slack 원문 시각이나 해시는 Worker 설정에 넣지 않습니다. migration 039 적용 뒤 `bun scripts/publish-welcome-guide.mjs`로 dry-run, `--apply`로 명시 발행합니다.
+3. welcome 안내는 `src/community-guide-release.ts`의 버전·본문을 검토해 변경합니다. Slack 이미지 파일 ID 두 개와 순서는 비공개 `COMMUNITY_GUIDE_FILE_IDS` 설정으로 제공하며 공개 export에서는 예시 값으로 치환합니다. 사람의 Slack 원문 시각이나 해시는 Worker 설정에 넣지 않습니다. migration 039 적용 뒤 `bun scripts/publish-welcome-guide.mjs`로 dry-run, `--apply`로 명시 발행합니다.
 
 4. 서명 키, 봇 토큰, DB URL, 보드 서명 키를 Wrangler secret으로 등록합니다. 값은 명령문·문서·공개 이력에 남기지 않습니다.
 5. 앱 manifest를 생성해 Slack에 적용하고 필요한 채널에 봇을 연결합니다. 슬래시 `/one`은 사용하지 않습니다.

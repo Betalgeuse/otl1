@@ -1,4 +1,4 @@
-import { canonicalGuideContent } from "./community-guide-content";
+import { canonicalGuideContent, parseGuideFileIds } from "./community-guide-content";
 import { WELCOME_GUIDE_RELEASE } from "./community-guide-release";
 import type { CommunityEnv } from "./community-runtime";
 import { InputError, string } from "./input";
@@ -6,7 +6,10 @@ import { NeonStore } from "./store";
 
 export type WelcomeGuideAdminEnv = Pick<
   CommunityEnv,
-  "SLACK_TEAM_ID" | "COMMUNITY_WELCOME_CHANNEL_ID" | "COMMUNITY_ADMIN_ID"
+  | "SLACK_TEAM_ID"
+  | "COMMUNITY_WELCOME_CHANNEL_ID"
+  | "COMMUNITY_ADMIN_ID"
+  | "COMMUNITY_GUIDE_FILE_IDS"
 > & { readonly GUIDE_ADMIN_DATABASE_URL: string };
 
 export type WelcomeGuideRelease = {
@@ -35,7 +38,8 @@ export async function inspectWelcomeGuideSource(
   const authorId = env.COMMUNITY_ADMIN_ID;
   if (!env.COMMUNITY_WELCOME_CHANNEL_ID || !authorId || !/^U[A-Z0-9]+$/.test(authorId))
     throw new InputError("환영 안내 채널과 발행 관리자를 확인해 주세요.");
-  const { version, body, orderedFileIds } = WELCOME_GUIDE_RELEASE;
+  const { version, body } = WELCOME_GUIDE_RELEASE;
+  const orderedFileIds = parseGuideFileIds(env.COMMUNITY_GUIDE_FILE_IDS);
   const retiredTerm = ["si", "lo"].join("");
   if (
     !/^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version) ||

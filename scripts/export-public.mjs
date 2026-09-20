@@ -12,6 +12,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assertSanitizedCoreConfig,
+  assertPublicGuideReleaseSource,
   sanitizePackageMetadata,
   sanitizeSiteQaCoreConfig,
   sanitizeSiteWranglerConfig,
@@ -34,6 +35,7 @@ assertRequiredPublicExportSources(
   PUBLIC_REQUIRED_EXPORT_SOURCES,
   (path) => existsSync(join(root, path)),
 );
+assertPublicGuideReleaseSource(readFileSync(join(root, "src/community-guide-release.ts"), "utf8"));
 if (existsSync(join(destination, ".git")))
   throw Error(
     "Refusing to overwrite a Git repository; preserve it and remove the export directory explicitly first.",

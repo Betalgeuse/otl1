@@ -36,6 +36,7 @@ const env = {
   COMMUNITY_WELCOME_CHANNEL_ID: "CWELCOME",
   COMMUNITY_BOT_USER_ID: "UBOT",
   COMMUNITY_ADMIN_ID: "UADMIN",
+  COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
 };
 globalThis.fetch = async (url, options) => {
   const parsed = new URL(url);

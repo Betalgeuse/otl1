@@ -1,5 +1,6 @@
 const PUBLIC_VARS = Object.freeze({
   COMMUNITY_WELCOME_CHANNEL_ID: "C_REPLACE_WELCOME",
+  COMMUNITY_GUIDE_FILE_IDS: "FREPLACELOGO,FREPLACEDAILY",
   COMMUNITY_INTRO_CHANNEL_ID: "C_REPLACE_INTRO",
   DATABASE_MAINTENANCE: "false",
   DAILY_SCRUM_CHANNEL_ID: "C_REPLACE_DAILY",
@@ -75,4 +76,9 @@ export function sanitizePackageMetadata(source) {
   };
   packageMetadata.scripts.typecheck = "tsc --noEmit";
   return packageMetadata;
+}
+
+export function assertPublicGuideReleaseSource(source) {
+  if (/\b[CF][A-Z0-9]{10,}\b/.test(source) || /https?:\/\/[^\s<>]+\.slack\.com\/archives\//i.test(source))
+    throw Error("Public welcome guide source contains a live Slack identifier or workspace URL.");
 }
