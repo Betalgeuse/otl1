@@ -119,6 +119,8 @@ export const PUBLIC_QA_NAMES = [
   "community-guide.mjs",
   "bot-owned-guide.mjs",
   "community-guide-cli.mjs",
+  "welcome-invite-button.mjs",
+  "community-guide-export.mjs",
   "community-guide-pg.mjs",
   "community-guide-security-pg.mjs",
   "community-guide-neon-owner-pg.mjs",

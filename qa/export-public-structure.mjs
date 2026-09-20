@@ -44,6 +44,8 @@ assert.equal(PUBLIC_QA_NAMES.includes("interest-storage-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("interest-dead-alert.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("real-name-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("community-membership-store-error-code.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("welcome-invite-button.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("community-guide-export.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("real-name-storage.sql"), true);
 assert.throws(
   () =>
