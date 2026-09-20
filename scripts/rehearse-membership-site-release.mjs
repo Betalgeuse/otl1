@@ -35,6 +35,7 @@ const focusedQa = [
   "referral-capacity-slack", "community-interest-intake", "community-interest-admin",
   "community-interest-local-e2e", "interest-private", "interest-storage-pg",
   "referral-capacity-pg", "real-name-pg", "community-membership-store-error-code", "version-map",
+  "interest-retention-runtime-grants-pg",
 ];
 const injection = process.argv.find((arg) => arg.startsWith("--inject="))?.slice(9);
 const existingPgOnly = process.argv.includes("--existing-pg-only");
@@ -43,9 +44,10 @@ const initdbQa = new Set([
   "referral-storage-pg", "referral-retention-pg", "community-runtime-pg",
   "review-thread-topology-pg", "garden-projection-upgrade-pg",
   "membership-reminder-audit-pg", "community-guide-security-pg", "referral-capacity-pg", "real-name-pg",
+  "interest-retention-runtime-grants-pg",
 ]);
 const injections = new Set([
-  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-038", "missing-039", "missing-040", "missing-binding",
+  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-038", "missing-039", "missing-040", "missing-041", "missing-binding",
   "missing-bootstrap", "missing-interest-admin-credential", "missing-interest-flag",
   "missing-interest-secret", "missing-role", "missing-secret", "pii-leak", "rollback-mismatch",
   "schema-head", "secret-leak", "turnstile-secret-in-vars", "turnstile-secret-leak", "turnstile-test-key",
@@ -174,7 +176,7 @@ async function cleanupDatabases() {
   pgEnv = serviceEnv;
   for (const database of [primaryDb, rollbackDb, freshDb])
     await psql("postgres", ["-c", `DROP DATABASE IF EXISTS ${database} WITH (FORCE)`]);
-  for (const role of ["otl_interest_member_login", "otl_interest_member", "otl_referral_admin_login",
+  for (const role of ["otl_interest_runtime_login", "otl_interest_member_login", "otl_interest_member", "otl_referral_admin_login",
     "otl_referral_admin", "otl_referral_runtime", "otl_lifecycle_admin_login", "otl_lifecycle_admin",
     "otl_lifecycle_runtime", "otl_guide_admin", "otl_guide_runtime", "legacy_invitation_runtime", ownerRole])
     await psql("postgres", ["-c", `DROP ROLE IF EXISTS ${role}`]);
@@ -182,8 +184,8 @@ async function cleanupDatabases() {
   receipt.checks.localCleanup = { exit: 0, observed: "disposable databases and roles removed" };
 }
 function preflight(config, site, vars, siteWorker, releaseNames = release) {
-  assert.equal(migrations.length, 40, "schema head must be 040");
-  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038", "039", "040"]);
+  assert.equal(migrations.length, 41, "schema head must be 041");
+  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038", "039", "040", "041"]);
   assert.equal(site.services?.find((item) => item.binding === "CORE")?.service, config.name, "CORE service binding missing");
   assert.equal(site.assets?.binding, "ASSETS", "ASSETS binding missing");
   assert.ok(config.r2_buckets?.some((item) => item.binding === "INVITE_PRIVATE_OBJECTS"), "invite R2 binding missing");
@@ -238,6 +240,7 @@ try {
   await expectFailure("missing-038", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("038_"))));
   await expectFailure("missing-039", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("039_"))));
   await expectFailure("missing-040", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("040_"))));
+  await expectFailure("missing-041", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("041_"))));
   await expectFailure("turnstile-test-key", async () => preflight(config, testKeySite, vars, siteWorker));
   await expectFailure("turnstile-secret-in-vars", async () => preflight(config, secretVarSite, vars, siteWorker));
   if (injection === "missing-binding") preflight(config, alternate, vars, siteWorker);
@@ -250,6 +253,7 @@ try {
   if (injection === "missing-038") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("038_")));
   if (injection === "missing-039") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("039_")));
   if (injection === "missing-040") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("040_")));
+  if (injection === "missing-041") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("041_")));
   if (injection === "turnstile-test-key") preflight(config, testKeySite, vars, siteWorker);
   if (injection === "turnstile-secret-in-vars") preflight(config, secretVarSite, vars, siteWorker);
   preflight(config, site, vars, siteWorker);
@@ -304,12 +308,12 @@ try {
   await check("snapshot-035", join(pgBin, "pg_dump"), ["-Fc", "--no-owner", "--no-acl", "-f", join(temp, "snapshot.dump"), primaryDb], { env: pgEnv });
   await apply(primaryDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
   if (injection === "schema-head")
-    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='040-real-name-introductions'"]);
-  await assertSchemaHead(primaryDb, "040-real-name-introductions");
-  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-9]|40)-'"), "12");
+    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='041-interest-retention-runtime-grants'"]);
+  await assertSchemaHead(primaryDb, "041-interest-retention-runtime-grants");
+  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-9]|4[01])-'"), "13");
   const after = await digest(primaryDb);
   assert.deepEqual(after, before, "protected rows changed during upgrade");
-  receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "040", protected: before };
+  receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "041", protected: before };
   if (injection === "missing-role")
     await psql(primaryDb, ["-c", "REVOKE otl_interest_member FROM otl_interest_member_login"]);
   await expectFailure("migration-conflict", () => psql(primaryDb, ["-f", "migrations/037_interest_requests.sql"]));
@@ -324,7 +328,14 @@ try {
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_referral_admin_login','otl.referral_capacity_admin_execute(text,jsonb)','EXECUTE')"), "t", "referral admin role binding missing");
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_referral_runtime','otl.referral_resolve_named(jsonb)','EXECUTE')"), "t", "named referral runtime role binding missing");
   assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_member_login','otl.referral_resolve_named(jsonb)','EXECUTE')"), "f", "named referral lookup leaked to interest member");
-  receipt.checks.roleMatrix = { exit: 0, observed: "direct interest/quota table grants and admin execute denied" };
+  assert.equal(await scalar(primaryDb, "SELECT has_schema_privilege('otl_interest_runtime_login','otl','USAGE')"), "t", "interest retention runtime schema usage missing");
+  assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_runtime_login','otl.interest_runtime_execute(text,jsonb)','EXECUTE')"), "t", "interest runtime execute missing");
+  assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_runtime_login','otl.interest_retention_execute(text,jsonb)','EXECUTE')"), "t", "interest retention execute missing");
+  assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_runtime_login','otl.interest_retention_next_due(jsonb)','EXECUTE')"), "t", "interest retention due missing");
+  assert.equal(await scalar(primaryDb, "SELECT has_table_privilege('otl_interest_runtime_login','otl.interest_requests','SELECT')"), "f", "interest runtime table access leaked");
+  assert.equal(await scalar(primaryDb, "SELECT has_function_privilege('otl_interest_runtime_login','otl.interest_admin_execute(text,jsonb)','EXECUTE')"), "f", "interest admin execute leaked");
+  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM pg_auth_members membership JOIN pg_roles member ON member.oid=membership.member WHERE member.rolname='otl_interest_runtime_login'"), "0", "interest runtime role membership leaked");
+  receipt.checks.roleMatrix = { exit: 0, observed: "direct interest/quota table grants and admin execute denied; retention runtime has exact direct functions" };
   assert.equal(await scalarAs(primaryDb, "otl_interest_member_login", "SELECT current_user"), "otl_interest_member_login");
   assert.equal(await scalarAs(primaryDb, "otl_referral_admin_login", "SELECT current_user"), "otl_referral_admin_login");
   await psql(primaryDb, ["-c", "INSERT INTO otl.referral_admins(team_id,user_id) VALUES('TLIFE','UACTIVE')"]);
@@ -349,17 +360,18 @@ try {
   assert.equal(await scalar(rollbackDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '036-%'"), "0");
   await psql(rollbackDb, ["-c", "DROP TABLE otl.referral_capacity_defaults"]);
   await apply(rollbackDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
-  await assertSchemaHead(rollbackDb, "040-real-name-introductions");
+  await assertSchemaHead(rollbackDb, "041-interest-retention-runtime-grants");
   assert.deepEqual(await digest(rollbackDb), before, "forward repair changed protected rows");
   assert.deepEqual(await seedAdditive(rollbackDb), additiveBefore, "forward repair changed additive row contract");
-  receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "040" };
+  receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "041" };
   await apply(freshDb, migrations);
-  await assertSchemaHead(freshDb, "040-real-name-introductions");
+  await assertSchemaHead(freshDb, "041-interest-retention-runtime-grants");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '037-%'"), "1");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '038-%'"), "1");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '039-%'"), "1");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '040-%'"), "1");
-  receipt.checks.freshInstall = { exit: 0, schemaHead: "040" };
+  assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '041-%'"), "1");
+  receipt.checks.freshInstall = { exit: 0, schemaHead: "041" };
   await cleanupDatabases();
   await check("full-check", "bun", ["run", "check"]);
   if (injection === "build-failure") await check("site-build", "bunx", ["wrangler", "deploy", "--dry-run", "-c", "missing-site-config.jsonc"]);
@@ -372,10 +384,10 @@ try {
   const exportDir = join(temp, "public");
   await check("public-export", "node", ["scripts/export-public.mjs", exportDir]);
   for (const name of ["migrations/036_referral_capacity.sql", "migrations/037_interest_requests.sql",
-    "migrations/038_interest_retention_due.sql", "migrations/039_bot_owned_welcome_guide.sql", "migrations/040_real_name_introductions.sql", "qa/real-name-pg.mjs", "qa/real-name-storage.sql", "scripts/bootstrap-referral-admin-db-role.mjs", "site/dist/interest.html", "site/dist/receipt.html",
+    "migrations/038_interest_retention_due.sql", "migrations/039_bot_owned_welcome_guide.sql", "migrations/040_real_name_introductions.sql", "migrations/041_interest_retention_runtime_grants.sql", "qa/real-name-pg.mjs", "qa/interest-retention-runtime-grants-pg.mjs", "qa/real-name-storage.sql", "scripts/bootstrap-referral-admin-db-role.mjs", "site/dist/interest.html", "site/dist/receipt.html",
     "site/dist/assets/otl1-emoji/blob_smiley.png"])
     assert.ok((await readFile(join(exportDir, name))).length > 0, `${name} missing from public export`);
-  receipt.checks.publicRequiredFiles = { exit: 0, observed: "036–040,real-name QA,bootstrap,interest,receipt,emoji present" };
+  receipt.checks.publicRequiredFiles = { exit: 0, observed: "036–041,real-name and retention-role QA,bootstrap,interest,receipt,emoji present" };
   receipt.checks.publicLeakScan = { exit: 0, scannedFiles: await scanPublicExport(exportDir) };
   await check("public-check", "bun", ["run", "check"], { cwd: exportDir });
   await check("public-site-build", join(exportDir, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "site/wrangler.jsonc"], { cwd: exportDir });
