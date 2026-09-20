@@ -9,13 +9,13 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const destination = join(tmpdir(), `otl1-guide-export-${randomUUID()}`);
-const privateValues = [
-  "1789721925.521149",
-  "F0C2S01GE06",
-  "F0C2P2G2DFF",
-  "onething1line.slack.com",
-  "1789722193.000000",
-  "fbef79eaf1840ee8e6c68fa203c2fbde2bbdba70a598cd1dcd23379d55c44b85",
+const sourceGuideIds = JSON.parse(readFileSync(join(root, "wrangler.jsonc"), "utf8"))
+  .vars.COMMUNITY_GUIDE_FILE_IDS.split(",")
+  .filter((id) => !id.startsWith("FREPLACE"));
+const unsafeGuideFixtures = [
+  "CFAKEGUIDE123",
+  "FFAKEGUIDE123",
+  ["https://", "example", ".slack.com/archives/CFAKEGUIDE123/p1234567890000000"].join(""),
 ];
 const lifecycleAdminSources = [
   "migrations/035_lifecycle_admin_login.sql",
@@ -83,7 +83,7 @@ async function assertUnsafeGuideSourceRefusesBeforeOutput(markerText) {
 }
 
 try {
-  for (const unsafe of ["C0BVB9HSL10", "F0C2S01GE06", "https://onething1line.slack.com/archives/C0BVB9HSL10/p1234567890000000"])
+  for (const unsafe of unsafeGuideFixtures)
     await assertUnsafeGuideSourceRefusesBeforeOutput(unsafe);
   for (const source of lifecycleAdminSources) await assertMissingSourceRefusesBeforeOutput(source);
   await run("bun", ["scripts/export-public.mjs", destination], { cwd: root, encoding: "utf8" });
@@ -101,7 +101,10 @@ try {
   const exportedText = textFiles(destination)
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
-  for (const value of privateValues) assert.doesNotMatch(exportedText, new RegExp(value));
+  for (const value of sourceGuideIds) assert.doesNotMatch(exportedText, new RegExp(value));
+  const workspaceLinks = [...exportedText.matchAll(/https:\/\/([a-z0-9-]+)\.slack\.com\/archives\//g)]
+    .filter((match) => !["test", "example"].includes(match[1]));
+  assert.equal(workspaceLinks.length, 0, "public export contains a workspace permalink");
   console.log(
     "PASS public welcome export rejects live C/F IDs and Slack URLs, uses private image placeholders, and contains no GitHub Actions",
   );
