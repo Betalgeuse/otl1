@@ -13,6 +13,7 @@ import { runRetentionQueues } from "./community-retention-schedule";
 import type { CommunityEnv } from "./community-runtime";
 import { InputError, object, string } from "./input";
 import type { NeonStore } from "./store";
+import { StoreError } from "./store-types";
 
 const BATCH = 10;
 
@@ -50,6 +51,7 @@ export async function runMembershipDue(
           event: "community.membership.queue.failed",
           queue: name,
           errorType: error.name,
+          ...(error instanceof StoreError ? { errorCode: error.code } : {}),
         }),
       );
     }
