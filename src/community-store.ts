@@ -153,6 +153,10 @@ export class CommunityStore extends CommunityScheduleStore {
   async introduction(teamId: string, userId: string): Promise<MemberIntroduction | null> {
     return introduction(await this.introductionCall("get", { teamId, userId }));
   }
+  async introductionNameInput(teamId: string, userId: string): Promise<string | null> {
+    const value = await this.introductionCall("name_input", { teamId, userId });
+    return value === null ? null : string(value);
+  }
   async introductions(teamId: string): Promise<readonly MemberIntroduction[]> {
     return list(await this.introductionCall("list", { teamId })).map((value) => {
       const result = introduction(value);

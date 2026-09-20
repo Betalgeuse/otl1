@@ -7,6 +7,25 @@ BEGIN
   result := otl.referral_resolve_named('{"teamId":"TREF","tokenDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'::jsonb);
   IF result <> '{"available":true,"inviterName":null}'::jsonb THEN RAISE EXCEPTION 'unconfirmed name leaked: %', result; END IF;
 END $$;
+-- Given an existing member with no introduction, Slack profile text is only a private input candidate.
+INSERT INTO otl.member_introductions(team_id,user_id,name_prefill)
+VALUES ('TREF','UADMIN','Profile Candidate');
+SELECT otl.referral_runtime_execute('issue', '{"teamId":"TREF","userId":"UADMIN","linkId":"LNK-PREFILL","tokenDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","now":"2026-09-20T00:00:00Z"}'::jsonb);
+DO $$
+BEGIN
+  IF otl.introduction_execute('name_input','{"teamId":"TREF","userId":"UADMIN"}'::jsonb) <> '"Profile Candidate"'::jsonb
+  THEN RAISE EXCEPTION 'private prefill missing'; END IF;
+  IF otl.introduction_execute('get','{"teamId":"TREF","userId":"UADMIN"}'::jsonb) <> 'null'::jsonb
+    OR otl.introduction_execute('list','{"teamId":"TREF"}'::jsonb)::text LIKE '%Profile Candidate%'
+  THEN RAISE EXCEPTION 'unpublished prefill in introduction directory'; END IF;
+  IF otl.referral_resolve_named('{"teamId":"TREF","tokenDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}'::jsonb)
+     <> '{"available":true,"inviterName":null}'::jsonb
+  THEN RAISE EXCEPTION 'unverified prefill leaked to referral'; END IF;
+  UPDATE otl.member_introductions SET confirmed_name='Confirmed Member' WHERE team_id='TREF' AND user_id='UADMIN';
+  IF otl.referral_resolve_named('{"teamId":"TREF","tokenDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}'::jsonb)
+     <> '{"available":true,"inviterName":"Confirmed Member"}'::jsonb
+  THEN RAISE EXCEPTION 'admin-confirmed no-intro member absent from referral'; END IF;
+END $$;
 -- When a modal prepares a new name then aborts, the public referral remains generic.
 SELECT otl.introduction_execute('prepare', '{"teamId":"TREF","userId":"UREFERRER","confirmedName":"Test Name","intro":"Existing introduction","expectedRevision":1,"token":"VIEW-ABORT"}'::jsonb);
 SELECT otl.introduction_execute('abort', '{"teamId":"TREF","userId":"UREFERRER","token":"VIEW-ABORT"}'::jsonb);

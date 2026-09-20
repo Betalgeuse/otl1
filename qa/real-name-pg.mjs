@@ -35,7 +35,17 @@ try {
   const existing = await run("psql", ["-X", "-Atq", "-c", "SELECT coalesce(confirmed_name,'<null>') FROM otl.member_introductions WHERE team_id='TREF' AND user_id='UREFERRER'"]);
   assert.equal(existing.stdout.trim(), "<null>", "upgrade must not infer a legal name from Slack display name");
   await run("psql", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", "qa/real-name-storage.sql"]);
-  console.log("PASS real-name PostgreSQL: upgrade preservation, prepare/abort/finish, active/unknown/paused referral, scoped runtime role");
+  await run("createdb", ["otl_real_name_fresh"]);
+  env.PGDATABASE = "otl_real_name_fresh";
+  for (const migration of migrations) {
+    if (migration.startsWith("007_")) continue;
+    if (migration.startsWith("006_"))
+      await run("psql", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", `migrations/${migration}`, "-f", "migrations/007_normalized_legacy.sql"]);
+    else await run("psql", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-f", `migrations/${migration}`]);
+  }
+  const fresh = await run("psql", ["-X", "-Atq", "-c", "SELECT version FROM otl.schema_migrations WHERE version='040-real-name-introductions'"]);
+  assert.equal(fresh.stdout.trim(), "040-real-name-introductions");
+  console.log("PASS real-name PostgreSQL: fresh+upgrade, private prefill, prepare/abort/finish, active/unknown/paused/exhausted referral, scoped runtime role");
 } finally {
   if (started) await run("pg_ctl", ["-D", data, "-m", "immediate", "-w", "stop"]);
   await rm(temp, { recursive: true, force: true });

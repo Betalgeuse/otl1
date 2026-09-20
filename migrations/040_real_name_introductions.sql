@@ -2,9 +2,12 @@ BEGIN;
 
 ALTER TABLE otl.member_introductions
   ADD COLUMN confirmed_name text,
+  ADD COLUMN name_prefill text,
   ADD COLUMN pending_confirmed_name text,
   ADD CONSTRAINT member_introductions_confirmed_name_check
-    CHECK (confirmed_name IS NULL OR (char_length(confirmed_name) BETWEEN 1 AND 40 AND confirmed_name !~ E'[\r\n]'));
+    CHECK (confirmed_name IS NULL OR (char_length(confirmed_name) BETWEEN 1 AND 40 AND confirmed_name !~ E'[\r\n]')),
+  ADD CONSTRAINT member_introductions_name_prefill_check
+    CHECK (name_prefill IS NULL OR (char_length(name_prefill) BETWEEN 1 AND 40 AND name_prefill !~ E'[\r\n]'));
 
 -- Existing introductions retain NULL until the member saves a modal or an explicitly authorized backfill runs.
 CREATE OR REPLACE FUNCTION otl.introduction_json(i otl.member_introductions)
@@ -34,6 +37,11 @@ BEGIN
     SELECT * INTO i FROM otl.member_introductions WHERE team_id = t AND user_id = u;
     IF NOT FOUND OR i.intro = '' THEN RETURN 'null'::jsonb; END IF;
     RETURN otl.introduction_json(i);
+  END IF;
+
+  IF op = 'name_input' THEN
+    SELECT * INTO i FROM otl.member_introductions WHERE team_id = t AND user_id = u;
+    RETURN to_jsonb(coalesce(i.confirmed_name, i.name_prefill));
   END IF;
 
   IF op = 'list' THEN
@@ -76,6 +84,7 @@ BEGIN
     THEN RAISE EXCEPTION 'invalid delivery'; END IF;
     UPDATE otl.member_introductions
       SET confirmed_name = pending_confirmed_name,
+          name_prefill = NULL,
           intro = pending_intro,
           linkedin = pending_linkedin,
           details = pending_details,
@@ -124,7 +133,7 @@ BEGIN
   SELECT referrer_user_id INTO owner_id FROM otl.member_referral_links
     WHERE team_id=p->>'teamId' AND token_digest=p->>'tokenDigest' AND status='active';
   SELECT confirmed_name INTO public_name FROM otl.member_introductions
-    WHERE team_id=p->>'teamId' AND user_id=owner_id AND message_ts IS NOT NULL;
+    WHERE team_id=p->>'teamId' AND user_id=owner_id;
   RETURN jsonb_build_object('available',true,'inviterName',public_name);
 END $$;
 REVOKE ALL ON FUNCTION otl.referral_resolve_named(jsonb) FROM PUBLIC,otl_referral_runtime,otl_referral_admin;

@@ -8,9 +8,13 @@ const { introductionModal, parseIntroduction, submitIntroduction } = await impor
 const calls = [];
 let current = null;
 let pending = null;
+let prefillCandidate = "Test Member";
 const store = {
   async introduction() {
     return current;
+  },
+  async introductionNameInput() {
+    return current?.confirmedName ?? prefillCandidate;
   },
   async prepareIntroduction(input) {
     if (pending || input.expectedRevision !== (current?.revision ?? 0)) return null;
@@ -19,7 +23,7 @@ const store = {
       current ?? {
         teamId: input.teamId,
         userId: input.userId,
-      intro: "",
+        intro: "",
         confirmedName: null,
         linkedin: null,
         details: null,
@@ -123,6 +127,7 @@ try {
   assert.equal(modal.blocks[2].element.max_length, 180);
   assert.match(modal.blocks[0].text.text, /공개/);
   assert.equal(modal.blocks[1].block_id, "confirmed_name");
+  assert.equal(modal.blocks[1].element.initial_value, prefillCandidate, "a member without an intro can see a private name candidate");
   assert.equal(modal.blocks[1].element.multiline, undefined);
 
   const values = {

@@ -72,6 +72,10 @@ export async function introductionModal(
   triggerId: string,
 ): Promise<void> {
   const existing = await context.store.introduction(context.scope.teamId, context.scope.userId);
+  const nameInput = await context.store.introductionNameInput(
+    context.scope.teamId,
+    context.scope.userId,
+  );
   const editing = existing !== null;
   await openView(context.env.SLACK_BOT_TOKEN, {
     trigger_id: triggerId,
@@ -105,7 +109,7 @@ export async function introductionModal(
             type: "plain_text_input",
             action_id: "value",
             max_length: 40,
-            ...(existing?.confirmedName ? { initial_value: existing.confirmedName } : {}),
+            ...(nameInput ? { initial_value: nameInput } : {}),
             placeholder: { type: "plain_text", text: "이름을 적어 주세요" },
           },
         },

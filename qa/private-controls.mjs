@@ -3,7 +3,7 @@ import { mock } from 'bun:test';
 mock.module('cloudflare:workers',()=>({DurableObject:class {}}));
 const publications=[];
 mock.module('../src/community-records.ts',()=>({statusMessage:async()=>({text:"board"}),publishStatus:async(context,day)=>{publications.push({context,day});},applyChange:async()=>{},undoChange:async()=>{}}));
-mock.module('../src/community-store.ts',()=>({CommunityStore:class {async day(scope){return {...scope,goal:'existing',outcome:'complete',revision:4};}async introduction(){return null;}}}));
+mock.module('../src/community-store.ts',()=>({CommunityStore:class {async day(scope){return {...scope,goal:'existing',outcome:'complete',revision:4};}async introduction(){return null;}async introductionNameInput(){return null;}}}));
 const { ephemeral } = await import('../src/community-runtime.ts');
 const { communityInteraction } = await import('../src/community-interactions.ts');
 const env={COMMUNITY_ENABLED:'true',SLACK_TEAM_ID:'TQA',SLACK_BOT_TOKEN:'test',DATABASE_URL:'postgresql://user:pass@qa.neon.tech/db',COMMUNITY_CHANNEL_ID:'CADMIN',COMMUNITY_ADMIN_ID:'UADMIN',COMMUNITY_PUBLIC_CHANNEL_ID:'CPUBLIC'};
