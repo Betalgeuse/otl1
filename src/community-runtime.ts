@@ -104,13 +104,21 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
         env.COMMUNITY_PUBLIC_CHANNEL_ID,
       ].includes(channelId)) ||
     (referralLinkAction &&
-      [env.COMMUNITY_WELCOME_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId));
+      [
+        env.COMMUNITY_WELCOME_CHANNEL_ID,
+        env.COMMUNITY_PUBLIC_CHANNEL_ID,
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+      ].includes(channelId));
   const feedbackActionDenied = channelId === env.COMMUNITY_FEEDBACK_CHANNEL_ID && !bugAction;
   if (
     teamId !== env.SLACK_TEAM_ID ||
     feedbackActionDenied ||
     (referralLinkAction &&
-      ![env.COMMUNITY_WELCOME_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId)) ||
+      ![
+        env.COMMUNITY_WELCOME_CHANNEL_ID,
+        env.COMMUNITY_PUBLIC_CHANNEL_ID,
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+      ].includes(channelId)) ||
     (![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) &&
       !expandedChannelAllowed) ||
     (channelId === env.COMMUNITY_CHANNEL_ID && userId !== env.COMMUNITY_ADMIN_ID) ||

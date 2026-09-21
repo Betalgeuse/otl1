@@ -1,5 +1,6 @@
 import { customBotEmoji, randomCustomEmoji } from "./community-emoji";
 import { introductionButton } from "./community-introduction";
+import { inviteButton } from "./community-member-actions";
 import type { CommunityEnv } from "./community-runtime";
 import { addReactions, callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
@@ -45,7 +46,7 @@ export async function welcomeTownhallMember(
     text: renderedText,
     blocks: [
       { type: "section", text: { type: "mrkdwn", text: renderedText } },
-      { type: "actions", elements: [introductionButton()] },
+      { type: "actions", elements: [introductionButton(), inviteButton()] },
     ],
     unfurl_links: false,
   });
