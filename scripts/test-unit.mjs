@@ -40,6 +40,7 @@ const suites = [
   "community-target-date-routing",
   "community-record-decision",
   "community-social",
+  "community-share-info",
   "community-townhall",
   "community-welcome",
   "community-introduction",

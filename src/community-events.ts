@@ -20,6 +20,7 @@ import { referralSlackPort } from "./community-referral-slack";
 import { CommunityReferralStore } from "./community-referral-store";
 import { replayReflectionOutcomeDelivery } from "./community-reflection-outcome";
 import { type CommunityEnv, textReply } from "./community-runtime";
+import { handleShareInfoMessage } from "./community-share-info";
 import { callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
 import { welcomeTownhallMember } from "./community-welcome";
@@ -131,6 +132,20 @@ export async function handleCommunityEvent(
   if (await handleIntroductionChannelMessage(event, env)) return true;
   await enrollReminderMember(event, env);
   if (await welcomeTownhallMember(event, env)) return true;
+  const shareContext = {
+    env,
+    store: new CommunityStore(new NeonStore(env.DATABASE_URL)),
+    scope: {
+      teamId: env.SLACK_TEAM_ID,
+      channelId: string(event.channel),
+      userId: string(event.user),
+    },
+    thread: string(event.thread_ts ?? event.ts),
+    source: string(event.ts),
+    date: koreaDate(Number(event.ts)),
+    key: `share-info:${string(event.ts)}`,
+  };
+  if (await handleShareInfoMessage(event, shareContext)) return true;
   if (
     ![
       env.COMMUNITY_CHANNEL_ID,
