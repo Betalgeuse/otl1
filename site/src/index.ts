@@ -155,9 +155,10 @@ async function referralPage(request: Request, env: SiteEnv, token: string): Prom
   const resolved = await availableLink(env, token);
   if (!resolved.available) return message(GENERIC_ERROR, 404);
   const html = await assetHtml(env, request, "referral.html");
+  const invitationPhrase = '<span class="invitation-phrase">같이 성장하자고</span>';
   const headline = resolved.inviterName
-    ? `${escapeHtml(resolved.inviterName)} 님이 같이 성장하자고<br>초대했어요!`
-    : "같이 성장하자고<br>초대받았어요!";
+    ? `${escapeHtml(resolved.inviterName)} 님이 ${invitationPhrase}<br>초대했어요!`
+    : `${invitationPhrase}<br>초대받았어요!`;
   return new Response(html.replaceAll("__REFERRAL_TOKEN__", token).replaceAll("__TURNSTILE_SITE_KEY__", env.TURNSTILE_SITE_KEY).replaceAll("__SHARE_TEXT__", SHARE_COPY(token)).replaceAll("__SUBMISSION_KEY__", crypto.randomUUID()).replaceAll("__INVITER_HEADLINE__", headline), { headers: { "content-type": "text/html;charset=UTF-8" } });
 }
 

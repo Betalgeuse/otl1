@@ -97,6 +97,9 @@ assert.match(css, /\.has-js:not\(\.prefers-reduced-motion\) \.daily-row:not\(\.i
 assert.doesNotMatch(script.slice(script.indexOf("const dailyReplay"), script.indexOf("window.addEventListener")), /fetch\(|XMLHttpRequest|sendBeacon/);
 assert.match(css, /#home-title \{ font-size:var\(--display-mobile-section\); word-break:keep-all/);
 assert.match(css, /body \{[^}]*word-break:keep-all/);
+assert.match(css, /\.invitation-phrase\{white-space:nowrap\}/);
+assert.match(css, /\.share-panel p\{(?=[^}]*word-break:keep-all)(?=[^}]*overflow-wrap:anywhere)/);
+assert.doesNotMatch(css, /\.thread-scene|\.message--(?:goal|peer|support)|\.thread--(?:one|two)|\.mini-garden/);
 
 for (const contents of [JSON.stringify(config), worker, page, referral, css, script]) {
   assert.doesNotMatch(contents, /ineffable/i);

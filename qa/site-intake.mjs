@@ -118,11 +118,11 @@ try {
   assert.match(pageText, new RegExp(referralToken));
   assert.match(pageText, /1x00000000000000000000AA/);
   assert.match(pageText, /매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야/);
-  assert.match(pageText, /홍길동 님이 같이 성장하자고/);
+  assert.match(pageText, /홍길동 님이 <span class="invitation-phrase">같이 성장하자고<\/span>/);
   assert.doesNotMatch(pageText, /__INVITER_HEADLINE__/);
 
   resolveName = null;
-  assert.match(await (await call(`/r/${referralToken}`)).text(), /같이 성장하자고<br>초대받았어요!/);
+  assert.match(await (await call(`/r/${referralToken}`)).text(), /<span class="invitation-phrase">같이 성장하자고<\/span><br>초대받았어요!/);
   resolveName = '<script>alert("x")</script>';
   const escapedPage = await (await call(`/r/${referralToken}`)).text();
   assert.doesNotMatch(escapedPage, /<script>alert/);
