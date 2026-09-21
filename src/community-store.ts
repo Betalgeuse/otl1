@@ -226,17 +226,19 @@ export class CommunityStore extends CommunityScheduleStore {
       undoKey: string(v.undoKey),
       ...(returnTransition ? { returnTransition } : {}),
     };
-    if (
-      !result.changed ||
-      result.conflict ||
-      delivery === undefined ||
-      reviewThreadV2 !== true ||
-      (result.day.outcome === "pending" && result.day.reflection === "")
-    )
+    if (!result.changed || result.conflict || delivery === undefined || reviewThreadV2 !== true)
       return result;
     const season = await this.seasonHistory(input);
     if (!season || result.day.date < season.openedOn) return result;
-    const routed = await this.db.queryJson("SELECT otl.route_member_review_garden($1::jsonb)", [
+    if (
+      change.action !== "goal" &&
+      result.day.outcome === "pending" &&
+      result.day.reflection === ""
+    )
+      return result;
+    const route =
+      change.action === "goal" ? "route_member_goal_garden" : "route_member_review_garden";
+    const routed = await this.db.queryJson(`SELECT otl.${route}($1::jsonb)`, [
       JSON.stringify({
         teamId: input.teamId,
         channelId: input.channelId,

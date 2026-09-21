@@ -65,7 +65,7 @@ const env = {
   TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
   TURNSTILE_SECRET: turnstileSecret,
   SITE_CORE_HMAC_SECRET: hmacSecret,
-  SLACK_SHARED_INVITE_URL: "https://join.slack.com/t/otl1/shared_invite/zt-synthetic-site-intake",
+  SLACK_SHARED_INVITE_URL: "https://join.slack.com/t/otl1/shared_invite/zt-synthetic~site-intake",
 };
 
 const originalFetch = globalThis.fetch;
@@ -138,7 +138,7 @@ try {
 
   const valid = await call(`/r/${referralToken}/apply`, { method: "POST", body: form() });
   assert.equal(valid.status, 303);
-  assert.equal(valid.headers.get("location"), "https://join.slack.com/t/otl1/shared_invite/zt-synthetic-site-intake");
+  assert.equal(valid.headers.get("location"), "https://join.slack.com/t/otl1/shared_invite/zt-synthetic~site-intake");
   assert.equal(valid.headers.get("set-cookie"), null);
   const directStarts = coreBodies.filter((entry) => entry.path === "/internal/referrals/direct-join");
   assert.equal(directStarts.length, 1);

@@ -220,7 +220,7 @@ function sharedInviteUrl(value: string | undefined): string | null {
     const url = new URL(value);
     if (url.protocol !== "https:" || url.host !== "join.slack.com" || url.username || url.password || url.search || url.hash)
       return null;
-    if (!/^\/t\/[A-Za-z0-9_-]+\/shared_invite\/[A-Za-z0-9_-]+$/.test(url.pathname)) return null;
+    if (!/^\/t\/[A-Za-z0-9_-]+\/shared_invite\/[A-Za-z0-9_~-]+$/.test(url.pathname)) return null;
     return url.href;
   } catch (error) { if (error instanceof TypeError) return null; throw error; }
 }
