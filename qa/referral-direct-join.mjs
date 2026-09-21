@@ -5,6 +5,7 @@ import {
 } from "../src/community-referral-intake.ts";
 import { handleReferralTeamJoin } from "../src/community-referral-join.ts";
 import { referralSlackPort } from "../src/community-referral-slack.ts";
+import { CommunityReferralStore } from "../src/community-referral-store.ts";
 
 const secret = "direct-join-service-secret-0123456789";
 const pepper = Buffer.alloc(32, 9).toString("base64url");
@@ -55,6 +56,19 @@ const claimsBeforeResolve = nonceClaims;
 assert.equal((await resolveRequest("resolve-read-only-nonce-001")).status, 200);
 assert.equal((await resolveRequest("resolve-read-only-nonce-001")).status, 200);
 assert.equal(nonceClaims, claimsBeforeResolve, "read-only resolve must not persist service nonces");
+
+const resolveCalls = [];
+const adapterStore = new CommunityReferralStore(
+  {
+    async queryJson(query, params, timeoutMs) {
+      resolveCalls.push({ query, params, timeoutMs });
+      return { available: false, inviterName: null };
+    },
+  },
+  { teamId: "TQA", channelId: "CQA", userId: "UQA" },
+);
+await adapterStore.resolveLink("TQA", "a".repeat(64));
+assert.equal(resolveCalls[0].timeoutMs, 15_000, "read-only resolve needs Neon cold-start headroom");
 const payload = {
   referralToken: "D".repeat(32),
   submissionKey: "direct-join-001",

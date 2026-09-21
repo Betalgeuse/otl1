@@ -98,9 +98,11 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
     tokenDigest: string,
   ): Promise<{ readonly available: boolean; readonly inviterName: string | null }> {
     const result = object(
-      await this.db.queryJson("SELECT otl.referral_resolve_named($1::jsonb)", [
-        JSON.stringify({ teamId, tokenDigest }),
-      ]),
+      await this.db.queryJson(
+        "SELECT otl.referral_resolve_named($1::jsonb)",
+        [JSON.stringify({ teamId, tokenDigest })],
+        15_000,
+      ),
     );
     return {
       available: result.available === true,
