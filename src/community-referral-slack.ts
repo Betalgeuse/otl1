@@ -47,6 +47,19 @@ export function referralSlackPort(
       });
       return string(result.ts);
     },
+    async postJoinIntroduction(input) {
+      const opened = object(
+        await callSlack(env.SLACK_BOT_TOKEN, "conversations.open", { users: input.userId }),
+      );
+      const channelId = string(object(opened.channel).id);
+      const result = await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
+        channel: channelId,
+        text: input.text,
+        blocks: input.blocks,
+        client_msg_id: await effectUuid(input.effectKey),
+      });
+      return string(result.ts);
+    },
     async person(userId) {
       const result = object(
         (await callSlack(env.SLACK_BOT_TOKEN, "users.info", { user: userId })).user,

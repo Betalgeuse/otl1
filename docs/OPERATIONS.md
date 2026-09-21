@@ -122,13 +122,13 @@ DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 �
 
 이 절은 v0.0.56–v0.0.70를 배포하기 전의 runbook입니다. 현재 운영 설정을 바꾸거나 기능이 출시되었다고 선언하지 않습니다.
 
-1. exact clean SHA와 `schema_migrations` 028을 readback하고, `029_member_lifecycle.sql`부터 `041_interest_retention_runtime_grants.sql`까지를 정확한 순서로 release receipt에 적습니다. 034의 runtime role은 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하며, 036은 초대 한도, 037은 비소속자 문의, 038은 플래그와 독립된 보존 작업, 039는 봇 소유 welcome 발행, 040은 본명 입력과 비공개 후보를 각각 추가합니다. 041은 정리 전용 interest runtime 로그인에 schema usage와 interest runtime·retention 함수 세 개만 직접 부여하며, 테이블·관리자·referral 역할 권한은 주지 않습니다. 기존 회원 본명 후보는 실제 Slack ID와 대조한 뒤 비공개로 넣고, 회원의 저장 또는 정확한 관리자 확인 전에는 초대 페이지에 노출하지 않습니다. 승인·거절·수동 초대 표시는 지정 관리자 경로에 남깁니다. 이미 적용한 migration을 고치거나 002–004의 retired invitation 경로를 되살리지 않습니다.
+1. exact clean SHA와 `schema_migrations` 028을 readback하고, `029_member_lifecycle.sql`부터 `042_instant_shared_invite_join.sql`까지를 정확한 순서로 release receipt에 적습니다. 034의 runtime role은 30일 소개 신청 만료·정리와 12개월 비식별 decision/security audit 보존만 처리하며, 036은 초대 한도, 037은 비소속자 문의, 038은 플래그와 독립된 보존 작업, 039는 봇 소유 welcome 발행, 040은 본명 입력과 비공개 후보를 각각 추가합니다. 041은 정리 전용 interest runtime 권한만 부여합니다. 042는 기존 신청을 `manual_review`로 보존하고 `shared_invite` 직접 예약, INSERT까지 잠그는 한도 guard, 정확한 이메일 가입 귀속 함수만 referral runtime에 추가합니다. 기존 회원 본명 후보는 실제 Slack ID와 대조한 뒤 비공개로 넣고, 회원의 저장 또는 정확한 관리자 확인 전에는 초대 페이지에 노출하지 않습니다. 승인·거절·수동 초대 표시는 지정 관리자 경로에 남깁니다. 이미 적용한 migration을 고치거나 002–004의 retired invitation 경로를 되살리지 않습니다.
 2. 유지보수를 켠 뒤 core Worker를 먼저 배포하고, `SITE_CORE_HMAC_SECRET`, `INVITE_EMAIL_PEPPER`, `INVITE_PRIVATE_KEK`, `INVITE_PRIVATE_KEK_VERSION`, 전용 `INVITE_PRIVATE_OBJECTS`를 값 없이 이름만 확인합니다. site Worker에는 core Service Binding과 Turnstile public site key만 둡니다. Slack·Neon·R2 비밀을 site asset이나 공개 vars에 넣지 않습니다.
 3. site preview에서 Turnstile 성공·실패, nonce 재사용 거절, HMAC 거절, 신청·철회, 축소 모션·키보드·320/375/768/1440 폭을 브라우저로 확인합니다. preview가 통과한 뒤에만 DNS와 `otl1.hyuk.me` custom domain의 기존 레코드·binding 충돌을 read-only로 확인하고 연결합니다.
 4. Slack manifest를 생성해 checked-in `slack-manifest.json`과 byte-for-byte 비교합니다. `im:write`, `users:read.email`, `team_join`은 Slack 앱 재설치와 event subscription readback이 필요한 변경입니다. `message.im`은 추가하지 않습니다. 그 밖의 기존 scope는 유지합니다.
 5. 모든 새 플래그는 기본 꺼짐입니다. canonical review root, 계절 잔디, shadow 후보, 유예, 종료, 새 ONE THING 복귀, 초대 한도, 비공개 참여 문의, 확인된 소개 신청, 비공개 승인·join provenance, domain 순서로 하나씩 올립니다. 각 단계마다 Slack/DB/브라우저의 독립 관찰 영수증을 남기고 실패하면 해당 플래그만 즉시 되돌립니다. shadow의 zero-retroactive 후보 audit 전에는 enforce로 올리지 않습니다.
 
-신청은 `approved`여도 Slack 접근 권한이 아닙니다. 지정 운영자만 비공개 admin 카드에서 결정하고, Free Slack UI에서 받는 사람별 초대를 수동으로 보낸 뒤 `mark-invited`를 기록합니다. `team_join`은 실제 가입 관찰에만 쓰고 inviter authority를 만들지 않습니다. inviter에게 지원자·유예·휴식·결정 정보를 보이지 않습니다.
+기존 `manual_review` 신청의 `approved`는 Slack 접근 권한이 아니며 지정 운영자의 수동 초대 표식을 유지합니다. `shared_invite` 직접 예약은 동의·Turnstile·회원별 한도를 통과한 방문자만 Site Worker의 공식 공유 초대로 이동시킵니다. 공유 URL은 `SLACK_SHARED_INVITE_URL` secret으로 설치하고 저장소·정적 자산·로그에 남기지 않습니다. 실제 `team_join`에서 Slack 계정 이메일 digest가 예약과 정확히 일치할 때만 출처를 기록하고 자기소개 DM을 보냅니다. 불일치 가입은 추정하거나 한도에 차감하지 않습니다.
 
 ### 계획된 초대 한도와 비공개 참여 문의
 
@@ -142,7 +142,7 @@ DB에 저장됐는지, Slack에 게시됐는지, 회원이 확인했는지를 �
 
 관심 문의의 서명된 R2 조정 마커가 digest 불일치나 DB 충돌로 `dead`가 되면 공개 플래그와 관계없이 비공개 `INTEREST_ADMIN_CHANNEL_ID`로 케이스 ID만 보냅니다. 운영자는 알림의 ID로 `interest-private-reconcile/v1/<workspace 해시>/<ID>.json`을 찾아 서명·`alertStatus`(`alert_pending` 또는 `alerted`)·ETag를 확인합니다. 암호문 경로와 digest는 Slack이나 로그에 복사하지 않습니다. `alert_pending`은 채널/API 오류, 응답 손실 또는 작업 중단 뒤 재시도되며, 재게시 전에 봇 기록을 대조합니다. 필요하면 비공개 채널 설정과 봇 권한을 복구하고 Community Clock/Cron을 다시 실행해 재시도합니다. `alerted`는 전송 영수증이며 오류의 해결을 뜻하지 않습니다. 운영자는 DB 상태와 암호문 무결성을 별도로 조사하고 근거를 남겨 forward repair 합니다. 충돌이나 digest 불일치의 암호문과 마커는 자동 삭제하지 않으며, 수동 해결 전에 보존 정책과 12개월 감사를 확인합니다.
 
-장애가 나면 먼저 feature flag를 닫고, 같은 버전의 core/site 이전 배포로 되돌릴 수 있는지와 schema의 forward repair 필요성을 분리합니다. migration은 운영 DB에서 자동 down하지 않습니다. 잘못 분류된 lifecycle은 근거가 있는 관리자 correction만 같은 시즌을 복원할 수 있고, 과거 기록을 지우지 않습니다. canonical 잔디 교체는 새 review-thread 게시를 Slack Web에서 확인한 뒤에만 옛 봇 이미지를 그 메시지의 저장된 payload로 복구하거나 forward repair 합니다. 어떤 복구도 Slack 강퇴·계정 비활성화·공개 초대 링크 발급을 포함하지 않습니다.
+장애가 나면 먼저 `REFERRALS_ENABLED`와 `PUBLIC_APPLICATIONS_ENABLED`를 닫고 Slack에서 공식 공유 초대를 회수·교체합니다. 이미 노출된 URL은 flag만으로 회수되지 않습니다. migration 042는 내려가지 않고 기존 직접 예약의 정확한 귀속과 30일 만료를 계속 처리합니다. 같은 버전의 core/site 이전 배포로 되돌릴 수 있는지와 schema의 forward repair 필요성을 분리하며 migration은 운영 DB에서 자동 down하지 않습니다. 잘못 분류된 lifecycle은 근거가 있는 관리자 correction만 같은 시즌을 복원할 수 있고, 과거 기록을 지우지 않습니다. canonical 잔디 교체는 새 review-thread 게시를 Slack Web에서 확인한 뒤에만 옛 봇 이미지를 그 메시지의 저장된 payload로 복구하거나 forward repair 합니다. 어떤 복구도 Slack 강퇴·계정 비활성화·공개 초대 링크 발급을 포함하지 않습니다.
 
 ### 계획된 lifecycle 관리자 자격증명
 

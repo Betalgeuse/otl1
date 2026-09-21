@@ -1,3 +1,4 @@
+import { introductionButton } from "./community-introduction";
 import { digestNormalizedInviteEmail } from "./community-referral-token";
 import type { ReferralRuntimeStore, ReferralSlackPort } from "./community-referral-types";
 
@@ -32,12 +33,29 @@ export async function handleReferralTeamJoin(
     deleted: person.deleted,
     observedAt,
   });
-  await store.attributeJoin({
+  const attribution = await store.attributeJoin({
     teamId: input.teamId,
     userId: input.userId,
     emailDigest: await digestNormalizedInviteEmail(person.email, env.INVITE_EMAIL_PEPPER),
     eventId: input.eventId,
     now: observedAt,
   });
+  if (attribution.kind === "attributed" && attribution.newlyAttributed) {
+    await slack.postJoinIntroduction({
+      userId: input.userId,
+      effectKey: `referral-introduction:${attribution.receiptId}`,
+      text: "환영합니다. 자기소개를 남기고 함께할 동료들에게 인사해 주세요.",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "환영합니다! 자기소개를 남기고 함께할 동료들에게 인사해 주세요.",
+          },
+          accessory: introductionButton(input.userId),
+        },
+      ],
+    });
+  }
   return true;
 }

@@ -1,4 +1,5 @@
 import type {
+  DirectReferralJoinStart,
   InviteAdminAction,
   InviteAdminDecision,
   InviteAdminReview,
@@ -193,6 +194,25 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
     return stored;
   }
 
+  async startDirectJoin(
+    input: DirectReferralJoinStart,
+  ): Promise<
+    { readonly kind: "accepted"; readonly requestId: string } | { readonly kind: "rejected" }
+  > {
+    try {
+      const value = object(
+        await this.db.queryJson("SELECT otl.referral_direct_join($1::jsonb)", [
+          JSON.stringify(input),
+        ]),
+      );
+      if (value.accepted !== true) return { kind: "rejected" };
+      return { kind: "accepted", requestId: string(value.requestId) };
+    } catch (error) {
+      if (error instanceof Error) return { kind: "rejected" };
+      throw error;
+    }
+  }
+
   async withdraw(
     input: ReferralWithdrawal,
   ): Promise<ReferralReceipt | { readonly kind: "rejected" }> {
@@ -301,16 +321,19 @@ export class CommunityReferralStore implements ReferralRuntimeStore {
     readonly emailDigest: string;
     readonly eventId: string;
     readonly now: string;
-  }): Promise<{ readonly kind: "attributed" | "unmatched"; readonly receiptId?: string }> {
-    const value = await this.db.queryJson(
-      `SELECT CASE WHEN EXISTS(
-        SELECT 1 FROM otl.referral_requests r
-        JOIN otl.referral_manual_invite_assertions a USING(team_id,request_id)
-        WHERE r.team_id=$2 AND r.email_digest=$3 AND r.state='approved')
-      THEN otl.referral_runtime_execute('attribute_join',$1::jsonb) ELSE NULL END`,
-      [JSON.stringify(input), input.teamId, input.emailDigest],
-    );
+  }): Promise<
+    | { readonly kind: "attributed"; readonly receiptId: string; readonly newlyAttributed: boolean }
+    | { readonly kind: "unmatched" }
+  > {
+    const value = await this.db.queryJson("SELECT otl.referral_attribute_join($1::jsonb)", [
+      JSON.stringify(input),
+    ]);
     if (value === null) return { kind: "unmatched" };
-    return { kind: "attributed", receiptId: string(object(value).receiptId) };
+    const result = object(value);
+    return {
+      kind: "attributed",
+      receiptId: string(result.receiptId),
+      newlyAttributed: result.newlyAttributed === true,
+    };
   }
 }

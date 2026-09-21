@@ -120,13 +120,13 @@ flowchart LR
   Slack -->|team_join| Core
 ```
 
-소개 신청과 비소속자 문의의 본문·이메일·철회 capability는 R2의 전용 `INVITE_PRIVATE_OBJECTS`에 versioned AEAD 암호문으로 둡니다. 관계형 DB에는 opaque reference, digest, 동의·상태·revision·최소 감사 값만 남깁니다. `SITE_CORE_HMAC_SECRET`은 site와 core의 요청 인증에, `INVITE_EMAIL_PEPPER`는 정규화 이메일 equality digest에, `INVITE_PRIVATE_KEK`과 `INVITE_PRIVATE_KEK_VERSION`은 신청 비공개 객체에만 사용합니다. 이 값은 공개 구성·브라우저·로그·export에 넣지 않습니다.
+기존 수동 검토 소개 신청과 비소속자 문의의 본문·이메일·철회 capability는 R2의 전용 `INVITE_PRIVATE_OBJECTS`에 versioned AEAD 암호문으로 둡니다. `shared_invite` 직접 예약은 원문 이메일이나 R2 객체 없이 equality digest와 동의만 관계형 DB에 둡니다. 관계형 DB에는 opaque reference, digest, 동의·상태·revision·최소 감사 값만 남깁니다. `SITE_CORE_HMAC_SECRET`은 site와 core의 요청 인증에, `INVITE_EMAIL_PEPPER`는 정규화 이메일 equality digest에, `INVITE_PRIVATE_KEK`과 `INVITE_PRIVATE_KEK_VERSION`은 신청 비공개 객체에만 사용합니다. 이 값은 공개 구성·브라우저·로그·export에 넣지 않습니다.
 
 referral·lifecycle·interest의 DB 함수와 비공개 객체 참조는 항상 workspace/team 범위에서 조회·변경합니다. site 서명은 site-to-core 요청을 인증할 뿐 다른 workspace의 신청·lifecycle·admin 카드에 대한 권한을 만들지 않습니다. runtime scheduler도 같은 DB/store 범위 안에서 만료·정리만 실행합니다.
 
 lifecycle 정정은 일반 Worker `DATABASE_URL`에서 분리한 `LIFECYCLE_ADMIN_DATABASE_URL`로만 실행합니다. 035의 `otl_lifecycle_admin_login`은 Neon 호환 제한 로그인 역할이며, 직접 테이블 접근과 일반 lifecycle runtime·소개·guide 함수는 받지 않습니다. 후보 범위 읽기와 audit가 남는 `restore_error`만 허용합니다. 이 연결을 쓰는 Slack 입력은 서명 검증 뒤 설정된 workspace, 지정 관리자, 공개 채널과 다른 비공개 admin 채널을 모두 확인하므로 site 서명이나 scheduler가 lifecycle 관리자 권한을 얻을 수 없습니다.
 
-사이트의 Turnstile 검증은 서버에서 hostname·action·single-use token을 확인한 뒤에만 신청을 core에 전달합니다. nonce와 timestamp는 재사용을 거절하고 사용 후 정리합니다. core는 애플리케이션 승인과 Slack 초대를 분리합니다. `approved`는 내부 검토 결과일 뿐이고, `mark-invited`는 관리자가 Free Slack UI에서 수동으로 보낸 초대의 관찰 기록일 뿐 배달·가입 증명은 아닙니다. 검증된 이메일과 `team_join`을 대조한 뒤에만 소개 출처를 회원 관계로 기록합니다.
+사이트의 Turnstile 검증은 서버에서 hostname·action·single-use token을 확인한 뒤에만 core에 전달합니다. nonce와 timestamp는 재사용을 거절하고 사용 후 정리합니다. 기존 `manual_review` 신청은 운영자 결정과 수동 초대 표식을 유지합니다. 새 `shared_invite` 경로는 이름·자기소개·R2 payload 없이 이메일 digest와 동의만 저장하고 `approved` 예약을 원자적으로 만듭니다. 공식 공유 초대로 가입한 뒤 Slack 계정 이메일과 예약 digest가 정확히 일치한 `team_join`만 소개 출처로 기록하며, 그때 기존 자기소개 버튼을 DM으로 한 번 안내합니다.
 
 036의 `referral_capacity_status`는 전역 기본값 또는 회원별 override에서 lifetime 최대를 정하고, joined attribution과 `approved` 예약을 더합니다. 기본값은 2이며 pending 소개 신청과 `pending_introduction` 관심 문의는 수에 넣지 않습니다. `otl_referral_admin_login`만 `referral_capacity_admin_execute`를 호출하며, 일반 runtime과 회원은 한도를 수정하거나 승인할 수 없습니다. `REFERRAL_ADMIN_DATABASE_URL`은 이 역할의 별도 연결이고 공개 export에는 빈 placeholder만 둡니다.
 

@@ -10,6 +10,7 @@ import {
 } from "./community-referral-reconcile";
 import { digestNormalizedInviteEmail, digestReferralToken } from "./community-referral-token";
 import {
+  directReferralJoinSchema,
   INVITE_CONSENT_VERSION,
   type ReferralRuntimeStore,
   referralApplicationSchema,
@@ -20,6 +21,7 @@ import { sign, verify } from "./signing";
 const INTAKE_PATH = "/internal/referrals/apply" as const;
 const WITHDRAW_PATH = "/internal/referrals/withdraw" as const;
 const RESOLVE_PATH = "/internal/referrals/resolve" as const;
+const DIRECT_JOIN_PATH = "/internal/referrals/direct-join" as const;
 const AUTH_WINDOW_SECONDS = 300;
 
 export type ReferralIntakeEnv = {
@@ -126,7 +128,8 @@ export async function handleReferralIntakeRequest(
     request.method !== "POST" ||
     (url.pathname !== INTAKE_PATH &&
       url.pathname !== WITHDRAW_PATH &&
-      url.pathname !== RESOLVE_PATH)
+      url.pathname !== RESOLVE_PATH &&
+      url.pathname !== DIRECT_JOIN_PATH)
   )
     return new Response("Not found", { status: 404 });
   if (Number(request.headers.get("content-length") ?? "0") > 8192)
@@ -162,6 +165,28 @@ export async function handleReferralIntakeRequest(
   }
   if (url.pathname === WITHDRAW_PATH) {
     return handleReferralWithdrawal(decoded, env.SLACK_TEAM_ID, store);
+  }
+  if (url.pathname === DIRECT_JOIN_PATH) {
+    const direct = directReferralJoinSchema.safeParse(decoded);
+    if (!direct.success || Date.parse(direct.data.consentedAt) > Date.now() + 30_000)
+      return Response.json({ error: "invalid_request" }, { status: 400 });
+    if (!env.INVITE_EMAIL_PEPPER) return Response.json({ error: "unavailable" }, { status: 503 });
+    const now = new Date().toISOString();
+    const result = await store.startDirectJoin({
+      teamId: env.SLACK_TEAM_ID,
+      tokenDigest: await digestReferralToken(direct.data.referralToken),
+      emailDigest: await digestNormalizedInviteEmail(direct.data.email, env.INVITE_EMAIL_PEPPER),
+      requestId: identity("REQ"),
+      receiptId: identity("RCP"),
+      withdrawalDigest: (await withdrawalCapability()).digest,
+      consentVersion: INVITE_CONSENT_VERSION,
+      consentedAt: direct.data.consentedAt,
+      key: direct.data.submissionKey,
+      now,
+    });
+    return result.kind === "accepted"
+      ? Response.json({ accepted: true }, { status: 202 })
+      : Response.json({ error: "unavailable" }, { status: 503 });
   }
   const application = referralApplicationSchema.safeParse(decoded);
   if (!application.success) return Response.json({ error: "invalid_request" }, { status: 400 });

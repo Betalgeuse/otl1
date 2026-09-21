@@ -40,6 +40,32 @@ export const referralApplicationSchema = z
 
 export type ReferralApplication = z.infer<typeof referralApplicationSchema>;
 
+export const directReferralJoinSchema = z
+  .object({
+    referralToken: z.string().regex(/^[A-Za-z0-9_-]{32}$/),
+    submissionKey: z.string().trim().min(8).max(120),
+    consentVersion: z.literal(INVITE_CONSENT_VERSION),
+    consentedAt: z.string().datetime({ offset: true }),
+    email: inviteEmailSchema,
+  })
+  .strict()
+  .readonly();
+
+export type DirectReferralJoin = z.infer<typeof directReferralJoinSchema>;
+
+export type DirectReferralJoinStart = {
+  readonly teamId: string;
+  readonly tokenDigest: string;
+  readonly emailDigest: string;
+  readonly requestId: string;
+  readonly receiptId: string;
+  readonly withdrawalDigest: string;
+  readonly consentVersion: typeof INVITE_CONSENT_VERSION;
+  readonly consentedAt: string;
+  readonly key: string;
+  readonly now: string;
+};
+
 export type ReferralReceipt = {
   readonly kind: "receipt";
   readonly receiptId: string;
@@ -98,6 +124,11 @@ export interface ReferralRuntimeStore {
     | { readonly kind: "unavailable" }
   >;
   submit(input: ReferralSubmit): Promise<ReferralReceipt | { readonly kind: "rejected" }>;
+  startDirectJoin(
+    input: DirectReferralJoinStart,
+  ): Promise<
+    { readonly kind: "accepted"; readonly requestId: string } | { readonly kind: "rejected" }
+  >;
   withdraw(input: ReferralWithdrawal): Promise<ReferralReceipt | { readonly kind: "rejected" }>;
   claimAdminReview(now: string): Promise<InviteAdminReview | null>;
   finishOutbox(input: {
@@ -126,7 +157,10 @@ export interface ReferralRuntimeStore {
     readonly emailDigest: string;
     readonly eventId: string;
     readonly now: string;
-  }): Promise<{ readonly kind: "attributed" | "unmatched"; readonly receiptId?: string }>;
+  }): Promise<
+    | { readonly kind: "attributed"; readonly receiptId: string; readonly newlyAttributed: boolean }
+    | { readonly kind: "unmatched" }
+  >;
 }
 
 export type InviteAdminReview = {
@@ -163,6 +197,12 @@ export interface ReferralSlackPort {
     readonly adminId: string;
     readonly effectKey: string;
     readonly requestId: string;
+    readonly text: string;
+    readonly blocks: readonly Json[];
+  }): Promise<string>;
+  postJoinIntroduction(input: {
+    readonly userId: string;
+    readonly effectKey: string;
     readonly text: string;
     readonly blocks: readonly Json[];
   }): Promise<string>;
