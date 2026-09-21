@@ -30,6 +30,8 @@ const success=[
  ['후기: 완료.\n다음 일정은 9/15에 있어요','complete',null],
  ['  후기: 완료!!! 좋았어요  ','complete',null],
  ['완료!\n후기: 원씽 작게 잡으니 다음 할거 해도 되어서 마음이 편하다','complete',null],
+ ['완료\n비선형 세상은 참 어렵다','complete',null],
+ ['완료...? (회의록 작성할만한 내용이 없었음)','complete',null],
 ];
 for(const [source,outcome,date] of success){assert.deepEqual(parseReflectionHeader(source,today),{date,outcome,text:source.trim(),hasReflection:outcome!=='rest'},source);count++;}
 for (const source of ['후기: 완료.', '후기: 완료', '후기: 완료!!!', '후기: 9/14: 완료.', '후기: 완료. ✅', '후기: 완료. :party_parrot:', '후기: 부분 완료.', '후기: 미완료.', '후기: 휴식. 편히 쉬었어요']) {

@@ -18,8 +18,14 @@ export async function statusMessage(
   undoKey: string | null,
 ) {
   const boardDate = koreaDate(Date.now() / 1000);
-  const season = await context.store.seasonHistory(context.scope);
-  const history = (season?.days ?? []).filter((item) => item.goal && item.date <= boardDate);
+  const [season, allDays] = await Promise.all([
+    context.store.seasonHistory(context.scope),
+    context.store.history(context.scope),
+  ]);
+  const history = allDays.filter((item) => item.goal && item.date <= boardDate);
+  const currentSeasonHistory = (season?.days ?? []).filter(
+    (item) => item.goal && item.date <= boardDate,
+  );
   const legacy = await new NeonStore(context.env.DATABASE_URL).execute({
     teamId: context.scope.teamId,
     userId: context.scope.userId,
@@ -30,11 +36,12 @@ export async function statusMessage(
     palette: DEFAULT_PALETTE,
     eventTime: Date.now() / 1000,
   });
-  const url = season
+  const startDate = legacy.startDate || history[0]?.date || season?.openedOn;
+  const url = startDate
     ? await boardLink(
         buildBoard(
           {
-            startDate: season.openedOn,
+            startDate,
             palette: legacy.palette,
             goals: history.map((item) => ({
               date: item.date,
@@ -53,7 +60,7 @@ export async function statusMessage(
       )
     : undefined;
   return communityStatusMessage({
-    earlierNotice: await earlierDayNotice(context, history, boardDate),
+    earlierNotice: await earlierDayNotice(context, currentSeasonHistory, boardDate),
     boardDate,
     userId: day.userId,
     date: day.date,

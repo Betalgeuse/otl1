@@ -68,7 +68,8 @@ export async function readBoardLink(token: string, secret: string): Promise<Boar
       today: stamp === todayStamp,
     };
   });
-  if (cells.length < 1 || cells.length > 8) throw new InputError("잔디 칸 수가 올바르지 않습니다.");
+  if (cells.length < 1 || cells.length > 512)
+    throw new InputError("잔디 칸 수가 올바르지 않습니다.");
   return {
     cells,
     palette: palette(decoded.palette),
