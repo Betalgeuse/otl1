@@ -6,11 +6,13 @@ export type TargetDateContext = {
 const DATE_TOKEN =
   "(?:\\d{4}[-./]\\d{1,2}[-./]\\d{1,2}|\\d{1,2}[./-]\\d{1,2}|\\d{1,2}월\\s*\\d{1,2}일)";
 const RECORD_CUE =
-  "(?:ONE\\s*THING|원씽|원싱|목표|후기|회고|기록|완료|달성|부분\\s*완료|일부\\s*완료|미완료|휴식|쉬었|다\\s*했)";
+  "(?:ONE\\s*THING|원씽|원띵|원싱|목표|후기|회고|기록|완료|달성|부분\\s*완료|일부\\s*완료|미완료|휴식|쉬었|다\\s*했)";
 const EXPLICIT_TARGET = new RegExp(
   `^\\s*(?![>'"“”‘’])(${DATE_TOKEN})(?:\\s*[.(]?[월화수목금토일](?:요일)?[.)]?)?\\s*(?::|${RECORD_CUE})`,
   "iu",
 );
+const STANDALONE_DATE = new RegExp(`^\\s*(${DATE_TOKEN})\\s*$`, "iu");
+const RECORD_HEADER = new RegExp(`^\\s*[-*•]?\\s*${RECORD_CUE}\\s*[:：]`, "iu");
 const RELATIVE_TARGET = new RegExp(`^\\s*(?![>'"“”‘’])(어제|그제)\\s+${RECORD_CUE}`, "u");
 const HISTORICAL_TARGET = new RegExp(`^\\s*(?![>'"“”‘’])지난\\s*주\\s+${RECORD_CUE}`, "u");
 
@@ -41,7 +43,15 @@ export function targetDateContext(
   const targets = new Set<string>();
   let unresolvedHistorical = false;
   let invalid = false;
-  for (const line of text.split(/\r?\n/u)) {
+  const lines = text.split(/\r?\n/u);
+  for (const [index, line] of lines.entries()) {
+    const standaloneDate = STANDALONE_DATE.exec(line);
+    if (standaloneDate?.[1] && RECORD_HEADER.test(lines[index + 1] ?? "")) {
+      const target = absoluteDate(standaloneDate[1], contextDate);
+      if (target) targets.add(target);
+      else invalid = true;
+      continue;
+    }
     if (HISTORICAL_TARGET.test(line)) {
       unresolvedHistorical = true;
       continue;

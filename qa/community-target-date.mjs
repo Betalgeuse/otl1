@@ -18,6 +18,7 @@ const cases = [
   ["오늘 완료. 어제는 시간이 부족했어요", "none", null],
   ["'어제 기록 수정'은 사용 예시예요", "none", null],
   ["9/16: 목표 정리\n9/15: 완료 처리", "conflicting", null],
+  ["9/20\n• 원띵: 신청서 지원\n• 완료", "different", "2026-09-20"],
   ["지난 주 목표 완료\n9/16: 완료 처리", "conflicting", null],
 ];
 
@@ -86,7 +87,7 @@ assert.equal(reviewCalls, 1);
 assert.equal(review.intent, "reflection");
 assert.equal(review.outcome, "partial");
 
-for (const text of ["9월 16일 완료 처리", "9/16: 목표 정리\n9/15: 완료 처리"]) {
+for (const text of ["9월 16일 완료 처리", "9/16: 목표 정리\n9/15: 완료 처리", "9/20\n• 원띵: 신청서 지원\n• 완료"]) {
   let calls = 0;
   const result = await classifyCommunityIntent(
     {
