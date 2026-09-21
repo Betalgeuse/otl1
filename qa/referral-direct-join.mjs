@@ -10,17 +10,51 @@ const secret = "direct-join-service-secret-0123456789";
 const pepper = Buffer.alloc(32, 9).toString("base64url");
 const nonces = new Set();
 const starts = [];
+let nonceClaims = 0;
 const store = {
   async claimServiceNonce(digest) {
+    nonceClaims += 1;
     if (nonces.has(digest)) return false;
     nonces.add(digest);
     return true;
+  },
+  async resolveLink() {
+    return { available: false, inviterName: null };
   },
   async startDirectJoin(input) {
     starts.push(input);
     return { kind: "accepted", requestId: input.requestId };
   },
 };
+
+async function resolveRequest(nonce) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const path = "/internal/referrals/resolve";
+  const body = JSON.stringify({ referralToken: "R".repeat(32) });
+  const signature = await signReferralServiceRequest(
+    { method: "POST", path, body, timestamp, nonce },
+    secret,
+  );
+  return handleReferralIntakeRequest(
+    new Request(`https://core.invalid${path}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-otl-timestamp": String(timestamp),
+        "x-otl-nonce": nonce,
+        "x-otl-signature": signature,
+      },
+      body,
+    }),
+    { SITE_CORE_HMAC_SECRET: secret, SLACK_TEAM_ID: "TQA", INVITE_EMAIL_PEPPER: pepper },
+    store,
+  );
+}
+
+const claimsBeforeResolve = nonceClaims;
+assert.equal((await resolveRequest("resolve-read-only-nonce-001")).status, 200);
+assert.equal((await resolveRequest("resolve-read-only-nonce-001")).status, 200);
+assert.equal(nonceClaims, claimsBeforeResolve, "read-only resolve must not persist service nonces");
 const payload = {
   referralToken: "D".repeat(32),
   submissionKey: "direct-join-001",

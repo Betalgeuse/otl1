@@ -8,6 +8,10 @@ import {
   createInvitePrivateReconciliationMarker,
   type InviteReconcileBucket,
 } from "./community-referral-reconcile";
+import { authenticateReferralServiceRequest, sha256Hex } from "./community-referral-service-auth";
+
+export { signReferralServiceRequest } from "./community-referral-service-auth";
+
 import { digestNormalizedInviteEmail, digestReferralToken } from "./community-referral-token";
 import {
   directReferralJoinSchema,
@@ -16,13 +20,11 @@ import {
   referralApplicationSchema,
 } from "./community-referral-types";
 import { handleReferralWithdrawal } from "./community-referral-withdraw";
-import { sign, verify } from "./signing";
 
 const INTAKE_PATH = "/internal/referrals/apply" as const;
 const WITHDRAW_PATH = "/internal/referrals/withdraw" as const;
 const RESOLVE_PATH = "/internal/referrals/resolve" as const;
 const DIRECT_JOIN_PATH = "/internal/referrals/direct-join" as const;
-const AUTH_WINDOW_SECONDS = 300;
 
 export type ReferralIntakeEnv = {
   readonly SITE_CORE_HMAC_SECRET?: string;
@@ -32,72 +34,6 @@ export type ReferralIntakeEnv = {
   readonly INVITE_PRIVATE_KEK?: string;
   readonly INVITE_PRIVATE_KEK_VERSION?: string;
 };
-
-type SignedInput = {
-  readonly method: string;
-  readonly path: string;
-  readonly body: string;
-  readonly timestamp: number;
-  readonly nonce: string;
-};
-
-function bytesToHex(value: ArrayBuffer): string {
-  return Array.from(new Uint8Array(value), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function sha256(value: string): Promise<string> {
-  return bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
-}
-
-async function canonical(input: SignedInput): Promise<string> {
-  return [
-    input.method.toUpperCase(),
-    input.path,
-    await sha256(input.body),
-    String(input.timestamp),
-    input.nonce,
-  ].join("\n");
-}
-
-export async function signReferralServiceRequest(
-  input: SignedInput,
-  secret: string,
-): Promise<string> {
-  return sign(await canonical(input), secret);
-}
-
-async function authenticate(
-  request: Request,
-  body: string,
-  secret: string | undefined,
-  store: ReferralRuntimeStore,
-): Promise<boolean> {
-  const timestampValue = request.headers.get("x-otl-timestamp") ?? "";
-  const nonce = request.headers.get("x-otl-nonce") ?? "";
-  const signature = request.headers.get("x-otl-signature") ?? "";
-  const timestamp = Number(timestampValue);
-  if (
-    !secret ||
-    !/^\d{10}$/.test(timestampValue) ||
-    !/^[A-Za-z0-9_-]{16,96}$/.test(nonce) ||
-    !/^[0-9a-f]{64}$/.test(signature) ||
-    Math.abs(Date.now() / 1000 - timestamp) > AUTH_WINDOW_SECONDS
-  )
-    return false;
-  const input = {
-    method: request.method,
-    path: new URL(request.url).pathname,
-    body,
-    timestamp,
-    nonce,
-  };
-  if (!(await verify(await canonical(input), signature, secret))) return false;
-  const nonceDigest = await sha256(`${timestampValue}:${nonce}`);
-  return store.claimServiceNonce(
-    nonceDigest,
-    new Date((timestamp + AUTH_WINDOW_SECONDS) * 1000).toISOString(),
-  );
-}
 
 function identity(prefix: "REQ" | "RCP"): string {
   return `${prefix}-${crypto.randomUUID().replaceAll("-", "").toUpperCase()}`;
@@ -115,7 +51,7 @@ async function withdrawalCapability(): Promise<{
   readonly digest: string;
 }> {
   const token = base64Url(crypto.getRandomValues(new Uint8Array(32)));
-  return { token, digest: await sha256(token) };
+  return { token, digest: await sha256Hex(token) };
 }
 
 export async function handleReferralIntakeRequest(
@@ -137,7 +73,15 @@ export async function handleReferralIntakeRequest(
   const body = await request.text();
   if (new TextEncoder().encode(body).byteLength > 8192)
     return new Response("Request too large", { status: 413 });
-  if (!(await authenticate(request, body, env.SITE_CORE_HMAC_SECRET, store)))
+  if (
+    !(await authenticateReferralServiceRequest({
+      request,
+      body,
+      secret: env.SITE_CORE_HMAC_SECRET,
+      store,
+      persistNonce: url.pathname !== RESOLVE_PATH,
+    }))
+  )
     return new Response("Unauthorized", { status: 401 });
   let decoded: unknown;
   try {
