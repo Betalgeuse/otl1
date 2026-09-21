@@ -236,13 +236,16 @@ export class CommunityStore extends CommunityScheduleStore {
       return result;
     const season = await this.seasonHistory(input);
     if (!season || result.day.date < season.openedOn) return result;
-    const routed = await this.call("route_review_garden", {
-      teamId: input.teamId,
-      channelId: input.channelId,
-      userId: input.userId,
-      date: result.day.date,
-      sourceTs: delivery.source,
-    });
+    const routed = await this.db.queryJson("SELECT otl.route_member_review_garden($1::jsonb)", [
+      JSON.stringify({
+        teamId: input.teamId,
+        channelId: input.channelId,
+        userId: input.userId,
+        date: result.day.date,
+        sourceTs: delivery.source,
+        threadTs: delivery.thread,
+      }),
+    ]);
     if (routed === null) return result;
     return { ...result, gardenDeliveryKey: string(object(routed).deliveryKey) };
   }
