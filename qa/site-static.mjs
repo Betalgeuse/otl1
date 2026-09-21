@@ -9,9 +9,9 @@ const mustExist = async (path) => stat(resolve(root, path));
 const config = JSON.parse(await read("site/wrangler.jsonc"));
 const worker = await read("site/src/index.ts");
 const page = await read("site/dist/index.html");
+const referral = await read("site/dist/referral.html");
 const css = await read("site/dist/styles.css");
 const script = await read("site/dist/app.js");
-const observations = JSON.parse(await read(".omo/evidence/task-5-browser-observations.json"));
 const documentText = page.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 const productionHostname = "otl1.hyuk.me";
 const turnstileTestSiteKey = "1x00000000000000000000AA";
@@ -71,9 +71,19 @@ assert.doesNotMatch(script, /thumbs-up-cat\.png/);
 assert.match(css, /\.reaction-stage \{ position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none/);
 assert.match(css, /\.chapter--reactions > \.chapter-inner \{[^}]*z-index:1/);
 assert.match(css, /\.rising-reactions \{[^}]*mask-image:/);
-assert.match(page, /data-preview-state="registration"/);
-assert.match(page, /data-preview-state="completion"/);
-assert.match(page, /data-preview-state="rest"/);
+assert.equal((page.match(/class="daily-thread"/g) ?? []).length, 2, "the daily example must show distinct morning and evening root conversations");
+assert.equal((page.match(/data-daily-row=/g) ?? []).length, 7, "the two conversations must retain all seven rows in DOM reading order");
+assert.match(page, /10:00 · 오늘의 ONE THING/);
+assert.match(page, /18:00 · 오늘의 돌아보기/);
+assert.match(page, /가상 예시 · Slack에 전송되지 않습니다/);
+assert.match(page, /data-daily-replay/);
+assert.match(page, /data-daily-garden-cell/);
+assert.doesNotMatch(page, /data-preview-state|data-preview-message|data-preview-cells/);
+assert.match(referral, /#daily-scrum에서 하는 일/);
+assert.match(referral, /가상 예시 · Slack에 전송되지 않습니다/);
+assert.match(referral, /href="\/#preview"/);
+assert.match(referral, /주말 참여는 선택이에요/);
+assert.match(referral, /10:08 동료/);
 assert.match(page, /aria-live="polite"/);
 assert.match(page, /DAY 4/);
 assert.doesNotMatch(page, /thread-scene"[^>]*role="img"/);
@@ -81,23 +91,17 @@ assert.match(css, /@keyframes rise-reaction/);
 assert.match(css, /reaction-stage\.is-paused \.rise/);
 assert.match(css, /prefers-reduced-motion:reduce[^}]*\.has-motion \.rise/);
 assert.match(script, /visibilitychange/);
+assert.match(script, /event\.key !== "Escape"/);
+assert.match(script, /setDailyGarden\(true\)/);
+assert.match(css, /\.has-js:not\(\.prefers-reduced-motion\) \.daily-row:not\(\.is-visible\) \{ opacity:0; transform:/);
+assert.doesNotMatch(script.slice(script.indexOf("const dailyReplay"), script.indexOf("window.addEventListener")), /fetch\(|XMLHttpRequest|sendBeacon/);
 assert.match(css, /#home-title \{ font-size:var\(--display-mobile-section\); word-break:keep-all/);
 assert.match(css, /body \{[^}]*word-break:keep-all/);
 
-const mobile = observations.viewports?.["320"];
-assert.ok(mobile, "missing real 320px browser observation contract");
-assert.equal(mobile.viewportWidth, 320);
-for (const [name, measurement] of Object.entries(mobile.components ?? {})) {
-  assert.ok(measurement.clientWidth >= measurement.scrollWidth, `${name} has intrinsic horizontal overflow`);
-  assert.ok(measurement.left >= 0, `${name} extends left of the viewport`);
-  assert.ok(measurement.right <= mobile.viewportWidth, `${name} extends right of the viewport`);
-}
-assert.deepEqual(mobile.visibleOverflow, [], "visible descendants exceed the 320px viewport");
-
-for (const contents of [JSON.stringify(config), worker, page, css, script]) {
+for (const contents of [JSON.stringify(config), worker, page, referral, css, script]) {
   assert.doesNotMatch(contents, /ineffable/i);
   assert.doesNotMatch(contents, /(?:xox[baprs]-|postgres(?:ql)?:\/\/|neon\.tech|\bC[A-Z0-9]{8,}\b|\bU[A-Z0-9]{8,}\b)/);
   assert.doesNotMatch(contents, /\b[0-9a-f]{32}\b/);
 }
 
-console.log("PASS site static: semantic story, isolation, motion fallback, and secret guards");
+console.log("PASS site static: two-root daily story, local replay isolation, referral routine, motion fallback, and secret guards");

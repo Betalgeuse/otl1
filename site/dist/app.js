@@ -24,6 +24,7 @@ const revealObserver = "IntersectionObserver" in window ? new IntersectionObserv
 for (const item of revealItems) revealObserver?.observe(item);
 const updateMotion = () => {
   document.documentElement.classList.toggle("has-motion", !motionPreference.matches);
+  document.documentElement.classList.toggle("prefers-reduced-motion", motionPreference.matches);
   if (motionPreference.matches || !revealObserver) {
     for (const item of revealItems) item.classList.add("is-visible");
   }
@@ -49,42 +50,102 @@ if (reactionStage instanceof HTMLElement) {
   document.addEventListener("visibilitychange", setPlayback);
 }
 
-const previewStates = {
-  registration: { time: "10:00", message: "오늘의 한 가지를 적었어요. 첫걸음이 분명해졌네요.", garden: "첫 칸에 씨앗을 심었습니다.", cells: ["filled", "", "", ""], emojis: [["ack-yes.png", "네 이모티콘"], ["blob_smiley.png", "웃는 이모티콘"]] },
-  completion: { time: "18:00", message: "오늘의 한 가지를 끝냈네요. 해낸 만큼 쉬어 가요.", garden: "완료한 하루의 잔디가 자랐습니다.", cells: ["filled", "filled", "filled", "filled"], emojis: [["finish_flag.png", "완주 깃발"], ["meow-adorable.png", "고양이 이모티콘"]] },
-  rest: { time: "18:00", message: "오늘은 쉬어 가도 괜찮아요. 내일 다시 한 가지에서 시작해요.", garden: "쉬어 간 날도 기록에 남습니다.", cells: ["filled", "rest", "", ""], emojis: [["blob-help.png", "도움 이모티콘"], ["meow-adorable.png", "고양이 이모티콘"]] }
+const dailyReplay = document.querySelector("[data-daily-replay]");
+const dailyRows = [...document.querySelectorAll("[data-daily-row]")];
+const dailyAnnouncement = document.querySelector("[data-daily-announcement]");
+const dailyGardenCell = document.querySelector("[data-daily-garden-cell]");
+const dailyGardenCopy = document.querySelector("[data-daily-garden-copy]");
+let dailyTimers = [];
+let dailyPlaying = false;
+
+const announceDaily = (message) => {
+  if (dailyAnnouncement instanceof HTMLElement) dailyAnnouncement.textContent = message;
 };
-const previewButtons = document.querySelectorAll("[data-preview-state]");
-const previewMessage = document.querySelector("[data-preview-message]");
-const previewTime = document.querySelector("[data-preview-time]");
-const previewGarden = document.querySelector("[data-preview-garden]");
-const previewCells = document.querySelector("[data-preview-cells]");
-const previewReactions = document.querySelector("[data-preview-reactions]");
-const previewAnnouncement = document.querySelector("[data-preview-announcement]");
-for (const button of previewButtons) button.addEventListener("click", () => {
-  const state = previewStates[button.dataset.previewState];
-  if (!state || !previewMessage || !previewTime || !previewGarden || !previewCells || !previewReactions || !previewAnnouncement) return;
-  for (const option of previewButtons) option.setAttribute("aria-pressed", String(option === button));
-  previewMessage.textContent = state.message;
-  previewTime.textContent = state.time;
-  previewGarden.textContent = state.garden;
-  previewCells.replaceChildren(...state.cells.map((value) => {
-    const cell = document.createElement("i");
-    if (value) cell.className = `is-${value}`;
-    return cell;
-  }));
-  previewReactions.replaceChildren(...state.emojis.map(([filename, label]) => {
-    const wrapper = document.createElement("span");
-    const image = document.createElement("img");
-    image.src = `/assets/otl1-emoji/${filename}`;
-    image.width = 128;
-    image.height = 128;
-    image.alt = label;
-    wrapper.append(image);
-    return wrapper;
-  }));
-  previewAnnouncement.textContent = `${button.textContent.trim()}: ${state.message} ${state.garden}`;
-});
+const setDailyGarden = (completed) => {
+  if (dailyGardenCell instanceof HTMLElement) {
+    dailyGardenCell.classList.toggle("is-written", !completed);
+    dailyGardenCell.classList.toggle("is-complete", completed);
+  }
+  if (dailyGardenCopy instanceof HTMLElement) dailyGardenCopy.textContent = completed ? "DAY 1 · 완료 한 칸" : "한 문장을 기록했습니다.";
+};
+const clearDailyPlayback = () => {
+  for (const timer of dailyTimers) window.clearTimeout(timer);
+  dailyTimers = [];
+  dailyPlaying = false;
+};
+const revealDailyRow = (name) => {
+  const row = document.querySelector(`[data-daily-row="${name}"]`);
+  if (!(row instanceof HTMLElement)) return;
+  row.classList.add("is-visible");
+  row.removeAttribute("aria-hidden");
+};
+const resetDailyPreview = () => {
+  for (const row of dailyRows) {
+    row.classList.remove("is-visible");
+    row.setAttribute("aria-hidden", "true");
+  }
+  setDailyGarden(false);
+  if (dailyReplay instanceof HTMLButtonElement) dailyReplay.textContent = "하루 재생";
+};
+const showDailyPreviewImmediately = () => {
+  clearDailyPlayback();
+  for (const row of dailyRows) {
+    row.classList.add("is-visible");
+    row.removeAttribute("aria-hidden");
+  }
+  setDailyGarden(true);
+  if (dailyReplay instanceof HTMLButtonElement) dailyReplay.textContent = "다시 보기";
+};
+const scheduleDaily = (delay, action) => {
+  dailyTimers.push(window.setTimeout(action, delay));
+};
+
+if (dailyReplay instanceof HTMLButtonElement && dailyRows.length > 0) {
+  const applyDailyMotionPreference = () => {
+    if (motionPreference.matches) showDailyPreviewImmediately();
+    else resetDailyPreview();
+  };
+  const playDailyPreview = () => {
+    if (motionPreference.matches) {
+      announceDaily("10시 목표, 동료의 응원, 18시 회고 순서로 읽을 수 있습니다.");
+      return;
+    }
+    clearDailyPlayback();
+    resetDailyPreview();
+    dailyPlaying = true;
+    dailyReplay.textContent = "다시 보기";
+    revealDailyRow("goal");
+    announceDaily("10시 목표와 봇의 기록 확인을 보여줍니다.");
+    scheduleDaily(360, () => revealDailyRow("ack"));
+    scheduleDaily(1100, () => {
+      revealDailyRow("morning-peer");
+      announceDaily("동료의 직접 응원 예시를 보여줍니다.");
+    });
+    scheduleDaily(2400, () => {
+      revealDailyRow("review-prompt");
+      announceDaily("18시 회고와 완료 기록을 보여줍니다.");
+    });
+    scheduleDaily(2760, () => revealDailyRow("reflection"));
+    scheduleDaily(3120, () => {
+      revealDailyRow("completion");
+      setDailyGarden(true);
+    });
+    scheduleDaily(3480, () => revealDailyRow("evening-peer"));
+    scheduleDaily(3840, () => {
+      dailyPlaying = false;
+      announceDaily("하루 미리보기를 모두 보여줬습니다.");
+    });
+  };
+  dailyReplay.addEventListener("click", playDailyPreview);
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !dailyPlaying) return;
+    clearDailyPlayback();
+    dailyReplay.textContent = "다시 보기";
+    announceDaily("재생을 멈췄습니다. 보인 대화는 그대로 읽을 수 있습니다.");
+  });
+  motionPreference.addEventListener("change", applyDailyMotionPreference);
+  applyDailyMotionPreference();
+}
 
 window.addEventListener("scroll", () => header?.classList.toggle("is-scrolled", window.scrollY > 24), { passive: true });
 

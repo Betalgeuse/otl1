@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 const evidence = resolve(process.argv[2] ?? ".omo/evidence/site-reactions-browser");
 mkdirSync(evidence, { recursive: true });
 const session = "otl1-site-reactions-qa";
+const origin = process.env.SITE_QA_ORIGIN ?? "http://127.0.0.1:18765";
 const browser = (...args) => {
   const result = spawnSync("agent-browser", ["--session", session, ...args], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(`agent-browser ${args.join(" ")} failed: ${result.stderr || result.stdout}`);
@@ -13,7 +14,7 @@ const browser = (...args) => {
 };
 const evaluate = (expression) => JSON.parse(browser("eval", expression));
 const results = [];
-browser("open", "http://127.0.0.1:18765/");
+browser("open", `${origin}/`);
 for (const width of [320, 375, 768, 1440]) {
   browser("set", "viewport", String(width), "900");
   browser("reload");
@@ -50,28 +51,46 @@ for (const width of [320, 375, 768, 1440]) {
 }
 browser("set", "viewport", "375", "900");
 browser("eval", `document.querySelector('#preview').scrollIntoView({behavior:'instant'})`);
-for (const state of ["registration", "completion", "rest"]) {
-  browser("click", `[data-preview-state="${state}"]`);
-  const stateResult = evaluate(`({selected:document.querySelector('[data-preview-state="${state}"]').getAttribute('aria-pressed'),message:document.querySelector('[data-preview-message]').textContent,announcement:document.querySelector('[data-preview-announcement]').textContent,reactions:[...document.querySelectorAll('[data-preview-reactions] img')].map(i=>i.getAttribute('src')),garden:document.querySelector('[data-preview-garden]').textContent})`);
-  assert.equal(stateResult.selected, "true");
-  assert.ok(stateResult.message.length > 10 && stateResult.announcement.includes(stateResult.message));
-  assert.ok(stateResult.reactions.length > 0);
-  assert.ok(stateResult.reactions.every((src) => src.startsWith("/assets/otl1-emoji/")));
-  browser("screenshot", resolve(evidence, `preview-${state}-375.png`));
-  results.push({ state, ...stateResult });
-}
-browser("focus", '[data-preview-state="registration"]');
-browser("press", "Tab");
+const initialPreview = evaluate(`({hiddenRows:[...document.querySelectorAll('[data-daily-row]')].filter(row=>!row.classList.contains('is-visible')).length,written:document.querySelector('[data-daily-garden-cell]').classList.contains('is-written'),button:document.querySelector('[data-daily-replay]').textContent.trim()})`);
+assert.deepEqual(initialPreview, { hiddenRows: 7, written: true, button: "하루 재생" });
+const resourcesBeforeReplay = evaluate(`performance.getEntriesByType('resource').length`);
+browser("eval", "document.querySelector('[data-daily-replay]').focus()");
 browser("press", "Enter");
-assert.equal(evaluate(`document.querySelector('[data-preview-state="completion"]').getAttribute('aria-pressed')`), "true");
-results.push({ keyboard: "Tab then Enter selected completion" });
+browser("wait", '[data-daily-row="ack"].is-visible');
+const firstStage = evaluate(`({visible:[...document.querySelectorAll('[data-daily-row]')].filter(row=>row.classList.contains('is-visible')).map(row=>row.dataset.dailyRow),focus:document.activeElement===document.querySelector('[data-daily-replay]'),announcement:document.querySelector('[data-daily-announcement]').textContent.trim()})`);
+assert.deepEqual(firstStage.visible, ["goal", "ack"]);
+assert.equal(firstStage.focus, true);
+assert.ok(firstStage.announcement.length > 0);
+browser("wait", '[data-daily-row="evening-peer"].is-visible');
+const completedPreview = evaluate(`({visible:[...document.querySelectorAll('[data-daily-row]')].filter(row=>row.classList.contains('is-visible')).map(row=>row.dataset.dailyRow),garden:document.querySelector('[data-daily-garden-cell]').className,copy:document.querySelector('[data-daily-garden-copy]').textContent.trim(),button:document.querySelector('[data-daily-replay]').textContent.trim(),slackWrites:performance.getEntriesByType('resource').slice(${resourcesBeforeReplay}).filter(entry=>/slack\\.com/.test(entry.name)).length})`);
+assert.deepEqual(completedPreview.visible, ["goal", "ack", "morning-peer", "review-prompt", "reflection", "completion", "evening-peer"]);
+assert.equal(completedPreview.garden.includes("is-complete"), true);
+assert.equal(completedPreview.copy, "DAY 1 · 완료 한 칸");
+assert.equal(completedPreview.button, "다시 보기");
+assert.equal(completedPreview.slackWrites, 0);
+browser("screenshot", resolve(evidence, "preview-complete-375.png"));
+results.push({ initialPreview, firstStage, completedPreview });
+browser("reload");
+browser("eval", `document.querySelector('#preview').scrollIntoView({behavior:'instant'})`);
+browser("eval", "document.querySelector('[data-daily-replay]').focus()");
+browser("press", "Enter");
+browser("wait", '[data-daily-row="ack"].is-visible');
+browser("press", "Escape");
+browser("eval", "new Promise(resolve => setTimeout(resolve, 4200))");
+const escaped = evaluate(`({visible:[...document.querySelectorAll('[data-daily-row]')].filter(row=>row.classList.contains('is-visible')).map(row=>row.dataset.dailyRow),written:document.querySelector('[data-daily-garden-cell]').classList.contains('is-written'),announcement:document.querySelector('[data-daily-announcement]').textContent.trim()})`);
+assert.deepEqual(escaped.visible, ["goal", "ack"]);
+assert.equal(escaped.written, true);
+assert.match(escaped.announcement, /재생을 멈췄습니다/);
+results.push({ escaped });
 browser("set", "media", "light", "reduced-motion");
 browser("reload");
-const reduced = evaluate(`({rise:[...document.querySelectorAll('.rise')].every(e=>getComputedStyle(e).display==='none'),static:getComputedStyle(document.querySelector('.still-reactions')).display,staticSources:[...document.querySelectorAll('.still-reactions img')].map(e=>e.getAttribute('src'))})`);
+const reduced = evaluate(`({rise:[...document.querySelectorAll('.rise')].every(e=>getComputedStyle(e).display==='none'),static:getComputedStyle(document.querySelector('.still-reactions')).display,staticSources:[...document.querySelectorAll('.still-reactions img')].map(e=>e.getAttribute('src')),visibleRows:[...document.querySelectorAll('[data-daily-row]')].filter(row=>row.classList.contains('is-visible')).length,complete:document.querySelector('[data-daily-garden-cell]').classList.contains('is-complete')})`);
 assert.equal(reduced.rise, true);
 assert.equal(reduced.static, "block");
 assert.equal(reduced.staticSources.length, 6);
 assert.ok(reduced.staticSources.every((src) => src.endsWith(".png")));
+assert.equal(reduced.visibleRows, 7);
+assert.equal(reduced.complete, true);
 browser("eval", `document.querySelector('#garden').scrollIntoView({behavior:'instant'})`);
 browser("screenshot", resolve(evidence, "garden-reduced-375.png"));
 results.push({ reduced });

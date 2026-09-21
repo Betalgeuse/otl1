@@ -6,6 +6,12 @@
 - Product source: `docs/PRODUCT_PRINCIPLES.md` anchors the story in a concrete daily practice, honest peer support, and a return path without guilt.
 - Direction: **a field notebook becoming a garden.** Warm paper and forest ink make the site feel like a durable record; a single soft leaf-green field signals practice becoming visible. The memorable moment is the four square cells filling from a 10:00 intention into an 18:00 reflection.
 
+## 0.1 Daily-thread redesign plan
+
+The prior preview swapped one generic bot card among three states. It did not show the actual shape of the daily practice and incorrectly described the morning goal and evening review as one Slack thread. Preserve the paper, ink, leaf field, thin rules, and square controls; replace only that preview with two short, clearly separated fictional `#daily-scrum` conversations: a 10:00 goal root and an 18:00 review root.
+
+The preview uses one native replay button. A user-triggered replay reveals already-reserved rows in their reading order with only opacity and an upward transform; it never sends a Slack request or fabricates an ongoing chat. JavaScript-disabled and reduced-motion presentations show the complete example and its final single Day 1 completion cell immediately. The referral page borrows a compact two-thread explanation before its existing application form so an invitee can understand the routine without duplicating the full preview.
+
 ## 1. Tokens
 
 | Role | Token | Value |
@@ -37,6 +43,8 @@ Display type uses `--display-hero` and `--display-section`, a tight serif stack 
 - `chapter-label`: topic, two-digit index, and one-pixel divider.
 - `editorial`: rail, reading column, and an original inline SVG process illustration.
 - `garden-cell`: a visual progress square with distinct fill and outline states; the site uses it as a decorative explanation of the product record, rather than an interactive control.
+- `daily-thread`: a square, source-labeled fictional `#daily-scrum` root conversation. A morning goal and evening review are separate thread primitives, never a single simulated Slack thread.
+- `daily-row`: a reserved-height member, bot, or peer row that enters only through opacity and an upward transform after a user asks to replay the example.
 
 ## 4. Motion and accessibility
 
@@ -50,8 +58,8 @@ The nav collapses at 760px, chapter typography scales through `clamp()`, diagram
 
 The homepage keeps the notebook's paper, forest ink, leaf field, thin rules, and square edges. New reaction and preview chapters use the same primitives. The reaction imagery is an absolute, transparent layer behind the leaf chapter copy. It contributes no layout height, border, fill, or pointer target; each sprite fades to zero before reaching the section edge. A transparent mask quiets motion under the copy, preserving contrast without a backing panel. Eight screened Slack custom assets with verified transparent alpha are shipped locally. The opaque blue completion tile and white-backed cat are excluded. GIFs appear only in the active rise layer. Static, real PNG assets make the six-image reduced-motion and no-script composition. No member photo or brand logo enters the site.
 
-The rise layer moves only by `transform` and `opacity`, with a bounded random negative start delay. Visibility and document state pause the layer when it cannot be seen. The controls below it are a locally simulated OT1L conversation, with pressed state, visible garden cells, and a polite announcement. It performs no network write.
+The rise layer moves only by `transform` and `opacity`, with a bounded random negative start delay. Visibility and document state pause the layer when it cannot be seen. The preview below it is a locally simulated pair of `#daily-scrum` root conversations. One native replay button reveals its fixed rows in reading order, retains focus, and only updates a polite status region; it performs no network write. `Escape` cancels the remaining timer without hiding rows already shown. Reduced motion and no-JavaScript show the whole fictional example immediately.
 
 The invitation chapter uses the owner's exact spoken invitation and depicts a member-specific `/r/` link without making a shared link. The interest callout describes an optional private inquiry. The Worker renders its square, outlined link only when `PUBLIC_INTEREST_ENABLED=true`; otherwise it remains a non-interactive readiness label. The dedicated `/interest` page reuses the referral page's paper-and-leaf editorial grid, labelled controls, focus treatment, and mobile collapse. The closing chapter uses actual Day 1–Day 4 grass cells in three member rows. A shaded empty cell means a rest day, not a deleted history.
 
-New homepage primitives: a transparent `reaction-stage` layer, `preview-controls`/`preview-conversation`, `invitation-note`, and `collective-garden`. They preserve the existing 1240px container and collapse into reading order below 760px. The preview paper tint `#fffdf5`, grass strokes `#39764d`/`#5f9b59`, and grass bed `#83ad6d` are illustration-only colors within the paper/leaf family. Controls use a 180ms state transition; reduced motion removes it.
+New homepage primitives: a transparent `reaction-stage` layer, `daily-thread`/`daily-row`, `daily-garden`, `invitation-note`, and `collective-garden`. They preserve the existing 1240px container and collapse into reading order below 760px. The preview paper tint `#fffdf5`, grass strokes `#39764d`/`#5f9b59`, and grass bed `#83ad6d` are illustration-only colors within the paper/leaf family. Message rows use a 180ms opacity/transform transition; reduced motion removes it.
