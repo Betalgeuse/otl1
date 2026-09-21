@@ -22,6 +22,8 @@ const STATUSES: readonly (readonly [RegExp, HeaderOutcome])[] = [
   [/^(?:휴식|쉬었어요)/, "rest"],
   [/^(?:완료(?:했어요|했습니다|했다)?|달성(?:했어요|했습니다|했다)?)/, "complete"],
 ];
+const COMBINED_REVIEW =
+  /^(일부\s*완료|부분\s*완료|절반|미완료|미완|못했어요|휴식|쉬었어요|완료(?:했어요|했습니다|했다)?|달성(?:했어요|했습니다|했다)?)[.!。！,:：]*\s*\n\s*(?:후기|회고)\s*[:：]?\s*/u;
 
 function headerDate(token: string, today: string): string {
   const numbers = token.match(/\d+/g) ?? [];
@@ -79,6 +81,11 @@ export function parseReflectionHeader(text: string, today: string): ReflectionHe
     .replace(/\r\n?/g, "\n")
     .replace(/^[-*]\s+/, "")
     .replaceAll("**", "");
+  const combined = COMBINED_REVIEW.exec(rest);
+  if (combined) {
+    const body = rest.slice(combined[0].length).trimStart();
+    rest = `후기: ${combined[1]}${body ? `. ${body}` : ""}`;
+  }
   const before = DATE_PREFIX.exec(rest);
   if (before) rest = rest.slice(before[0].length);
   const marker = /^(?:후기|회고)[ \t]*(?:[:：][ \t]*|\n\s*)/.exec(rest);
