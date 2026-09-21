@@ -30,7 +30,7 @@ const assets = {
   async fetch(request) {
     const path = new URL(request.url).pathname;
     if (path === "/referral.html") {
-      return new Response("<html><body>__REFERRAL_TOKEN__ __TURNSTILE_SITE_KEY__ __SHARE_TEXT__ __SUBMISSION_KEY__ __INVITER_HEADLINE__</body></html>", {
+      return new Response("<html><body>__REFERRAL_TOKEN__ __TURNSTILE_SITE_KEY__ __SHARE_TEXT__ __SUBMISSION_KEY__ __INVITER_BYLINE__</body></html>", {
         headers: { "content-type": "text/html;charset=UTF-8" },
       });
     }
@@ -118,11 +118,11 @@ try {
   assert.match(pageText, new RegExp(referralToken));
   assert.match(pageText, /1x00000000000000000000AA/);
   assert.match(pageText, /매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야/);
-  assert.match(pageText, /홍길동 님이 <span class="invitation-phrase">같이 성장하자고<\/span>/);
-  assert.doesNotMatch(pageText, /__INVITER_HEADLINE__/);
+  assert.match(pageText, /홍길동 님이 같이 성장하자고 소개했어요\./);
+  assert.doesNotMatch(pageText, /__INVITER_BYLINE__/);
 
   resolveName = null;
-  assert.match(await (await call(`/r/${referralToken}`)).text(), /<span class="invitation-phrase">같이 성장하자고<\/span><br>초대받았어요!/);
+  assert.match(await (await call(`/r/${referralToken}`)).text(), /지인의 소개로 이곳에 도착했어요\./);
   resolveName = '<script>alert("x")</script>';
   const escapedPage = await (await call(`/r/${referralToken}`)).text();
   assert.doesNotMatch(escapedPage, /<script>alert/);

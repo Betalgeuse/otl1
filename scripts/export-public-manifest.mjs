@@ -79,8 +79,11 @@ export const PUBLIC_MEMBERSHIP_SOURCE_PATHS = [
   "site/dist/receipt.html",
   "site/dist/app.js",
   "site/dist/styles.css",
+  "site/dist/assets/fictional-four-day-board-before-review.png",
+  "site/dist/assets/fictional-four-day-board-complete.png",
   "site/dist/assets/otl1-emoji/ack-yes.png",
   "site/dist/assets/otl1-emoji/finish_flag.png",
+  "site/qa/generate-example-board.mts",
   "site/qa/interest-check.mjs",
   "site/qa/interest-siteverify.mjs",
 ];

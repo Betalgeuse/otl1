@@ -26,7 +26,6 @@ The preview uses one native replay button. A user-triggered replay reveals alrea
 | Preview paper | `--paper-preview` | `#fffdf5` |
 | Focus ink | `--focus-ink` | `#387149` |
 | Muted UI ink | `--ink-muted` / `--ink-subtle` | `#43534b` / `#526158` |
-| Grass illustration | `--grass-dark` / `--grass-mid` / `--grass-bed` | `#39764d` / `#5f9b59` / `#83ad6d` |
 | Inverse rule | `--rule-inverse` / `--rule-inverse-strong` | paper at 40% / 50% |
 | Sans | `--sans` | system Korean UI stack |
 | Display | `--display` | Georgia and Korean serif fallbacks |
@@ -43,6 +42,7 @@ Display type uses `--display-hero` and `--display-section`, a tight serif stack 
 - `chapter-label`: topic, two-digit index, and one-pixel divider.
 - `editorial`: rail, reading column, and an original inline SVG process illustration.
 - `garden-cell`: a visual progress square with distinct fill and outline states; the site uses it as a decorative explanation of the product record, rather than an interactive control.
+- `collective-board`: a single, responsive production-rendered PNG for the fictional four-day example. `site/qa/generate-example-board.mts` calls `renderBoard` with `DEFAULT_PALETTE`, so the visible DAY labels, completion checks, today outline, and future cell are the same board language sent to Slack.
 - `daily-thread`: a square, source-labeled fictional `#daily-scrum` root conversation. A morning goal and evening review are separate thread primitives, never a single simulated Slack thread.
 - `daily-row`: a reserved-height member, bot, or peer row that enters only through opacity and an upward transform after a user asks to replay the example.
 
@@ -52,7 +52,7 @@ Intersection observers reveal sections only after JavaScript has attached the mo
 
 ## 5. Responsive rules and accepted debt
 
-The nav collapses at 760px, chapter typography scales through `clamp()`, diagrams remain inside their containers, and text wraps naturally without horizontal scrolling at 320px. The referral page keeps the same paper, ink, leaf, square controls, and editorial grid. Its form and receipt remain readable when the site's animation script does not run; Turnstile still needs its own script to validate a submission. The site Worker resolves opaque links through the core binding and sends validated applications through a signed request.
+The nav collapses at 760px, chapter typography scales through `clamp()`, diagrams remain inside their containers, and text wraps naturally without horizontal scrolling at 320px. The referral page reuses the homepage rhythm, reaction stage, two-thread replay, and collective board; only its hero copy and final application form change. Its form and receipt remain readable when the site's animation script does not run; Turnstile still needs its own script to validate a submission. The site Worker resolves opaque links through the core binding and sends validated applications through a signed request.
 
 ## 6. Reactions and member invitation
 
@@ -60,6 +60,6 @@ The homepage keeps the notebook's paper, forest ink, leaf field, thin rules, and
 
 The rise layer moves only by `transform` and `opacity`, with a bounded random negative start delay. Visibility and document state pause the layer when it cannot be seen. The preview below it is a locally simulated pair of `#daily-scrum` root conversations. One native replay button reveals its fixed rows in reading order, retains focus, and only updates a polite status region; it performs no network write. `Escape` cancels the remaining timer without hiding rows already shown. Reduced motion and no-JavaScript show the whole fictional example immediately.
 
-The invitation chapter uses the owner's exact spoken invitation and depicts a member-specific `/r/` link without making a shared link. The interest callout describes an optional private inquiry. The Worker renders its square, outlined link only when `PUBLIC_INTEREST_ENABLED=true`; otherwise it remains a non-interactive readiness label. The dedicated `/interest` page reuses the referral page's paper-and-leaf editorial grid, labelled controls, focus treatment, and mobile collapse. The closing chapter uses actual Day 1–Day 4 grass cells in three member rows. A shaded empty cell means a rest day, not a deleted history.
+The invitation chapter uses the owner's exact spoken invitation and depicts a member-specific `/r/` link without making a shared link. The interest callout describes an optional private inquiry. The Worker renders its square, outlined link only when `PUBLIC_INTEREST_ENABLED=true`; otherwise it remains a non-interactive readiness label. The dedicated `/interest` page reuses the referral page's paper-and-leaf editorial grid, labelled controls, focus treatment, and mobile collapse. The closing chapter uses the one fictional Day 1–Day 4 production board PNG on both homepage and referral page. Its first three cells are complete and checked; Day 4 remains the renderer's future empty cell.
 
-New homepage primitives: a transparent `reaction-stage` layer, `daily-thread`/`daily-row`, `daily-garden`, `invitation-note`, and `collective-garden`. They preserve the existing 1240px container and collapse into reading order below 760px. The preview paper tint `#fffdf5`, grass strokes `#39764d`/`#5f9b59`, and grass bed `#83ad6d` are illustration-only colors within the paper/leaf family. Message rows use a 180ms opacity/transform transition; reduced motion removes it.
+New homepage primitives: a transparent `reaction-stage` layer, `daily-thread`/`daily-row`, `daily-garden`, `invitation-note`, and `collective-board`. They preserve the existing 1240px container and collapse into reading order below 760px. The preview paper tint `#fffdf5` keeps the board image readable without replacing it with CSS illustration. Message rows use a 180ms opacity/transform transition; reduced motion removes it.

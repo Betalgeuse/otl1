@@ -12,6 +12,8 @@ const page = await read("site/dist/index.html");
 const referral = await read("site/dist/referral.html");
 const css = await read("site/dist/styles.css");
 const script = await read("site/dist/app.js");
+const beforeReviewBoard = await readFile(resolve(root, "site/dist/assets/fictional-four-day-board-before-review.png"));
+const completeBoard = await readFile(resolve(root, "site/dist/assets/fictional-four-day-board-complete.png"));
 const documentText = page.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 const productionHostname = "otl1.hyuk.me";
 const turnstileTestSiteKey = "1x00000000000000000000AA";
@@ -21,6 +23,8 @@ await Promise.all([
   mustExist("site/dist/404.html"),
   mustExist("site/dist/boot.js"),
   mustExist("site/DESIGN.md"),
+  mustExist("site/dist/assets/fictional-four-day-board-before-review.png"),
+  mustExist("site/dist/assets/fictional-four-day-board-complete.png"),
 ]);
 
 assert.equal(config.name, "otl1-site");
@@ -78,12 +82,26 @@ assert.match(page, /18:00 · 오늘의 돌아보기/);
 assert.match(page, /가상 예시 · Slack에 전송되지 않습니다/);
 assert.match(page, /data-daily-replay/);
 assert.match(page, /data-daily-garden-cell/);
+assert.match(page, /src="\/assets\/fictional-four-day-board-complete\.png"/);
+assert.match(referral, /src="\/assets\/fictional-four-day-board-complete\.png"/);
+assert.match(script, /beforeReview: "\/assets\/fictional-four-day-board-before-review\.png"/);
+assert.match(script, /complete: "\/assets\/fictional-four-day-board-complete\.png"/);
+assert.deepEqual([...beforeReviewBoard.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+assert.deepEqual([...completeBoard.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+assert.notDeepEqual(beforeReviewBoard, completeBoard, "replay needs distinct before-review and completed board images");
 assert.doesNotMatch(page, /data-preview-state|data-preview-message|data-preview-cells/);
-assert.match(referral, /#daily-scrum에서 하는 일/);
+assert.match(referral, /<h1 id="home-title">초대받았어요!<\/h1>/);
+assert.match(referral, /__INVITER_BYLINE__/);
 assert.match(referral, /가상 예시 · Slack에 전송되지 않습니다/);
-assert.match(referral, /href="\/#preview"/);
+assert.match(referral, /data-reaction-stage/);
+assert.equal((referral.match(/class="daily-thread"/g) ?? []).length, 2, "the referral page must reuse the two-root daily replay");
+assert.equal((referral.match(/data-daily-row=/g) ?? []).length, 7, "the referral page must retain all replay rows");
+assert.match(referral, /data-daily-replay/);
+assert.match(referral, /data-daily-garden-cell/);
 assert.match(referral, /주말 참여는 선택이에요/);
-assert.match(referral, /10:08 동료/);
+assert.match(referral, /필요할 때 먼저 건네는 도움/);
+assert.doesNotMatch(referral, /referral-excerpt|\(invite-consent-v1\)/);
+assert.match(referral, /name="consent" type="checkbox" value="invite-consent-v1" required/);
 assert.match(page, /aria-live="polite"/);
 assert.match(page, /DAY 4/);
 assert.doesNotMatch(page, /thread-scene"[^>]*role="img"/);
@@ -97,8 +115,9 @@ assert.match(css, /\.has-js:not\(\.prefers-reduced-motion\) \.daily-row:not\(\.i
 assert.doesNotMatch(script.slice(script.indexOf("const dailyReplay"), script.indexOf("window.addEventListener")), /fetch\(|XMLHttpRequest|sendBeacon/);
 assert.match(css, /#home-title \{ font-size:var\(--display-mobile-section\); word-break:keep-all/);
 assert.match(css, /body \{[^}]*word-break:keep-all/);
-assert.match(css, /\.invitation-phrase\{white-space:nowrap\}/);
 assert.match(css, /\.share-panel p\{(?=[^}]*word-break:keep-all)(?=[^}]*overflow-wrap:anywhere)/);
+assert.match(css, /\.collective-board img \{[^}]*width:min\(100%,320px\)/);
+assert.doesNotMatch(css, /\.grass(?:--|[.{:])/);
 assert.doesNotMatch(css, /\.thread-scene|\.message--(?:goal|peer|support)|\.thread--(?:one|two)|\.mini-garden/);
 
 for (const contents of [JSON.stringify(config), worker, page, referral, css, script]) {

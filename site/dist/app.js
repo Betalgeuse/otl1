@@ -55,6 +55,10 @@ const dailyRows = [...document.querySelectorAll("[data-daily-row]")];
 const dailyAnnouncement = document.querySelector("[data-daily-announcement]");
 const dailyGardenCell = document.querySelector("[data-daily-garden-cell]");
 const dailyGardenCopy = document.querySelector("[data-daily-garden-copy]");
+const dailyBoard = {
+  beforeReview: "/assets/fictional-four-day-board-before-review.png",
+  complete: "/assets/fictional-four-day-board-complete.png",
+};
 let dailyTimers = [];
 let dailyPlaying = false;
 
@@ -62,11 +66,13 @@ const announceDaily = (message) => {
   if (dailyAnnouncement instanceof HTMLElement) dailyAnnouncement.textContent = message;
 };
 const setDailyGarden = (completed) => {
-  if (dailyGardenCell instanceof HTMLElement) {
-    dailyGardenCell.classList.toggle("is-written", !completed);
-    dailyGardenCell.classList.toggle("is-complete", completed);
+  if (dailyGardenCell instanceof HTMLImageElement) {
+    dailyGardenCell.src = completed ? dailyBoard.complete : dailyBoard.beforeReview;
+    dailyGardenCell.alt = completed
+      ? "가상 예시의 완료된 Day 1부터 Day 4 보드"
+      : "가상 예시의 회고 전 Day 1부터 Day 4 보드";
   }
-  if (dailyGardenCopy instanceof HTMLElement) dailyGardenCopy.textContent = completed ? "DAY 1 · 완료 한 칸" : "한 문장을 기록했습니다.";
+  if (dailyGardenCopy instanceof HTMLElement) dailyGardenCopy.textContent = completed ? "DAY 1–3 · 완료 체크, DAY 4 · 예정" : "DAY 1–2 · 완료 체크, DAY 3 · 기록, DAY 4 · 예정";
 };
 const clearDailyPlayback = () => {
   for (const timer of dailyTimers) window.clearTimeout(timer);
