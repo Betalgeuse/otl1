@@ -15,6 +15,8 @@ const browser = (...args) => {
 };
 const evaluate = (expression) => JSON.parse(browser("eval", expression));
 const results = [];
+browser("network", "unroute");
+browser("set", "media", "light");
 browser("open", `${origin}/`);
 for (const width of [320, 375, 768, 1440]) {
   browser("set", "viewport", String(width), "900");
@@ -22,7 +24,7 @@ for (const width of [320, 375, 768, 1440]) {
   browser("eval", "scrollTo({top:0,behavior:'instant'})");
   browser("eval", "new Promise(resolve=>setTimeout(resolve,120))");
   const measured = evaluate(
-    `(()=>{const tags=[...document.querySelectorAll('.daily-thread-heading p')];return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,stageHeight:document.querySelector('.reaction-stage').getBoundingClientRect().height,sectionHeight:document.querySelector('#garden').getBoundingClientRect().height,stagePosition:getComputedStyle(document.querySelector('.reaction-stage')).position,stageFill:getComputedStyle(document.querySelector('.reaction-stage')).backgroundColor,stageBorder:getComputedStyle(document.querySelector('.reaction-stage')).borderTopWidth,stagePointer:getComputedStyle(document.querySelector('.reaction-stage')).pointerEvents,copyMask:getComputedStyle(document.querySelector('.rising-reactions')).maskImage,textLayer:getComputedStyle(document.querySelector('#garden > .chapter-inner')).zIndex,share:document.body.textContent.includes('매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야. 같이 할래?'),sections:[...document.querySelectorAll('main > section')].length,risingAssets:document.querySelectorAll('.rise').length,channelLines:tags.map(tag=>{const range=document.createRange();range.selectNodeContents(tag);return range.getClientRects().length})}})()`,
+    `(()=>{const tags=[...document.querySelectorAll('.daily-thread-heading p')];const wordmark=document.querySelector('.wordmark span'),brand=document.querySelector('.brand-lockup');return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,stageHeight:document.querySelector('.reaction-stage').getBoundingClientRect().height,sectionHeight:document.querySelector('#garden').getBoundingClientRect().height,stagePosition:getComputedStyle(document.querySelector('.reaction-stage')).position,stageFill:getComputedStyle(document.querySelector('.reaction-stage')).backgroundColor,stageBorder:getComputedStyle(document.querySelector('.reaction-stage')).borderTopWidth,stagePointer:getComputedStyle(document.querySelector('.reaction-stage')).pointerEvents,copyMask:getComputedStyle(document.querySelector('.rising-reactions')).maskImage,textLayer:getComputedStyle(document.querySelector('#garden > .chapter-inner')).zIndex,invitation:document.body.textContent.includes('ONE THING 1 LINE은 신뢰하는 지인의 초대로만 함께할 수 있습니다.'),sections:[...document.querySelectorAll('main > section')].length,risingAssets:document.querySelectorAll('.rise').length,stageLabels:document.querySelectorAll('.stage-label').length,clockIcons:document.querySelectorAll('.clock-icon').length,wordmarkLines:(()=>{const r=document.createRange();r.selectNodeContents(wordmark);return r.getClientRects().length})(),brandOneLine:(()=>{const parts=[...brand.children].map(e=>e.getBoundingClientRect());return Math.abs(parts[0].top-parts[1].top)<1})(),logoLoaded:document.querySelector('.wordmark img').naturalWidth===512,bookLoaded:document.querySelector('.book-card img').naturalWidth===1000,channelLines:tags.map(tag=>{const range=document.createRange();range.selectNodeContents(tag);return range.getClientRects().length})}})()`,
   );
   assert.equal(measured.width, width);
   assert.equal(measured.scrollWidth, width, `horizontal overflow at ${width}`);
@@ -34,9 +36,15 @@ for (const width of [320, 375, 768, 1440]) {
   assert.equal(measured.stagePointer, "none");
   assert.notEqual(measured.copyMask, "none");
   assert.equal(measured.textLayer, "1");
-  assert.equal(measured.share, true);
-  assert.equal(measured.sections, 7);
+  assert.equal(measured.invitation, true);
+  assert.equal(measured.sections, 5);
   assert.equal(measured.risingAssets, 16);
+  assert.equal(measured.stageLabels, 3);
+  assert.equal(measured.clockIcons, 2);
+  assert.equal(measured.wordmarkLines, 1);
+  assert.equal(measured.brandOneLine, true);
+  assert.equal(measured.logoLoaded, true);
+  assert.equal(measured.bookLoaded, true);
   assert.deepEqual(
     measured.channelLines,
     [1, 1],
@@ -60,7 +68,7 @@ for (const width of [320, 375, 768, 1440]) {
     `(async()=>{const reveals=[...document.querySelectorAll('.reveal')];for(const e of reveals){e.scrollIntoView();await new Promise(r=>setTimeout(r,700))}if(reveals.some(e=>!e.classList.contains('is-visible')))throw new Error('reveal did not settle');document.activeElement?.blur();scrollTo(0,0);await new Promise(r=>setTimeout(r,700));return true})()`,
   );
   browser("screenshot", "--full", resolve(evidence, `home-${width}.png`));
-  for (const id of ["garden", "preview", "invitation", "collective"]) {
+  for (const id of ["rhythm", "garden", "preview", "invitation"]) {
     browser(
       "eval",
       `(async()=>{document.querySelector('#${id}').scrollIntoView({behavior:'instant'});await new Promise(r=>setTimeout(r,180));return true})()`,
@@ -141,6 +149,35 @@ assert.deepEqual(pausedOffscreen, {
   board: "/assets/fictional-four-day-board-before-review.png",
 });
 results.push({ pausedByVisibility, pausedOffscreen });
+const referralToken = "A".repeat(32);
+for (const width of [320, 375, 768, 1440]) {
+  browser("set", "viewport", String(width), "900");
+  browser("open", `${origin}/r/${referralToken}`);
+  browser(
+    "eval",
+    `(async()=>{const reveals=[...document.querySelectorAll('.reveal')];for(const e of reveals){e.scrollIntoView({behavior:'instant'});await new Promise(r=>setTimeout(r,700))}if(reveals.some(e=>!e.classList.contains('is-visible')))throw new Error('referral reveal did not settle');scrollTo({top:0,behavior:'instant'});await new Promise(r=>setTimeout(r,180));return true})()`,
+  );
+  const referral = evaluate(
+    `(()=>{const wordmark=document.querySelector('.wordmark span');const range=document.createRange();range.selectNodeContents(wordmark);return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,title:document.querySelector('h1')?.textContent.trim(),sections:document.querySelectorAll('main > section').length,wordmarkLines:range.getClientRects().length,logoLoaded:document.querySelector('.wordmark img')?.naturalWidth===512,stageLabels:document.querySelectorAll('.stage-label').length,clocks:document.querySelectorAll('.clock-icon').length,threads:document.querySelectorAll('.daily-thread').length,boardLoaded:document.querySelector('[data-daily-garden-cell]')?.naturalWidth===640,formAction:document.querySelector('[data-application-form]')?.getAttribute('action'),fields:[...document.querySelectorAll('[data-application-form] [name]')].map(e=>e.getAttribute('name')),placeholderLeak:document.body.textContent.includes('__')}})()`,
+  );
+  assert.equal(referral.width, width);
+  assert.equal(referral.scrollWidth, width, `referral horizontal overflow at ${width}`);
+  assert.equal(referral.clientWidth, width);
+  assert.equal(referral.title, "초대받았어요!");
+  assert.equal(referral.sections, 5);
+  assert.equal(referral.wordmarkLines, 1);
+  assert.equal(referral.logoLoaded, true);
+  assert.equal(referral.stageLabels, 3);
+  assert.equal(referral.clocks, 2);
+  assert.equal(referral.threads, 2);
+  assert.equal(referral.boardLoaded, true);
+  assert.equal(referral.formAction, `/r/${referralToken}/apply`);
+  assert.deepEqual(referral.fields.slice(0, 5), ["submissionKey", "email", "displayName", "intent", "consent"]);
+  assert.equal(referral.placeholderLeak, false);
+  browser("screenshot", "--full", resolve(evidence, `referral-${width}.png`));
+  results.push({ referral });
+}
+browser("set", "viewport", "375", "900");
 browser("set", "media", "light", "reduced-motion");
 browser("reload");
 const reduced = evaluate(
@@ -156,6 +193,22 @@ browser("eval", `document.querySelector('#garden').scrollIntoView({behavior:'ins
 browser("screenshot", resolve(evidence, "garden-reduced-375.png"));
 results.push({ reduced });
 browser("set", "media", "light");
+browser("network", "route", "**/app.js", "--abort");
+browser("network", "route", "**/boot.js", "--abort");
+browser("open", `${origin}/`);
+const noScript = evaluate(
+  `({hasJs:document.documentElement.classList.contains('has-js'),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,links:getComputedStyle(document.querySelector('.site-links')).display,visibleRows:[...document.querySelectorAll('[data-daily-row]')].every(row=>getComputedStyle(row).opacity==='1'),board:new URL(document.querySelector('[data-daily-garden-cell]').src).pathname})`,
+);
+assert.deepEqual(noScript, {
+  hasJs: false,
+  overflow: 0,
+  links: "grid",
+  visibleRows: true,
+  board: "/assets/fictional-four-day-board-complete.png",
+});
+browser("screenshot", "--full", resolve(evidence, "home-no-script-375.png"));
+results.push({ noScript });
+browser("network", "unroute");
 browser("close");
 writeFileSync(
   resolve(evidence, "results.json"),

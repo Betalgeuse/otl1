@@ -12,6 +12,12 @@ The prior preview swapped one generic bot card among three states. It did not sh
 
 The preview uses one native replay button. A user-triggered replay reveals already-reserved rows in their reading order with only opacity and an upward transform; it never sends a Slack request or fabricates an ongoing chat. JavaScript-disabled and reduced-motion presentations show the complete example and its final single Day 1 completion cell immediately. The referral page borrows a compact two-thread explanation before its existing application form so an invitee can understand the routine without duplicating the full preview.
 
+## 0.2 ONE THING 1 LINE brand story
+
+The public name is always `ONE THING 1 LINE`; “한 문장” describes the input format and never substitutes for the product name. The existing OT1L bot avatar anchors the navigation wordmark. The homepage hero pairs one oversized, single-line brand lockup with the approved black Korean edition of 『원씽』, linked to its product source with a visible no-sponsorship statement.
+
+The visitor path is deliberately short: promise, daily rhythm, trusted peers, real board preview, invitation. `SET ONE THING`, `DO ONE THING`, and `REVIEW ONE THING` form the instructional spine. Code-native clocks identify 10:00 and 18:00. The peer chapter leads with focus, accountable execution, and learning from capable peers; custom emoji remain atmospheric support behind clearly fictional role examples. The referral route replaces only the top promise with the inviter context, then reuses rhythm, peers, and preview before the unchanged application contract.
+
 ## 1. Tokens
 
 | Role | Token | Value |
@@ -45,6 +51,10 @@ Display type uses `--display-hero` and `--display-section`, a tight serif stack 
 - `collective-board`: a single, responsive production-rendered PNG for the fictional four-day example. `site/qa/generate-example-board.mts` calls `renderBoard` with `DEFAULT_PALETTE`, so the visible DAY labels, completion checks, today outline, and future cell are the same board language sent to Slack.
 - `daily-thread`: a square, source-labeled fictional `#daily-scrum` root conversation. A morning goal and evening review are separate thread primitives, never a single simulated Slack thread.
 - `daily-row`: a reserved-height member, bot, or peer row that enters only through opacity and an upward transform after a user asks to replay the example.
+- `brand-lockup`: a responsive one-line `ONE THING 1 LINE` display that never wraps on supported viewports.
+- `book-card`: the locally served Korean cover, source link, bibliographic line, and no-sponsorship statement.
+- `stage-marker`: a code-native clock or execution icon paired with a stage label and accessible name.
+- `peer-examples`: three explicitly fictional role examples that connect a concrete ONE THING to execution and learning.
 
 ## 4. Motion and accessibility
 
@@ -52,7 +62,7 @@ Intersection observers reveal sections only after JavaScript has attached the mo
 
 ## 5. Responsive rules and accepted debt
 
-The nav collapses at 760px, chapter typography scales through `clamp()`, diagrams remain inside their containers, and text wraps naturally without horizontal scrolling at 320px. The referral page reuses the homepage rhythm, reaction stage, two-thread replay, and collective board; only its hero copy and final application form change. Its form and receipt remain readable when the site's animation script does not run; Turnstile still needs its own script to validate a submission. The site Worker resolves opaque links through the core binding and sends validated applications through a signed request.
+The nav collapses at 760px, chapter typography scales through `clamp()`, the brand lockup remains on one visual line, and text wraps naturally without horizontal scrolling at 320px. The book moves below the promise on narrow screens without changing its aspect ratio. The referral page reuses the homepage rhythm, reaction stage, two-thread replay, and real board; only its hero copy and final application form change. Its form and receipt remain readable when the site's animation script does not run; Turnstile still needs its own script to validate a submission. The site Worker resolves opaque links through the core binding and sends validated applications through a signed request.
 
 ## 6. Reactions and member invitation
 

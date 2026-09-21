@@ -29,6 +29,8 @@ await Promise.all([
   mustExist("site/DESIGN.md"),
   mustExist("site/dist/assets/fictional-four-day-board-before-review.png"),
   mustExist("site/dist/assets/fictional-four-day-board-complete.png"),
+  mustExist("site/dist/assets/otl1-avatar.jpg"),
+  mustExist("site/dist/assets/one-thing-korean-black.jpg"),
 ]);
 
 assert.equal(config.name, "otl1-site");
@@ -69,14 +71,27 @@ assert.match(
 );
 
 for (const fragment of [
+  "ONE THING 1 LINE",
+  "가장 중요한 업무 하나에 집중하는 모임",
   "오늘 가장 중요한 업무 하나를 함께 해냅니다.",
+  "아침에 ONE THING을 정하고, 저녁에 완료 여부와 후기를 남깁니다.",
+  "실제 진행 방식 보기",
+  "게리 켈러·제이 파파산, 『원씽』",
+  "하루 두 번, 목표와 결과를 한 문장씩 나눕니다.",
   "10:00",
   "18:00",
-  "동료의 말",
-  "필요할 때 먼저 건네는 도움",
-  "서로 다른 하루가",
-  "매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야. 같이 할래?",
-  "각 회원에게 발급된 전용 링크",
+  "SET ONE THING",
+  "DO ONE THING",
+  "REVIEW ONE THING",
+  "오늘의 ONE THING을 적습니다.",
+  "ONE THING을 실행합니다.",
+  "완료 여부와 후기를 남깁니다.",
+  "함께 가면 더 멀리 갑니다. 기왕이면, 제대로 해내는 사람들과.",
+  "검증된 사업가, 직장인, 학자들이 서로의 ONE THING을 응원하며 함께 성장합니다.",
+  "신규 고객 인터뷰 3건 끝내기",
+  "다음 주 발표 자료 첫 장 완성하기",
+  "논문 서론 초안 마무리하기",
+  "ONE THING 1 LINE은 신뢰하는 지인의 초대로만 함께할 수 있습니다.",
 ])
   assert.ok(documentText.includes(fragment), `missing semantic/story fragment: ${fragment}`);
 
@@ -87,6 +102,12 @@ assert.match(script, /IntersectionObserver/);
 assert.match(script, /classList\.add\("has-js"\)/);
 assert.match(css, /\.has-js \.site-links/);
 assert.match(page, /data-reaction-stage/);
+assert.match(page, /src="\/assets\/otl1-avatar\.jpg"/);
+assert.match(page, /src="\/assets\/one-thing-korean-black\.jpg"/);
+assert.match(page, /href="https:\/\/product\.kyobobook\.co\.kr\/detail\/S000001619177"/);
+assert.match(page, /후원|협찬/);
+assert.equal((page.match(/class="stage-label"/g) ?? []).length, 3);
+assert.equal((page.match(/class="clock-icon"/g) ?? []).length, 2);
 assert.ok(
   page.indexOf("data-reaction-stage") < page.indexOf('class="garden-intro'),
   "reaction sprites must precede section text in the DOM",
@@ -128,6 +149,10 @@ assert.notDeepEqual(
 assert.doesNotMatch(page, /data-preview-state|data-preview-message|data-preview-cells/);
 assert.match(referral, /<h1 id="home-title">초대받았어요!<\/h1>/);
 assert.match(referral, /__INVITER_BYLINE__/);
+assert.match(referral, /src="\/assets\/otl1-avatar\.jpg"/);
+assert.match(referral, /SET ONE THING/);
+assert.match(referral, /함께 가면 더 멀리 갑니다\. 기왕이면, 제대로 해내는 사람들과\./);
+assert.match(referral, /ONE THING이 매일의 기록으로 쌓이는 과정을 확인하세요\./);
 assert.match(referral, /가상 예시 · Slack에 전송되지 않습니다/);
 assert.match(referral, /data-reaction-stage/);
 assert.equal(
@@ -142,12 +167,14 @@ assert.equal(
 );
 assert.match(referral, /data-daily-replay/);
 assert.match(referral, /data-daily-garden-cell/);
-assert.match(referral, /필요할 때 먼저 건네는 도움/);
 assert.doesNotMatch(referral, /referral-excerpt|\(invite-consent-v1\)/);
 assert.match(referral, /name="consent" type="checkbox" value="invite-consent-v1" required/);
 assert.match(page, /aria-live="polite"/);
-assert.match(page, /DAY 4/);
+assert.match(page, /DAY 1–4/);
 assert.doesNotMatch(page, /thread-scene"[^>]*role="img"/);
+assert.doesNotMatch(page, /사람과 실천|함께 자라는 기록/);
+assert.doesNotMatch(referral, /사람과 실천|함께 자라는 기록/);
+assert.doesNotMatch(page, /초대 문구 미리보기|회원당 기본 초대 인원|회원별 전용 링크/);
 assert.match(css, /@keyframes rise-reaction/);
 assert.match(css, /reaction-stage\.is-paused \.rise/);
 assert.match(css, /prefers-reduced-motion:reduce[^}]*\.has-motion \.rise/);
@@ -167,7 +194,7 @@ assert.doesNotMatch(
 assert.match(css, /#home-title \{ font-size:var\(--display-mobile-section\); word-break:keep-all/);
 assert.match(css, /body \{[^}]*word-break:keep-all/);
 assert.match(css, /\.share-panel p\{(?=[^}]*word-break:keep-all)(?=[^}]*overflow-wrap:anywhere)/);
-assert.match(css, /\.collective-board img \{[^}]*width:min\(100%,320px\)/);
+assert.match(css, /\.daily-garden-board \{[^}]*width:100%/);
 assert.doesNotMatch(css, /\.grass(?:--|[.{:])/);
 assert.doesNotMatch(
   css,

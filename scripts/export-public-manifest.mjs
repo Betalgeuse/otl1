@@ -81,6 +81,8 @@ export const PUBLIC_MEMBERSHIP_SOURCE_PATHS = [
   "site/dist/styles.css",
   "site/dist/assets/fictional-four-day-board-before-review.png",
   "site/dist/assets/fictional-four-day-board-complete.png",
+  "site/dist/assets/otl1-avatar.jpg",
+  "site/dist/assets/one-thing-korean-black.jpg",
   "site/dist/assets/otl1-emoji/ack-yes.png",
   "site/dist/assets/otl1-emoji/finish_flag.png",
   "site/qa/generate-example-board.mts",

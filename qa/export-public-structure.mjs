@@ -38,6 +38,8 @@ assert.deepEqual(PUBLIC_RUNTIME_MIGRATION_PATHS, [
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-lifecycle-admin-db-role.mjs"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-referral-admin-db-role.mjs"), true);
 assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("site/dist/interest.html"), true);
+assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("site/dist/assets/otl1-avatar.jpg"), true);
+assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("site/dist/assets/one-thing-korean-black.jpg"), true);
 assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("site/qa/interest-check.mjs"), true);
 assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("src/community-interest-intake.ts"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("referral-capacity-pg.mjs"), true);
@@ -74,6 +76,22 @@ assert.throws(
       (path) => path !== "site/dist/interest.html",
     ),
   /Missing required public export source: site\/dist\/interest\.html/,
+);
+assert.throws(
+  () =>
+    assertRequiredPublicExportSources(
+      PUBLIC_REQUIRED_EXPORT_SOURCES,
+      (path) => path !== "site/dist/assets/otl1-avatar.jpg",
+    ),
+  /Missing required public export source: site\/dist\/assets\/otl1-avatar\.jpg/,
+);
+assert.throws(
+  () =>
+    assertRequiredPublicExportSources(
+      PUBLIC_REQUIRED_EXPORT_SOURCES,
+      (path) => path !== "site/dist/assets/one-thing-korean-black.jpg",
+    ),
+  /Missing required public export source: site\/dist\/assets\/one-thing-korean-black\.jpg/,
 );
 assert.throws(
   () =>
