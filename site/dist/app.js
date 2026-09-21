@@ -59,8 +59,18 @@ const dailyBoard = {
   beforeReview: "/assets/fictional-four-day-board-before-review.png",
   complete: "/assets/fictional-four-day-board-complete.png",
 };
-let dailyTimers = [];
-let dailyPlaying = false;
+const dailyPreview = document.querySelector("#preview");
+const dailySequence = [["goal", 360], ["ack", 740], ["morning-peer", 1300], ["review-prompt", 360], ["reflection", 360], ["completion", 360], ["evening-peer", 0]];
+const dailyCompleteHold = 3000;
+const dailyResetHold = 1000;
+let dailyTimer = null;
+let dailyTimerStartedAt = 0;
+let dailyTimerDelay = 0;
+let dailyTimerRemaining = 0;
+let dailyStep = 0;
+let dailyPhase = "idle";
+let dailyInView = false;
+let dailyManuallyPaused = false;
 
 const announceDaily = (message) => {
   if (dailyAnnouncement instanceof HTMLElement) dailyAnnouncement.textContent = message;
@@ -74,10 +84,12 @@ const setDailyGarden = (completed) => {
   }
   if (dailyGardenCopy instanceof HTMLElement) dailyGardenCopy.textContent = completed ? "DAY 1–3 · 완료 체크, DAY 4 · 예정" : "DAY 1–2 · 완료 체크, DAY 3 · 기록, DAY 4 · 예정";
 };
-const clearDailyPlayback = () => {
-  for (const timer of dailyTimers) window.clearTimeout(timer);
-  dailyTimers = [];
-  dailyPlaying = false;
+const clearDailyTimer = () => {
+  if (dailyTimer !== null) {
+    dailyTimerRemaining = Math.max(0, dailyTimerDelay - (performance.now() - dailyTimerStartedAt));
+    window.clearTimeout(dailyTimer);
+    dailyTimer = null;
+  }
 };
 const revealDailyRow = (name) => {
   const row = document.querySelector(`[data-daily-row="${name}"]`);
@@ -91,66 +103,110 @@ const resetDailyPreview = () => {
     row.setAttribute("aria-hidden", "true");
   }
   setDailyGarden(false);
-  if (dailyReplay instanceof HTMLButtonElement) dailyReplay.textContent = "하루 재생";
+};
+const setDailyControl = () => {
+  if (!(dailyReplay instanceof HTMLButtonElement)) return;
+  const isPlaying = dailyPhase !== "idle" && !dailyManuallyPaused;
+  dailyReplay.textContent = isPlaying ? "일시정지" : "다시 재생";
+  dailyReplay.setAttribute("aria-label", isPlaying ? "하루 예시 재생을 일시정지" : "하루 예시 재생을 다시 시작");
 };
 const showDailyPreviewImmediately = () => {
-  clearDailyPlayback();
+  clearDailyTimer();
+  dailyPhase = "idle";
   for (const row of dailyRows) {
     row.classList.add("is-visible");
     row.removeAttribute("aria-hidden");
   }
   setDailyGarden(true);
-  if (dailyReplay instanceof HTMLButtonElement) dailyReplay.textContent = "다시 보기";
+  if (dailyReplay instanceof HTMLButtonElement) {
+    dailyReplay.textContent = "하루 예시 완료";
+    dailyReplay.disabled = true;
+  }
 };
 const scheduleDaily = (delay, action) => {
-  dailyTimers.push(window.setTimeout(action, delay));
+  dailyTimerDelay = delay;
+  dailyTimerRemaining = delay;
+  dailyTimerStartedAt = performance.now();
+  dailyTimer = window.setTimeout(() => {
+    dailyTimer = null;
+    action();
+  }, delay);
 };
 
 if (dailyReplay instanceof HTMLButtonElement && dailyRows.length > 0) {
-  const applyDailyMotionPreference = () => {
-    if (motionPreference.matches) showDailyPreviewImmediately();
-    else resetDailyPreview();
-  };
-  const playDailyPreview = () => {
-    if (motionPreference.matches) {
-      announceDaily("10시 목표, 동료의 응원, 18시 회고 순서로 읽을 수 있습니다.");
+  const advanceDailyPreview = () => {
+    if (dailyPhase === "playing") {
+      const next = dailySequence[dailyStep];
+      if (next) {
+        const [name, delay] = next;
+        dailyStep += 1;
+        revealDailyRow(name);
+        if (name === "completion") setDailyGarden(true);
+        scheduleDaily(delay, advanceDailyPreview);
+        return;
+      }
+      dailyPhase = "complete";
+      scheduleDaily(dailyCompleteHold, advanceDailyPreview);
       return;
     }
-    clearDailyPlayback();
-    resetDailyPreview();
-    dailyPlaying = true;
-    dailyReplay.textContent = "다시 보기";
-    revealDailyRow("goal");
-    announceDaily("10시 목표와 봇의 기록 확인을 보여줍니다.");
-    scheduleDaily(360, () => revealDailyRow("ack"));
-    scheduleDaily(1100, () => {
-      revealDailyRow("morning-peer");
-      announceDaily("동료의 직접 응원 예시를 보여줍니다.");
-    });
-    scheduleDaily(2400, () => {
-      revealDailyRow("review-prompt");
-      announceDaily("18시 회고와 완료 기록을 보여줍니다.");
-    });
-    scheduleDaily(2760, () => revealDailyRow("reflection"));
-    scheduleDaily(3120, () => {
-      revealDailyRow("completion");
-      setDailyGarden(true);
-    });
-    scheduleDaily(3480, () => revealDailyRow("evening-peer"));
-    scheduleDaily(3840, () => {
-      dailyPlaying = false;
-      announceDaily("하루 미리보기를 모두 보여줬습니다.");
-    });
+    if (dailyPhase === "complete") {
+      resetDailyPreview();
+      dailyPhase = "reset";
+      scheduleDaily(dailyResetHold, advanceDailyPreview);
+      return;
+    }
+    if (dailyPhase === "reset") startDailyPreview();
   };
-  dailyReplay.addEventListener("click", playDailyPreview);
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !dailyPlaying) return;
-    clearDailyPlayback();
-    dailyReplay.textContent = "다시 보기";
-    announceDaily("재생을 멈췄습니다. 보인 대화는 그대로 읽을 수 있습니다.");
+  const startDailyPreview = () => {
+    clearDailyTimer();
+    resetDailyPreview();
+    dailyPhase = "playing";
+    dailyStep = 0;
+    advanceDailyPreview();
+    setDailyControl();
+  };
+  const pauseDailyPreview = () => {
+    clearDailyTimer();
+    setDailyControl();
+  };
+  const resumeDailyPreview = () => {
+    if (dailyPhase === "idle") startDailyPreview();
+    else if (dailyTimer === null) scheduleDaily(dailyTimerRemaining, advanceDailyPreview);
+    setDailyControl();
+  };
+  const shouldPlayDailyPreview = () => !motionPreference.matches && dailyInView && !document.hidden && !dailyManuallyPaused;
+  const syncDailyPreview = () => {
+    if (motionPreference.matches) {
+      showDailyPreviewImmediately();
+      return;
+    }
+    dailyReplay.disabled = false;
+    if (shouldPlayDailyPreview()) resumeDailyPreview();
+    else pauseDailyPreview();
+  };
+  dailyReplay.addEventListener("click", () => {
+    dailyManuallyPaused = !dailyManuallyPaused;
+    if (dailyManuallyPaused) {
+      pauseDailyPreview();
+      announceDaily("하루 예시 재생을 멈췄습니다.");
+    } else {
+      announceDaily("하루 예시 재생을 다시 시작합니다.");
+      syncDailyPreview();
+    }
   });
-  motionPreference.addEventListener("change", applyDailyMotionPreference);
-  applyDailyMotionPreference();
+  if ("IntersectionObserver" in window && dailyPreview instanceof HTMLElement) {
+    const dailyObserver = new IntersectionObserver(([entry]) => {
+      dailyInView = entry.isIntersecting && entry.intersectionRatio >= 0.16;
+      syncDailyPreview();
+    }, { threshold: [0, 0.16] });
+    dailyObserver.observe(dailyPreview);
+  } else dailyInView = true;
+  document.addEventListener("visibilitychange", syncDailyPreview);
+  motionPreference.addEventListener("change", () => {
+    dailyManuallyPaused = false;
+    syncDailyPreview();
+  });
+  syncDailyPreview();
 }
 
 window.addEventListener("scroll", () => header?.classList.toggle("is-scrolled", window.scrollY > 24), { passive: true });
