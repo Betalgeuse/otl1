@@ -171,6 +171,11 @@ assert.doesNotMatch(referral, /referral-excerpt|\(invite-consent-v1\)/);
 assert.match(referral, /name="consent" type="checkbox" value="invite-consent-v1" required/);
 assert.match(referral, /Slack에서 함께하기/);
 assert.match(referral, /class="slack-mark"[^>]*aria-hidden="true"/);
+assert.ok(
+  referral.indexOf("slack-join-button") < referral.indexOf('id="share-copy"'),
+  "Slack participation must appear before the invite-copy panel",
+);
+assert.equal((referral.match(/id="share-copy"/g) ?? []).length, 1);
 assert.doesNotMatch(referral, /name="displayName"|name="intent"|운영자가 직접 신청을 확인하고 승인|수동으로 보내/);
 assert.match(script, /확인했습니다\. Slack을 열고 있어요\./);
 assert.match(page, /aria-live="polite"/);

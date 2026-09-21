@@ -170,6 +170,6 @@ main > section { scroll-margin-top:82px; }
   .brand-lockup { font-size:1.96rem; }
   .wordmark span { font-size:var(--type-11); }
 }
-.slack-join-button{display:inline-flex;align-items:center;justify-content:center;gap:.65rem}.slack-mark{flex:0 0 auto}
+.slack-join-button{display:inline-flex;align-items:center;justify-content:center;gap:.65rem;text-decoration:none}.slack-mark{flex:0 0 auto}.referral-share-section{padding:var(--space-80) max(var(--space-32),calc((100vw - var(--content-width))/2)) var(--space-112);background:var(--leaf)}.referral-share-section .share-panel{margin-top:var(--space-32)}
 
 .phrase-nowrap{white-space:nowrap}
