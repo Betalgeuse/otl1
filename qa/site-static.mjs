@@ -176,6 +176,7 @@ assert.ok(
   "Slack participation must appear before the invite-copy panel",
 );
 assert.equal((referral.match(/id="share-copy"/g) ?? []).length, 1);
+assert.match(worker, /GET.*applyRoute.*Response\.redirect/);
 assert.doesNotMatch(referral, /name="displayName"|name="intent"|운영자가 직접 신청을 확인하고 승인|수동으로 보내/);
 assert.match(script, /확인했습니다\. Slack을 열고 있어요\./);
 assert.match(page, /aria-live="polite"/);

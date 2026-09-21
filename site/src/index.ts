@@ -324,6 +324,7 @@ const siteWorker = {
     else if (request.method === "GET" && url.pathname === "/interest") response = await interestPage(request, env);
     else if (request.method === "POST" && url.pathname === "/interest") response = await submitInterest(request, env);
     else if (request.method === "GET" && referral) response = await referralPage(request, env, referral[1]);
+    else if (request.method === "GET" && applyRoute) response = Response.redirect(new URL(`/r/${applyRoute[1]}`, request.url), 303);
     else if (request.method === "POST" && applyRoute) response = await directJoin(request, env, applyRoute[1]);
     else if (request.method === "GET" && interestReceipt) {
       const html = await assetHtml(env, request, "receipt.html");
