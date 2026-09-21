@@ -142,6 +142,10 @@ try {
     ),
     "1",
   );
+  const expiredReplay = JSON.parse(
+    await sql(`SELECT otl.referral_direct_join('${JSON.stringify(replayInput)}'::jsonb)`),
+  );
+  assert.equal(expiredReplay.accepted, false);
   assert.equal(
     await sql(
       "SELECT has_function_privilege('otl_referral_runtime','otl.referral_direct_join(jsonb)','EXECUTE')",

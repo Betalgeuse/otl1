@@ -85,7 +85,8 @@ BEGIN
     END IF;
     SELECT * INTO request FROM otl.referral_requests
       WHERE team_id=t AND request_id=submission.request_id;
-    RETURN jsonb_build_object('accepted',request.admission_mode='shared_invite',
+    RETURN jsonb_build_object(
+      'accepted',request.admission_mode='shared_invite' AND request.state='approved',
       'requestId',request.request_id);
   END IF;
 
