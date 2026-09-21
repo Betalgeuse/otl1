@@ -22,6 +22,23 @@ try {
   assert.equal(await sendReminderBatch({ token: "token", teamId: "TQA", channelId: "CPUBLIC", now: "2026-09-17T09:00:00Z", store: retryStore }), 0);
   assert.deepEqual(failed, [{ teamId: "TQA", channelId: "CPUBLIC", leaseToken: "retry", status: "failed", errorCode: "rate_limited", retryAfterSeconds: 17 }]);
 
+  let goalReply;
+  globalThis.fetch = async (url, request) => {
+    if (new URL(url).pathname.endsWith("chat.postMessage")) {
+      goalReply = JSON.parse(request.body);
+      return Response.json({ ok: true, ts: "123.457" });
+    }
+    throw new Error(`unexpected ${url}`);
+  };
+  const threadedGoalStore = {
+    async claimReviewReminderBatch() { return null; },
+    async claimGoalReminderBatch(input) { return { leaseToken: input.leaseToken, attempt: 1, firstAttemptAt: "2026-09-17T09:00:00Z", threadTs: "123.000", jobs: [job("U1")] }; },
+    async finishReminderBatch() { return true; },
+    async finishReviewReminderBatch() { return true; },
+  };
+  assert.equal(await sendReminderBatch({ token: "token", teamId: "TQA", channelId: "CPUBLIC", now: "2026-09-17T09:00:00Z", reviewThreadV2: true, store: threadedGoalStore }), 1);
+  assert.equal(goalReply.thread_ts, "123.000");
+
   let acceptedText = "";
   let posts = 0;
   let claims = 0;

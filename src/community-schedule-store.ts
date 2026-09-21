@@ -175,7 +175,11 @@ export class CommunityScheduleStore {
         ) SELECT coalesce((SELECT CASE WHEN count(*)=0 THEN NULL ELSE jsonb_build_object(
           'leaseToken',$4,'attempt',max(reminder_attempts),'firstAttemptAt',min(reminder_first_attempt_at),
           'jobs',jsonb_agg(jsonb_build_object('teamId',team_id,'channelId',channel_id,'userId',user_id,
-            'key',record_key,'date',body->>'date','kind','goal') ORDER BY user_id)) END FROM claimed),'null'::jsonb)`,
+            'key',record_key,'date',body->>'date','kind','goal') ORDER BY user_id))
+          || coalesce((SELECT jsonb_build_object('threadTs',root.body->>'ts') FROM otl.community_records root
+            WHERE root.team_id=$1 AND root.channel_id=$2 AND root.kind='prompt'
+              AND root.record_key='common-thread:'||(SELECT body->>'date' FROM claimed LIMIT 1)||':goal'), '{}'::jsonb)
+        END FROM claimed),'null'::jsonb)`,
         [input.teamId, input.channelId, input.now, input.leaseToken],
       ),
     );

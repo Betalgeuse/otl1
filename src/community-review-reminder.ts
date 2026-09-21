@@ -8,7 +8,7 @@ type ReviewReminderStore = {
   ): Promise<boolean>;
 };
 
-async function exactThreadReplyTimestamp(
+export async function exactThreadReplyTimestamp(
   token: string,
   channelId: string,
   threadTs: string,

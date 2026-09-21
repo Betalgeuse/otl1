@@ -1,4 +1,4 @@
-import { deliverReviewReminder } from "./community-review-reminder";
+import { deliverReviewReminder, exactThreadReplyTimestamp } from "./community-review-reminder";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { ReminderBatch, ReminderBatchFinish, ReminderJob } from "./community-types";
 import { list, object, string } from "./input";
@@ -178,7 +178,15 @@ export async function sendReminderBatch(input: {
   try {
     if (
       batch.attempt > 1 &&
-      (await exactMessageAlreadyPosted(input.token, input.channelId, text, batch.firstAttemptAt))
+      (await (batch.threadTs
+        ? exactThreadReplyTimestamp(
+            input.token,
+            input.channelId,
+            batch.threadTs,
+            text,
+            batch.firstAttemptAt,
+          )
+        : exactMessageAlreadyPosted(input.token, input.channelId, text, batch.firstAttemptAt)))
     ) {
       await input.store.finishReminderBatch({
         teamId: input.teamId,
@@ -202,6 +210,7 @@ export async function sendReminderBatch(input: {
     await callSlack(input.token, "chat.postMessage", {
       channel: input.channelId,
       text: deliverableText,
+      ...(batch.threadTs ? { thread_ts: batch.threadTs } : {}),
       blocks: deliverableText
         .split("\n\n")
         .filter((value) => value.includes("<@"))
