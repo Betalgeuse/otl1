@@ -2,6 +2,7 @@ type Env = { readonly SITE_CORE_HMAC_SECRET: string };
 const receipts = new Map<string, { readonly receiptId: string; readonly withdrawalToken: string; withdrawn: boolean }>();
 let resolveCalls = 0;
 let applyCalls = 0;
+let directJoinCalls = 0;
 let created = 0;
 let withdrawals = 0;
 const interestReceipts = new Map<string, { readonly receiptId: string; readonly withdrawalToken: string; readonly requestHash: string; withdrawn: boolean }>();
@@ -23,7 +24,7 @@ function opaque(prefix: string): string { return `${prefix}-${crypto.randomUUID(
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/__qa/stats") return Response.json({ resolveCalls, applyCalls, created, withdrawals, receipts: receipts.size, interestCreated, interestWithdrawals, interestReceipts: interestReceipts.size });
+    if (request.method === "GET" && url.pathname === "/__qa/stats") return Response.json({ resolveCalls, applyCalls, directJoinCalls, created, withdrawals, receipts: receipts.size, interestCreated, interestWithdrawals, interestReceipts: interestReceipts.size });
     const body = await request.text();
     if (request.headers.get("x-otl-signature") !== await signature(env.SITE_CORE_HMAC_SECRET, request, body)) return new Response("Unauthorized", { status: 401 });
     if (url.pathname.startsWith("/internal/interest/")) {
@@ -52,6 +53,11 @@ export default {
     if (url.pathname === "/internal/referrals/resolve") {
       resolveCalls += 1;
       return Response.json({ available: input.referralToken === "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" });
+    }
+    if (url.pathname === "/internal/referrals/direct-join") {
+      directJoinCalls += 1;
+      if (input.consentVersion !== "invite-consent-v1" || typeof input.email !== "string" || typeof input.submissionKey !== "string" || typeof input.referralToken !== "string") return new Response("Bad request", { status: 400 });
+      return Response.json({ accepted: true }, { status: 202 });
     }
     if (url.pathname === "/internal/referrals/apply") {
       applyCalls += 1;

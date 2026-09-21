@@ -31,7 +31,8 @@ const focusedQa = [
   "referral-storage-pg", "referral-retention-pg", "community-runtime-pg",
   "review-thread-topology-pg", "garden-projection-upgrade-pg",
   "membership-reminder-audit-pg", "community-guide-security-pg",
-  "membership-invite-security", "site-intake", "site-static", "export-public-structure",
+  "membership-invite-security", "site-intake", "site-direct-join", "site-static", "export-public-structure",
+  "referral-direct-join", "instant-shared-invite-pg",
   "referral-capacity-slack", "community-interest-intake", "community-interest-admin",
   "community-interest-local-e2e", "interest-private", "interest-storage-pg",
   "referral-capacity-pg", "real-name-pg", "interest-role-cleanup", "community-membership-store-error-code", "version-map",
@@ -44,12 +45,12 @@ const initdbQa = new Set([
   "referral-storage-pg", "referral-retention-pg", "community-runtime-pg",
   "review-thread-topology-pg", "garden-projection-upgrade-pg",
   "membership-reminder-audit-pg", "community-guide-security-pg", "referral-capacity-pg", "real-name-pg",
-  "interest-retention-runtime-grants-pg", "interest-role-cleanup",
+  "interest-retention-runtime-grants-pg", "interest-role-cleanup", "instant-shared-invite-pg",
 ]);
 const injections = new Set([
-  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-038", "missing-039", "missing-040", "missing-041", "missing-binding",
+  "build-failure", "direct-table-grant", "missing-036", "missing-037", "missing-038", "missing-039", "missing-040", "missing-041", "missing-042", "missing-binding",
   "missing-bootstrap", "missing-interest-admin-credential", "missing-interest-flag",
-  "missing-interest-secret", "missing-role", "missing-secret", "pii-leak", "rollback-mismatch",
+  "missing-interest-secret", "missing-role", "missing-secret", "missing-slack-invite-secret", "pii-leak", "rollback-mismatch",
   "schema-head", "secret-leak", "turnstile-secret-in-vars", "turnstile-secret-leak", "turnstile-test-key",
 ]);
 const rollbackReadbackPath = process.argv.find((arg) => arg.startsWith("--rollback-readback="))?.slice(20);
@@ -63,7 +64,7 @@ const turnstileProductionSiteKey = "0x4AAAAAAE83tTpMHyLr4nIv";
 const productionHostname = "otl1.hyuk.me";
 const sensitiveValues = [fakeSecret, fakePii, ...Object.entries(process.env)
   .filter(([name, value]) => /(?:SECRET|TOKEN|KEY|KEK|PEPPER|DATABASE_URL)/.test(name) && value?.length >= 12)
-  .map(([, value]) => value)];
+  .map(([, value]) => value), ...(process.env.SLACK_SHARED_INVITE_URL ? [process.env.SLACK_SHARED_INVITE_URL] : [])];
 const credentialPattern = /xox[baprs]-[A-Za-z0-9-]{20,}|postgres(?:ql)?:\/\/[^:\s]+:[^@\s]+@[^/\s]+|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/;
 function assertNoLeak(content, checkPatterns = true) {
   if (sensitiveValues.some((value) => content.includes(value)) ||
@@ -184,15 +185,15 @@ async function cleanupDatabases() {
   receipt.checks.localCleanup = { exit: 0, observed: "disposable databases and roles removed" };
 }
 function preflight(config, site, vars, siteWorker, releaseNames = release) {
-  assert.equal(migrations.length, 41, "schema head must be 041");
-  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038", "039", "040", "041"]);
+  assert.equal(migrations.length, 42, "schema head must be 042");
+  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038", "039", "040", "041", "042"]);
   assert.equal(site.services?.find((item) => item.binding === "CORE")?.service, config.name, "CORE service binding missing");
   assert.equal(site.assets?.binding, "ASSETS", "ASSETS binding missing");
   assert.ok(config.r2_buckets?.some((item) => item.binding === "INVITE_PRIVATE_OBJECTS"), "invite R2 binding missing");
   for (const name of ["SITE_CORE_HMAC_SECRET", "INVITE_EMAIL_PEPPER", "INVITE_PRIVATE_KEK",
     "INVITE_PRIVATE_KEK_VERSION", "LIFECYCLE_ADMIN_DATABASE_URL", "REFERRAL_ADMIN_DATABASE_URL",
     "INTEREST_RUNTIME_DATABASE_URL", "INTEREST_ADMIN_DATABASE_URL", "INTEREST_MEMBER_DATABASE_URL",
-    "INTEREST_ADMIN_CHANNEL_ID", "INTEREST_ACTION_SECRET"])
+    "INTEREST_ADMIN_CHANNEL_ID", "INTEREST_ACTION_SECRET", "SLACK_SHARED_INVITE_URL"])
     assert.ok(vars.includes(`${name}=`), `${name} declaration missing`);
   assert.equal(config.vars.LIFECYCLE_MODE, "disabled");
   for (const name of ["REVIEW_THREAD_V2", "GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED", "PUBLIC_INTEREST_ENABLED"])
@@ -203,6 +204,8 @@ function preflight(config, site, vars, siteWorker, releaseNames = release) {
   assert.equal(site.vars.TURNSTILE_SECRET, undefined, "TURNSTILE_SECRET must be a Worker secret, never a public var");
   assert.match(siteWorker, /if \(!env\.TURNSTILE_SECRET \|\| !token \|\| token\.length > 2048\) return "invalid";/, "TURNSTILE_SECRET must fail closed when absent");
   assert.match(siteWorker, /secret: env\.TURNSTILE_SECRET/, "TURNSTILE_SECRET must be sent only to Siteverify");
+  assert.match(siteWorker, /env\.SLACK_SHARED_INVITE_URL/, "shared Slack invite secret binding missing from Site Worker");
+  assert.doesNotMatch(JSON.stringify(site), /SLACK_SHARED_INVITE_URL|join\.slack\.com/, "shared Slack invite must not be a public var");
   assert.equal(config.vars.PUBLIC_APPLICATION_ORIGIN, `https://${productionHostname}`);
   assert.ok(config.r2_buckets?.some((item) => item.binding === "BUG_PRIVATE_OBJECTS"), "private R2 binding missing");
 }
@@ -232,6 +235,7 @@ try {
   const missingInterestAdminCredential = vars.replace("INTEREST_ADMIN_DATABASE_URL=", "");
   await expectFailure("missing-binding", async () => preflight(config, alternate, vars, siteWorker));
   await expectFailure("missing-secret", async () => preflight(config, site, vars.replace("INVITE_PRIVATE_KEK=", ""), siteWorker));
+  await expectFailure("missing-slack-invite-secret", async () => preflight(config, site, vars.replace("SLACK_SHARED_INVITE_URL=", ""), siteWorker));
   await expectFailure("missing-interest-secret", async () => preflight(config, site, vars.replace("INTEREST_RUNTIME_DATABASE_URL=", ""), siteWorker));
   await expectFailure("missing-interest-flag", async () => preflight(missingInterestFlag, site, vars, siteWorker));
   await expectFailure("missing-interest-admin-credential", async () => preflight(config, site, missingInterestAdminCredential, siteWorker));
@@ -241,10 +245,12 @@ try {
   await expectFailure("missing-039", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("039_"))));
   await expectFailure("missing-040", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("040_"))));
   await expectFailure("missing-041", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("041_"))));
+  await expectFailure("missing-042", async () => preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("042_"))));
   await expectFailure("turnstile-test-key", async () => preflight(config, testKeySite, vars, siteWorker));
   await expectFailure("turnstile-secret-in-vars", async () => preflight(config, secretVarSite, vars, siteWorker));
   if (injection === "missing-binding") preflight(config, alternate, vars, siteWorker);
   if (injection === "missing-secret") preflight(config, site, vars.replace("INVITE_PRIVATE_KEK=", ""), siteWorker);
+  if (injection === "missing-slack-invite-secret") preflight(config, site, vars.replace("SLACK_SHARED_INVITE_URL=", ""), siteWorker);
   if (injection === "missing-interest-secret") preflight(config, site, vars.replace("INTEREST_RUNTIME_DATABASE_URL=", ""), siteWorker);
   if (injection === "missing-interest-flag") preflight(missingInterestFlag, site, vars, siteWorker);
   if (injection === "missing-interest-admin-credential") preflight(config, site, missingInterestAdminCredential, siteWorker);
@@ -254,6 +260,7 @@ try {
   if (injection === "missing-039") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("039_")));
   if (injection === "missing-040") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("040_")));
   if (injection === "missing-041") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("041_")));
+  if (injection === "missing-042") preflight(config, site, vars, siteWorker, release.filter((name) => !name.startsWith("042_")));
   if (injection === "turnstile-test-key") preflight(config, testKeySite, vars, siteWorker);
   if (injection === "turnstile-secret-in-vars") preflight(config, secretVarSite, vars, siteWorker);
   preflight(config, site, vars, siteWorker);
@@ -265,8 +272,8 @@ try {
       "INVITE_EMAIL_PEPPER", "INVITE_PRIVATE_KEK", "INVITE_PRIVATE_KEK_VERSION",
       "REFERRAL_TOKEN_SECRET", "LIFECYCLE_ACTION_SECRET", "LIFECYCLE_ADMIN_DATABASE_URL",
       "REFERRAL_ADMIN_DATABASE_URL", "INTEREST_RUNTIME_DATABASE_URL", "INTEREST_ADMIN_DATABASE_URL",
-      "INTEREST_MEMBER_DATABASE_URL", "INTEREST_ADMIN_CHANNEL_ID", "INTEREST_ACTION_SECRET"],
-    siteSecrets: ["TURNSTILE_SECRET", "SITE_CORE_HMAC_SECRET"],
+      "INTEREST_MEMBER_DATABASE_URL", "INTEREST_ADMIN_CHANNEL_ID", "INTEREST_ACTION_SECRET", "SLACK_SHARED_INVITE_URL"],
+    siteSecrets: ["TURNSTILE_SECRET", "SITE_CORE_HMAC_SECRET", "SLACK_SHARED_INVITE_URL"],
     operatorOnlySecrets: ["GUIDE_ADMIN_DATABASE_URL"],
     slackScopes: ["im:write", "users:read.email"], slackEvents: ["team_join"],
     domain: productionHostname, turnstileProductionSiteKey, turnstileSecret: "required by name before enablement",
@@ -308,12 +315,12 @@ try {
   await check("snapshot-035", join(pgBin, "pg_dump"), ["-Fc", "--no-owner", "--no-acl", "-f", join(temp, "snapshot.dump"), primaryDb], { env: pgEnv });
   await apply(primaryDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
   if (injection === "schema-head")
-    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='041-interest-retention-runtime-grants'"]);
-  await assertSchemaHead(primaryDb, "041-interest-retention-runtime-grants");
-  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-9]|4[01])-'"), "13");
+    await psql(primaryDb, ["-c", "DELETE FROM otl.schema_migrations WHERE version='042-instant-shared-invite-join'"]);
+  await assertSchemaHead(primaryDb, "042-instant-shared-invite-join");
+  assert.equal(await scalar(primaryDb, "SELECT count(*) FROM otl.schema_migrations WHERE version ~ '^0(29|3[0-9]|4[0-2])-'"), "14");
   const after = await digest(primaryDb);
   assert.deepEqual(after, before, "protected rows changed during upgrade");
-  receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "041", protected: before };
+  receipt.checks.upgrade = { exit: 0, fromHead: "035", schemaHead: "042", protected: before };
   if (injection === "missing-role")
     await psql(primaryDb, ["-c", "REVOKE otl_interest_member FROM otl_interest_member_login"]);
   await expectFailure("migration-conflict", () => psql(primaryDb, ["-f", "migrations/037_interest_requests.sql"]));
@@ -360,18 +367,19 @@ try {
   assert.equal(await scalar(rollbackDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '036-%'"), "0");
   await psql(rollbackDb, ["-c", "DROP TABLE otl.referral_capacity_defaults"]);
   await apply(rollbackDb, release.filter((name) => Number(name.slice(0, 3)) >= 36));
-  await assertSchemaHead(rollbackDb, "041-interest-retention-runtime-grants");
+  await assertSchemaHead(rollbackDb, "042-instant-shared-invite-join");
   assert.deepEqual(await digest(rollbackDb), before, "forward repair changed protected rows");
   assert.deepEqual(await seedAdditive(rollbackDb), additiveBefore, "forward repair changed additive row contract");
-  receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "041" };
+  receipt.checks.rollbackForwardRepair = { exit: 0, restoredHead: "035", repairedHead: "042" };
   await apply(freshDb, migrations);
-  await assertSchemaHead(freshDb, "041-interest-retention-runtime-grants");
+  await assertSchemaHead(freshDb, "042-instant-shared-invite-join");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '037-%'"), "1");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '038-%'"), "1");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '039-%'"), "1");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '040-%'"), "1");
   assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '041-%'"), "1");
-  receipt.checks.freshInstall = { exit: 0, schemaHead: "041" };
+  assert.equal(await scalar(freshDb, "SELECT count(*) FROM otl.schema_migrations WHERE version LIKE '042-%'"), "1");
+  receipt.checks.freshInstall = { exit: 0, schemaHead: "042" };
   await cleanupDatabases();
   await check("full-check", "bun", ["run", "check"]);
   if (injection === "build-failure") await check("site-build", "bunx", ["wrangler", "deploy", "--dry-run", "-c", "missing-site-config.jsonc"]);
@@ -384,10 +392,10 @@ try {
   const exportDir = join(temp, "public");
   await check("public-export", "node", ["scripts/export-public.mjs", exportDir]);
   for (const name of ["migrations/036_referral_capacity.sql", "migrations/037_interest_requests.sql",
-    "migrations/038_interest_retention_due.sql", "migrations/039_bot_owned_welcome_guide.sql", "migrations/040_real_name_introductions.sql", "migrations/041_interest_retention_runtime_grants.sql", "qa/real-name-pg.mjs", "qa/interest-retention-runtime-grants-pg.mjs", "qa/real-name-storage.sql", "scripts/bootstrap-referral-admin-db-role.mjs", "site/dist/interest.html", "site/dist/receipt.html",
+    "migrations/038_interest_retention_due.sql", "migrations/039_bot_owned_welcome_guide.sql", "migrations/040_real_name_introductions.sql", "migrations/041_interest_retention_runtime_grants.sql", "migrations/042_instant_shared_invite_join.sql", "qa/real-name-pg.mjs", "qa/interest-retention-runtime-grants-pg.mjs", "qa/real-name-storage.sql", "scripts/bootstrap-referral-admin-db-role.mjs", "site/dist/interest.html", "site/dist/receipt.html",
     "site/dist/assets/otl1-emoji/blob_smiley.png"])
     assert.ok((await readFile(join(exportDir, name))).length > 0, `${name} missing from public export`);
-  receipt.checks.publicRequiredFiles = { exit: 0, observed: "036–041,real-name and retention-role QA,bootstrap,interest,receipt,emoji present" };
+  receipt.checks.publicRequiredFiles = { exit: 0, observed: "036–042,real-name and retention-role QA,bootstrap,interest,receipt,emoji present" };
   receipt.checks.publicLeakScan = { exit: 0, scannedFiles: await scanPublicExport(exportDir) };
   await check("public-check", "bun", ["run", "check"], { cwd: exportDir });
   await check("public-site-build", join(exportDir, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "-c", "site/wrangler.jsonc"], { cwd: exportDir });
@@ -404,7 +412,8 @@ try {
   try { await cleanupDatabases(); }
   catch {
     receipt.status = "failed";
-    receipt.failure = "local PostgreSQL cleanup failed";
+    if (!receipt.failure) receipt.failure = "local PostgreSQL cleanup failed";
+    else receipt.cleanupFailure = "local PostgreSQL cleanup failed";
     process.exitCode = 1;
   }
   if (temp) await rm(temp, { recursive: true, force: true });

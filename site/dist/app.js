@@ -226,6 +226,6 @@ if (applicationForm instanceof HTMLFormElement) {
     const submit = applicationForm.querySelector("[data-submit]");
     const status = applicationForm.querySelector("[data-form-status]");
     if (submit instanceof HTMLButtonElement) submit.disabled = true;
-    if (status instanceof HTMLElement) status.textContent = "신청을 안전하게 보내고 있어요.";
+    if (status instanceof HTMLElement) status.textContent = "확인했습니다. Slack을 열고 있어요.";
   });
 }

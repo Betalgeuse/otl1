@@ -53,7 +53,7 @@ const core = {
     if (body.includes("outage@example.com")) throw new Error("core outage");
     if (body.includes("paused@example.com")) return Response.json({ error: "unavailable" }, { status: 503 });
     if (new URL(request.url).pathname.endsWith("withdraw")) return Response.json({ receiptId, state: "withdrawn" }, { status: 202 });
-    return Response.json({ receiptId, withdrawalToken: "A".repeat(43) }, { status: 202 });
+    return Response.json({ accepted: true }, { status: 202 });
   },
 };
 
@@ -65,6 +65,7 @@ const env = {
   TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
   TURNSTILE_SECRET: turnstileSecret,
   SITE_CORE_HMAC_SECRET: hmacSecret,
+  SLACK_SHARED_INVITE_URL: "https://join.slack.com/t/otl1/shared_invite/zt-synthetic-site-intake",
 };
 
 const originalFetch = globalThis.fetch;
@@ -102,8 +103,6 @@ const call = (path, init = {}) => siteWorker.fetch(new Request(`https://otl1.hyu
 const form = (overrides = {}) => {
   const value = new FormData();
   value.set("email", "  PERSON@Example.COM ");
-  value.set("displayName", "  소개받은 사람  ");
-  value.set("intent", "  오늘 한 가지를 꾸준히 끝내고 싶어요.  ");
   value.set("consent", "invite-consent-v1");
   value.set("submissionKey", "submission-browser-123456");
   value.set("cf-turnstile-response", "XXXX.DUMMY.TOKEN.XXXX");
@@ -139,39 +138,18 @@ try {
 
   const valid = await call(`/r/${referralToken}/apply`, { method: "POST", body: form() });
   assert.equal(valid.status, 303);
-  assert.equal(valid.headers.get("location"), `/receipt/${receiptId}`);
-  assert.match(valid.headers.get("set-cookie") ?? "", /otl1_withdraw=/);
-  assert.match(valid.headers.get("set-cookie") ?? "", /HttpOnly/);
-  assert.match(valid.headers.get("set-cookie") ?? "", /SameSite=Strict/);
-  const applies = coreBodies.filter((entry) => entry.path === "/internal/referrals/apply");
-  assert.equal(applies.length, 1);
-  const submitted = JSON.parse(applies[0].body);
+  assert.equal(valid.headers.get("location"), "https://join.slack.com/t/otl1/shared_invite/zt-synthetic-site-intake");
+  assert.equal(valid.headers.get("set-cookie"), null);
+  const directStarts = coreBodies.filter((entry) => entry.path === "/internal/referrals/direct-join");
+  assert.equal(directStarts.length, 1);
+  const submitted = JSON.parse(directStarts[0].body);
   assert.deepEqual(
-    { email: submitted.email, displayName: submitted.displayName, intent: submitted.intent, consentVersion: submitted.consentVersion },
-    { email: "person@example.com", displayName: "소개받은 사람", intent: "오늘 한 가지를 꾸준히 끝내고 싶어요.", consentVersion: "invite-consent-v1" },
+    { email: submitted.email, consentVersion: submitted.consentVersion },
+    { email: "person@example.com", consentVersion: "invite-consent-v1" },
   );
-  assert.match(applies[0].headers["x-otl-signature"], /^[0-9a-f]{64}$/);
-
-  const receipt = await call(`/receipt/${receiptId}`);
-  assert.equal(receipt.status, 200);
-  assert.match(await receipt.text(), new RegExp(receiptId));
-
-  const withdraw = await call(`/receipt/${receiptId}/withdraw`, {
-    method: "POST",
-    headers: { cookie: valid.headers.get("set-cookie").split(";")[0] },
-    body: new URLSearchParams({ withdrawalKey: "withdraw-browser-123456" }),
-  });
-  assert.equal(withdraw.status, 303);
-  assert.equal(coreBodies.at(-1).path, "/internal/referrals/withdraw");
-  assert.equal(JSON.parse(coreBodies.at(-1).body).receiptId, receiptId);
-
-  const [first, second] = await Promise.all([
-    call(`/r/${referralToken}/apply`, { method: "POST", body: form() }),
-    call(`/r/${referralToken}/apply`, { method: "POST", body: form() }),
-  ]);
-  assert.equal(first.headers.get("location"), second.headers.get("location"));
-  assert.equal(coreBodies.filter((entry) => entry.path.endsWith("apply")).length, 3);
-  assert.equal(new Set(coreBodies.filter((entry) => entry.path.endsWith("apply")).slice(-2).map((entry) => JSON.parse(entry.body).submissionKey)).size, 1);
+  assert.equal("displayName" in submitted, false);
+  assert.equal("intent" in submitted, false);
+  assert.match(directStarts[0].headers["x-otl-signature"], /^[0-9a-f]{64}$/);
 
   const genericBodies = [];
   for (const email of ["paused@example.com", "outage@example.com"]) {
@@ -182,7 +160,8 @@ try {
   assert.equal(new Set(genericBodies).size, 1);
   assert.doesNotMatch(genericBodies[0], /paused|outage|example\.com|referral/i);
 
-  const applyCountBeforeTurnstile = coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length;
+  const countDirectStarts = () => coreBodies.filter((entry) => entry.path === "/internal/referrals/direct-join").length;
+  const startCountBeforeTurnstile = countDirectStarts();
   const expiredTurnstile = await call(`/r/${referralToken}/apply`, {
     method: "POST",
     body: form({ "cf-turnstile-response": "synthetic-expired-token", submissionKey: "expired-turnstile-key-1234" }),
@@ -191,7 +170,7 @@ try {
   const expiredFeedback = await expiredTurnstile.text();
   assert.match(expiredFeedback, /요청을 지금 처리할 수 없어요/);
   assert.doesNotMatch(expiredFeedback, /synthetic-expired-token|person@example.com/);
-  assert.equal(coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length, applyCountBeforeTurnstile);
+  assert.equal(countDirectStarts(), startCountBeforeTurnstile);
 
   const oneTimeToken = "synthetic-one-time-token";
   const firstTokenUse = await call(`/r/${referralToken}/apply`, {
@@ -199,8 +178,8 @@ try {
     body: form({ "cf-turnstile-response": oneTimeToken, submissionKey: "turnstile-first-use-1234" }),
   });
   assert.equal(firstTokenUse.status, 303);
-  const applyCountAfterFirstUse = coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length;
-  assert.equal(applyCountAfterFirstUse, applyCountBeforeTurnstile + 1);
+  const startCountAfterFirstUse = countDirectStarts();
+  assert.equal(startCountAfterFirstUse, startCountBeforeTurnstile + 1);
   const reusedTurnstile = await call(`/r/${referralToken}/apply`, {
     method: "POST",
     body: form({ "cf-turnstile-response": oneTimeToken, submissionKey: "turnstile-reused-1234" }),
@@ -208,32 +187,24 @@ try {
   assert.equal(reusedTurnstile.status, 422);
   const reusedFeedback = await reusedTurnstile.text();
   assert.equal(reusedFeedback, expiredFeedback);
-  assert.equal(coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length, applyCountAfterFirstUse);
+  assert.equal(countDirectStarts(), startCountAfterFirstUse);
   assert.deepEqual(siteverifyTrace, [
     { scenario: "expired", response: { success: false, "error-codes": ["timeout-or-duplicate"] } },
     { scenario: "first-use", response: { success: true, hostname: "example.com" } },
     { scenario: "reused", response: { success: false, "error-codes": ["timeout-or-duplicate"] } },
   ]);
-  console.log(`SITEVERIFY_NEGATIVE_OBSERVABLES=${JSON.stringify({ expiredStatus: expiredTurnstile.status, firstUseStatus: firstTokenUse.status, reusedStatus: reusedTurnstile.status, safeFeedback: expiredFeedback === reusedFeedback && expiredFeedback.includes("요청을 지금 처리할 수 없어요"), coreApplyDelta: applyCountAfterFirstUse - applyCountBeforeTurnstile, rejectedCoreApplyDelta: coreBodies.filter((entry) => entry.path === "/internal/referrals/apply").length - applyCountAfterFirstUse, trace: siteverifyTrace })}`);
+  console.log(`SITEVERIFY_NEGATIVE_OBSERVABLES=${JSON.stringify({ expiredStatus: expiredTurnstile.status, firstUseStatus: firstTokenUse.status, reusedStatus: reusedTurnstile.status, safeFeedback: expiredFeedback === reusedFeedback && expiredFeedback.includes("요청을 지금 처리할 수 없어요"), coreStartDelta: startCountAfterFirstUse - startCountBeforeTurnstile, rejectedCoreStartDelta: countDirectStarts() - startCountAfterFirstUse, trace: siteverifyTrace })}`);
 
   verifyMode = "invalid";
-  const invalidTurnstile = await call(`/r/${referralToken}/apply`, { method: "POST", body: form() });
-  assert.equal(invalidTurnstile.status, 422);
+  assert.equal((await call(`/r/${referralToken}/apply`, { method: "POST", body: form() })).status, 422);
   verifyMode = "timeout";
-  const timeoutTurnstile = await call(`/r/${referralToken}/apply`, { method: "POST", body: form() });
-  assert.equal(timeoutTurnstile.status, 503);
+  assert.equal((await call(`/r/${referralToken}/apply`, { method: "POST", body: form() })).status, 503);
   verifyMode = "ok";
 
-  for (const invalid of [
-    { consent: "" },
-    { email: "not-an-email" },
-    { displayName: "가".repeat(81) },
-    { displayName: "bad\ud800name" },
-    { intent: "나".repeat(1001) },
-  ]) {
+  for (const invalid of [{ consent: "" }, { email: "not-an-email" }]) {
     const response = await call(`/r/${referralToken}/apply`, { method: "POST", body: form(invalid) });
     assert.equal(response.status, 422);
-    assert.doesNotMatch(await response.text(), /not-an-email|bad|가가가/);
+    assert.doesNotMatch(await response.text(), /not-an-email/);
   }
 
   rateLimitSuccess = false;
@@ -242,8 +213,8 @@ try {
   rateLimitSuccess = true;
 
   const canonicalBody = JSON.stringify({ ok: true });
-  const signed = await createSiteCoreSignature("POST", "/internal/referrals/apply", canonicalBody, 1_700_000_000, "nonce-browser-123456");
-  const expected = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/apply", body: canonicalBody, timestamp: 1_700_000_000, nonce: "nonce-browser-123456" }, hmacSecret);
+  const signed = await createSiteCoreSignature("POST", "/internal/referrals/direct-join", canonicalBody, 1_700_000_000, "nonce-browser-123456");
+  const expected = await signReferralServiceRequest({ method: "POST", path: "/internal/referrals/direct-join", body: canonicalBody, timestamp: 1_700_000_000, nonce: "nonce-browser-123456" }, hmacSecret);
   assert.equal(await signed(hmacSecret), expected);
 } finally {
   globalThis.fetch = originalFetch;
@@ -327,4 +298,4 @@ assert.equal(coreStore.withdrawals, 1);
 const changedKey = JSON.stringify({ ...JSON.parse(withdrawalBody), withdrawalKey: "core-withdraw-key-other" });
 assert.equal((await signedCore("/internal/referrals/withdraw", changedKey, "nonce-core-withdraw-3")).status, 404);
 
-console.log("PASS site intake: opaque referral, normalized private fields, Turnstile gate, signed CORE binding, generic failures, rate limit, idempotent receipt, and one-time withdrawal");
+console.log("PASS site intake: direct Slack join, normalized email, Turnstile gate, signed CORE binding, generic failures, rate limit, and historical one-time withdrawal");

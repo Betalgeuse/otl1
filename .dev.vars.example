@@ -25,6 +25,8 @@ COMMUNITY_ADMIN_ID=
 
 # Invite/lifecycle secrets: create separately in the Core Worker before enabling rollout flags.
 SITE_CORE_HMAC_SECRET=
+# Site Worker only: official https://join.slack.com/t/<workspace>/shared_invite/<token> URL.
+SLACK_SHARED_INVITE_URL=
 INVITE_EMAIL_PEPPER=
 INVITE_PRIVATE_KEK=
 INVITE_PRIVATE_KEK_VERSION=

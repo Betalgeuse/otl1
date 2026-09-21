@@ -136,3 +136,7 @@ cd /tmp/otl1-public-review && bun run check
 대상 날짜는 메시지 맨 앞의 날짜 헤더나 기록 대상 표현에서만 결정합니다. 본문 속 교재 장 번호, 시각, URL, 버전, 백분율과 이유에 포함된 과거 표현은 목표·후기 내용으로 유지합니다. 다른 날짜의 기록 변경과 여러 대상 날짜는 기존 확인·거절 경계를 유지합니다.
 
 `bun qa/community-target-date.mjs`는 순수 판별과 Qwen 호출 경계를, `bun qa/community-target-date-routing.mjs`는 서명된 합성 Slack 이벤트의 저장·부분 후기·재전송 멱등성을 검사합니다. 두 검사는 실제 Slack이나 Neon을 호출하지 않습니다.
+
+## 즉시 Slack 참여 로컬 검증
+
+`SLACK_SHARED_INVITE_URL`은 Site Worker secret 이름으로만 선언하고 값은 저장소에 기록하지 않습니다. 로컬 QA는 합성 `join.slack.com` URL과 fake Core를 사용하며 외부 Slack으로 이동하거나 가입을 만들지 않습니다. migration 042, `qa/referral-direct-join.mjs`, `qa/site-direct-join.mjs`, `qa/instant-shared-invite-pg.mjs`와 release rehearsal이 모두 통과한 뒤에도 운영 migration·secret 설치·플래그 활성화·실제 `team_join` 관찰은 별도 단계입니다. 공유 링크는 방문자에게 최종 노출될 수 있으므로 유출 시 두 referral flag를 닫고 Slack에서 링크를 회수·교체합니다.

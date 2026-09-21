@@ -60,6 +60,7 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/039_bot_owned_welcome_guide.sql",
   "migrations/040_real_name_introductions.sql",
   "migrations/041_interest_retention_runtime_grants.sql",
+  "migrations/042_instant_shared_invite_join.sql",
 ];
 
 // `src` and `site` are copied as directories, but these paths keep the membership
@@ -180,6 +181,8 @@ export const PUBLIC_QA_NAMES = [
   "referral-capacity-pg.mjs",
   "referral-capacity-slack.mjs",
   "referral-empty-queue-null.mjs",
+  "referral-direct-join.mjs",
+  "instant-shared-invite-pg.mjs",
   "community-interest-intake.mjs",
   "community-interest-admin.mjs",
   "community-interest-local-e2e.mjs",
@@ -190,6 +193,7 @@ export const PUBLIC_QA_NAMES = [
   "membership-invite-security.mjs",
   "review-thread-topology-pg.mjs",
   "site-intake.mjs",
+  "site-direct-join.mjs",
   "dormant-shoutout.mjs",
   "docs-links.mjs",
   "version-map.mjs",

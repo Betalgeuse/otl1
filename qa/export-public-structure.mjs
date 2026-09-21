@@ -34,6 +34,7 @@ assert.deepEqual(PUBLIC_RUNTIME_MIGRATION_PATHS, [
   "migrations/039_bot_owned_welcome_guide.sql",
   "migrations/040_real_name_introductions.sql",
   "migrations/041_interest_retention_runtime_grants.sql",
+  "migrations/042_instant_shared_invite_join.sql",
 ]);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-lifecycle-admin-db-role.mjs"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-referral-admin-db-role.mjs"), true);
@@ -44,6 +45,9 @@ assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("site/qa/interest-check.mjs
 assert.equal(PUBLIC_MEMBERSHIP_SOURCE_PATHS.includes("src/community-interest-intake.ts"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("referral-capacity-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("referral-empty-queue-null.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("referral-direct-join.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("instant-shared-invite-pg.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("site-direct-join.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("interest-storage-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("interest-dead-alert.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("real-name-pg.mjs"), true);
@@ -105,6 +109,7 @@ assert.equal(PUBLIC_QA_NAMES.includes("community-guide-security-pg.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("version-map.mjs"), true);
 assert.throws(() => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPORT_SOURCES, (path) => path !== "migrations/040_real_name_introductions.sql"), /Missing required public export source: migrations\/040_real_name_introductions\.sql/);
 assert.throws(() => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPORT_SOURCES, (path) => path !== "migrations/041_interest_retention_runtime_grants.sql"), /Missing required public export source: migrations\/041_interest_retention_runtime_grants\.sql/);
+assert.throws(() => assertRequiredPublicExportSources(PUBLIC_REQUIRED_EXPORT_SOURCES, (path) => path !== "migrations/042_instant_shared_invite_join.sql"), /Missing required public export source: migrations\/042_instant_shared_invite_join\.sql/);
 assert.equal(PUBLIC_DOC_NAMES.includes("GUIDE_DATABASE_SECURITY.md"), true);
 assert.throws(() => assertPublicExportPaths(["site/dist/index.html", "site/dist/app.js", "src/index.ts"]));
 assert.throws(() => assertPublicExportPaths(["site/dist/index.html", "site/dist/app.js", "site/dist/styles.css", "src/index.ts", ".github/workflows/publish.yml"]));

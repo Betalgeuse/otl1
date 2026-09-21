@@ -83,7 +83,12 @@ try {
       sql(`SELECT otl.referral_direct_join('${JSON.stringify(direct(n))}'::jsonb)`),
     ),
   );
-  assert.equal(race.map((value) => JSON.parse(value).accepted).filter(Boolean).length, 2);
+  const acceptedNumbers = race
+    .map((value, index) => ({ result: JSON.parse(value), number: index + 1 }))
+    .filter((entry) => entry.result.accepted)
+    .map((entry) => entry.number);
+  assert.equal(acceptedNumbers.length, 2);
+  const replayNumber = acceptedNumbers[0];
   assert.equal(
     await sql(
       "SELECT count(*) FROM otl.referral_requests WHERE admission_mode='shared_invite' AND state='approved'",
@@ -91,7 +96,7 @@ try {
     "2",
   );
   const replayInput = {
-    ...direct(1),
+    ...direct(replayNumber),
     requestId: "REQ-DIRECT42REPLAY",
     receiptId: "RCP-DIRECT42REPLAY",
     withdrawalDigest: "c".repeat(64),
@@ -101,7 +106,7 @@ try {
     await sql(`SELECT otl.referral_direct_join('${JSON.stringify(replayInput)}'::jsonb)`),
   );
   assert.equal(replay.accepted, true);
-  assert.equal(replay.requestId, "REQ-DIRECT421");
+  assert.equal(replay.requestId, `REQ-DIRECT42${replayNumber}`);
   assert.equal(
     await sql("SELECT count(*) FROM otl.referral_requests WHERE admission_mode='shared_invite'"),
     "2",
@@ -113,7 +118,7 @@ try {
   );
   assert.equal(await sql("SELECT count(*) FROM otl.referral_decisions"), "0");
   assert.equal(await sql("SELECT count(*) FROM otl.referral_manual_invite_assertions"), "0");
-  const first = direct(1);
+  const first = direct(replayNumber);
   const matched = JSON.parse(
     await sql(
       `SELECT otl.referral_attribute_join('${JSON.stringify({ teamId: "TREF", userId: "UJOINED", emailDigest: first.emailDigest, eventId: "EvDirect42", now: "2026-09-21T02:00:00Z" })}'::jsonb)`,

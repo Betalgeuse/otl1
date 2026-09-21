@@ -5,11 +5,12 @@ interface SiteEnv {
   readonly TURNSTILE_SITE_KEY: string;
   readonly TURNSTILE_SECRET?: string;
   readonly SITE_CORE_HMAC_SECRET?: string;
+  readonly SLACK_SHARED_INVITE_URL?: string;
   readonly PUBLIC_INTEREST_ENABLED?: string;
 }
 
 type TurnstileResult = { readonly success?: boolean; readonly action?: string; readonly hostname?: string };
-const APPLY_PATH = "/internal/referrals/apply";
+const DIRECT_JOIN_PATH = "/internal/referrals/direct-join";
 const WITHDRAW_PATH = "/internal/referrals/withdraw";
 const RESOLVE_PATH = "/internal/referrals/resolve";
 const INTEREST_SUBMIT_PATH = "/internal/interest/submit";
@@ -178,7 +179,7 @@ async function availableLink(env: SiteEnv, token: string): Promise<{ readonly av
   } catch (error) { if (error instanceof Error) return { available: false, inviterName: null }; throw error; }
 }
 
-async function apply(request: Request, env: SiteEnv, token: string): Promise<Response> {
+async function directJoin(request: Request, env: SiteEnv, token: string): Promise<Response> {
   const applicantIp = request.headers.get("cf-connecting-ip") ?? "unknown";
   if (!(await env.RATE_LIMITER.limit({ key: `apply:${applicantIp}` })).success) return message(GENERIC_ERROR, 429);
   if (!(await availableLink(env, token)).available) return message(GENERIC_ERROR, 404);
@@ -190,28 +191,38 @@ async function apply(request: Request, env: SiteEnv, token: string): Promise<Res
     form = parsed;
   } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 422); throw error; }
   const email = safeText(form.get("email"), 320)?.toLowerCase() ?? null;
-  const displayName = safeText(form.get("displayName"), 80);
-  const intent = safeText(form.get("intent"), 1000);
   const submissionKey = safeText(form.get("submissionKey"), 120);
-  const fieldsValid = Boolean(email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && displayName && intent && submissionKey && submissionKey.length >= 8 && form.get("consent") === "invite-consent-v1");
-  if (!fieldsValid) {
-    console.warn(JSON.stringify({ event: "invite_fields_rejected", email: Boolean(email), displayName: Boolean(displayName), intent: Boolean(intent), submissionKey: Boolean(submissionKey), consent: form.get("consent") === "invite-consent-v1" }));
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !submissionKey || submissionKey.length < 8 || form.get("consent") !== "invite-consent-v1")
     return message(GENERIC_ERROR, 422);
-  }
   const turnstile = await verifyTurnstile(request, env, String(form.get("cf-turnstile-response") ?? ""));
   if (turnstile !== "valid") return message(GENERIC_ERROR, turnstile === "invalid" ? 422 : 503);
+  const slackInvite = sharedInviteUrl(env.SLACK_SHARED_INVITE_URL);
+  if (!slackInvite) return message(GENERIC_ERROR, 503);
   try {
-    const response = await coreRequest(env, APPLY_PATH, { referralToken: token, submissionKey, consentVersion: "invite-consent-v1", consentedAt: new Date().toISOString(), email, displayName, intent });
+    const response = await coreRequest(env, DIRECT_JOIN_PATH, {
+      referralToken: token,
+      submissionKey,
+      consentVersion: "invite-consent-v1",
+      consentedAt: new Date().toISOString(),
+      email,
+    });
     if (response.status !== 202) return message(GENERIC_ERROR, 503);
-    const result = await response.json<{ receiptId?: string; withdrawalToken?: string }>();
-    if (!result.receiptId || !/^RCP-[A-Z0-9-]{4,64}$/.test(result.receiptId)) return message(GENERIC_ERROR, 503);
-    const headers = new Headers({ location: `/receipt/${result.receiptId}` });
-    if (result.withdrawalToken && env.SITE_CORE_HMAC_SECRET) {
-      const sealed = await sealCapability(env.SITE_CORE_HMAC_SECRET, result.receiptId, result.withdrawalToken);
-      headers.append("set-cookie", `otl1_withdraw=${sealed}; Path=/receipt/${result.receiptId}; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`);
-    }
-    return new Response(null, { status: 303, headers });
+    const result: unknown = await response.json();
+    if (typeof result !== "object" || result === null || !("accepted" in result) || result.accepted !== true)
+      return message(GENERIC_ERROR, 503);
+    return new Response(null, { status: 303, headers: { location: slackInvite } });
   } catch (error) { if (error instanceof Error) return message(GENERIC_ERROR, 503); throw error; }
+}
+
+function sharedInviteUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.host !== "join.slack.com" || url.username || url.password || url.search || url.hash)
+      return null;
+    if (!/^\/t\/[A-Za-z0-9_-]+\/shared_invite\/[A-Za-z0-9_-]+$/.test(url.pathname)) return null;
+    return url.href;
+  } catch (error) { if (error instanceof TypeError) return null; throw error; }
 }
 
 function interestEnabled(env: SiteEnv): boolean {
@@ -313,7 +324,7 @@ const siteWorker = {
     else if (request.method === "GET" && url.pathname === "/interest") response = await interestPage(request, env);
     else if (request.method === "POST" && url.pathname === "/interest") response = await submitInterest(request, env);
     else if (request.method === "GET" && referral) response = await referralPage(request, env, referral[1]);
-    else if (request.method === "POST" && applyRoute) response = await apply(request, env, applyRoute[1]);
+    else if (request.method === "POST" && applyRoute) response = await directJoin(request, env, applyRoute[1]);
     else if (request.method === "GET" && interestReceipt) {
       const html = await assetHtml(env, request, "receipt.html");
       const sealed = request.headers.get("cookie")?.match(/(?:^|;\s*)otl1_interest_withdraw=([^;]+)/)?.[1];

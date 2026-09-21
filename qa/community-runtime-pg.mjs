@@ -180,7 +180,7 @@ try {
   await run(join(pgBin, "initdb"), ["-D", data, "--no-locale", "--encoding=UTF8", "--auth=trust"]);
   await run(join(pgBin, "pg_ctl"), ["-D", data, "-o", `-F -k ${socket} -p ${port}`, "-l", join(temp, "postgres.log"), "-w", "start"]);
   started = true;
-  for (const migration of migrations.filter((name) => Number(name.slice(0, 3)) <= 38)) {
+  for (const migration of migrations.filter((name) => Number(name.slice(0, 3)) <= 42)) {
     if (migration.startsWith("006_"))
       await run(join(pgBin, "psql"), ["-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", `migrations/${migration}`, "-f", "migrations/007_normalized_legacy.sql"]);
     else if (!migration.startsWith("007_"))

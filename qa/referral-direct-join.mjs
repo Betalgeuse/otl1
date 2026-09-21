@@ -59,6 +59,8 @@ assert.equal(starts.length, 1);
 assert.equal(starts[0].emailDigest.length, 64);
 assert.equal("email" in starts[0], false);
 assert.equal("privateRef" in starts[0], false);
+assert.equal((await directRequest("direct-join-nonce-001")).status, 401);
+assert.equal(starts.length, 1);
 
 const malformed = await directRequest(
   "direct-join-nonce-002",

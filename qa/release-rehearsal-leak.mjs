@@ -29,6 +29,14 @@ try {
   assert.equal(interestReceipt.checks["missing-binding"].observed, "rejected");
   assert.equal(interestReceipt.checks.localCleanup, undefined);
 
+  const sharedInvite = spawnSync(process.execPath, [
+    "scripts/rehearse-membership-site-release.mjs", "--inject=missing-slack-invite-secret", `--receipt=${path}`,
+  ], { cwd: root, encoding: "utf8", timeout: 10_000 });
+  const sharedInviteReceipt = JSON.parse(readFileSync(path, "utf8"));
+  assert.equal(sharedInvite.status, 1);
+  assert.equal(sharedInviteReceipt.failure, "SLACK_SHARED_INVITE_URL declaration missing");
+  assert.equal(sharedInviteReceipt.checks["missing-slack-invite-secret"].observed, "rejected");
+
   const due = spawnSync(process.execPath, [
     "scripts/rehearse-membership-site-release.mjs", "--inject=missing-038", `--receipt=${path}`,
   ], { cwd: root, encoding: "utf8", timeout: 10_000 });

@@ -170,3 +170,6 @@ main > section { scroll-margin-top:82px; }
   .brand-lockup { font-size:1.96rem; }
   .wordmark span { font-size:var(--type-11); }
 }
+.slack-join-button{display:inline-flex;align-items:center;justify-content:center;gap:.65rem}.slack-mark{flex:0 0 auto}
+
+.phrase-nowrap{white-space:nowrap}

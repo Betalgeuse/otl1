@@ -22,6 +22,7 @@ function evaluate(expression) {
 
 browser("open", `${origin}/r/${"A".repeat(32)}`);
 browser("wait", "#home-title");
+browser("wait", "5000");
 const results = [];
 for (const width of [320, 375, 1440]) {
   browser("set", "viewport", String(width), "900");
@@ -29,8 +30,9 @@ for (const width of [320, 375, 1440]) {
   browser("eval", "scrollTo({top:0,behavior:'instant'})");
   browser("eval", "new Promise(resolve=>setTimeout(resolve,120))");
   browser("wait", "#home-title");
+  browser("wait", "5000");
   const page = evaluate(
-    `(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,title:document.querySelector('#home-title')?.textContent?.trim(),byline:document.querySelector('.inviter-byline')?.textContent?.trim(),stages:document.querySelectorAll('[data-reaction-stage]').length,threads:document.querySelectorAll('.daily-thread').length,rows:document.querySelectorAll('[data-daily-row]').length,collective:new URL(document.querySelector('.collective-board img').src).pathname,consent:document.querySelector('input[name="consent"]')?.value,visibleConsent:document.querySelector('.consent')?.textContent?.includes('invite-consent-v1')}))()`,
+    `(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,title:document.querySelector('#home-title')?.textContent?.trim(),byline:document.querySelector('.inviter-byline')?.textContent?.trim(),stages:document.querySelectorAll('[data-reaction-stage]').length,threads:document.querySelectorAll('.daily-thread').length,rows:document.querySelectorAll('[data-daily-row]').length,collective:new URL(document.querySelector('[data-daily-garden-cell]').src).pathname,consent:document.querySelector('input[name="consent"]')?.value,visibleConsent:document.querySelector('.consent')?.textContent?.includes('invite-consent-v1'),displayName:document.querySelector('input[name="displayName"]')!==null,intent:document.querySelector('textarea[name="intent"]')!==null,joinLabel:document.querySelector('[data-submit]')?.textContent?.trim(),slackMark:document.querySelector('.slack-mark')?.getAttribute('aria-hidden'),turnstile:(()=>{const container=document.querySelector('.cf-turnstile');const response=container?.querySelector('input[name=\"cf-turnstile-response\"]');return {initialized:typeof turnstile==='object',hasResponse:response instanceof HTMLInputElement&&response.value.length>0,childCount:container?.childElementCount??0}})()}))()`,
   );
   assert.equal(page.width, width);
   assert.equal(page.scrollWidth, width, `horizontal overflow at ${width}`);
@@ -42,12 +44,24 @@ for (const width of [320, 375, 1440]) {
   assert.equal(page.collective, "/assets/fictional-four-day-board-complete.png");
   assert.equal(page.consent, "invite-consent-v1");
   assert.equal(page.visibleConsent, false);
+  assert.equal(page.displayName, false);
+  assert.equal(page.intent, false);
+  assert.equal(page.joinLabel, "Slack에서 함께하기");
+  assert.equal(page.slackMark, "true");
+  assert.equal(page.turnstile.initialized, true);
+  assert.equal(page.turnstile.hasResponse, true);
+  assert.ok(page.turnstile.childCount > 0);
   browser(
     "eval",
-    `(async()=>{const reveals=[...document.querySelectorAll('.reveal')];for(const element of reveals){element.scrollIntoView();await new Promise(resolve=>setTimeout(resolve,700))}if(reveals.some(element=>!element.classList.contains('is-visible')))throw new Error('reveal did not settle');document.activeElement?.blur();scrollTo(0,0);await new Promise(resolve=>setTimeout(resolve,700));return true})()`,
+    `(async()=>{const reveals=[...document.querySelectorAll('.reveal')];for(const element of reveals){element.scrollIntoView();await new Promise(resolve=>setTimeout(resolve,700))}if(reveals.some(element=>!element.classList.contains('is-visible')))throw new Error('reveal did not settle');document.querySelector('[data-daily-replay]')?.click();for(const row of document.querySelectorAll('[data-daily-row]')){const visible=['goal','ack'].includes(row.dataset.dailyRow);row.classList.toggle('is-visible',visible);row.toggleAttribute('aria-hidden',!visible)}const board=document.querySelector('[data-daily-garden-cell]');if(board instanceof HTMLImageElement)board.src='/assets/fictional-four-day-board-before-review.png';document.activeElement?.blur();scrollTo(0,0);await new Promise(resolve=>setTimeout(resolve,700));return true})()`,
   );
+  const captureState = evaluate(
+    `({visible:[...document.querySelectorAll('[data-daily-row].is-visible')].map(row=>row.dataset.dailyRow),texts:[...document.querySelectorAll('[data-daily-row].is-visible p')].map(row=>row.textContent?.trim())})`,
+  );
+  assert.deepEqual(captureState.visible, ["goal", "ack"]);
+  assert.ok(captureState.texts.every((text) => typeof text === "string" && text.length > 0));
   browser("screenshot", "--full", resolve(evidence, `referral-${width}.png`));
-  results.push(page);
+  results.push({ ...page, captureState });
 }
 
 browser("set", "viewport", "375", "900");
