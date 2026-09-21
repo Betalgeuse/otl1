@@ -1,3 +1,4 @@
+import { memberActionBlock } from "./community-member-actions";
 import { exactMessageTimestamp, reminderRetryCode } from "./community-reminder-batch";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
@@ -71,6 +72,7 @@ export async function sendCommonDeliveries(input: {
   readonly scope: CommunityScope;
   readonly store: CommonStore;
   readonly reviewThreadV2?: boolean;
+  readonly memberActions?: boolean;
 }): Promise<number> {
   let sent = 0;
   for (let index = 0; index < 4; index += 1) {
@@ -104,6 +106,14 @@ export async function sendCommonDeliveries(input: {
       const response = await callSlack(input.token, "chat.postMessage", {
         channel: input.scope.channelId,
         text: delivery.text,
+        ...(input.memberActions
+          ? {
+              blocks: [
+                { type: "section", text: { type: "mrkdwn", text: delivery.text } },
+                memberActionBlock(),
+              ],
+            }
+          : {}),
       });
       const messageTs = string(response.ts);
       if (!/^\d+\.\d+$/.test(messageTs)) throw new InputError("Slack timestamp missing");

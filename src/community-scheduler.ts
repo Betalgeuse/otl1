@@ -131,6 +131,7 @@ export async function runCommunitySchedule(
     scope,
     store,
     reviewThreadV2: env.REVIEW_THREAD_V2 === "true",
+    memberActions: publicChannel,
   });
   if (isWeekend(date) || (publicChannel && !targetedDue)) return { common, personal: 0 };
   const personal = await sendReminderBatches({
@@ -140,6 +141,7 @@ export async function runCommunitySchedule(
     now,
     store,
     reviewThreadV2: env.REVIEW_THREAD_V2 === "true",
+    memberActions: publicChannel,
   });
   return { common, personal };
 }

@@ -152,11 +152,16 @@ await press(click("UDISABLED"), { ...env, PUBLIC_APPLICATIONS_ENABLED: "false" }
 assert.equal(issueInputs.length, issuedBeforeDisabledPress);
 assert.doesNotMatch(ephemeralEffects.at(-1)?.text, /\/r\//);
 
+// Public daily-scrum member surfaces may expose the same actor-scoped invite action.
+await press(click("UPUBLIC", { container: { channel_id: "CPUBLIC" } }));
+assert.equal(issueInputs.at(-1)?.userId, "UPUBLIC");
+assert.equal(ephemeralEffects.at(-1)?.channelId, "CPUBLIC");
+assert.match(ephemeralEffects.at(-1)?.text, /^https:\/\/otl1\.hyuk\.me\/r\/[A-Za-z0-9_-]{32}/);
+
 // Given a forged workspace or a different channel, when it replays the action,
 // then authorization rejects it before a link or private Slack effect is created.
 for (const forged of [
   click("UFORGED", { team: { id: "TOTHER" } }),
-  click("UFORGED", { container: { channel_id: "CPUBLIC" } }),
   click("UFORGED", {
     actions: [
       {
@@ -174,5 +179,5 @@ for (const forged of [
   assert.equal(ephemeralEffects.length, ephemeralsBefore);
 }
 
-assert.ok(ephemeralEffects.every((effect) => effect.channelId === "CWELCOME"));
+assert.ok(ephemeralEffects.every((effect) => ["CWELCOME", "CPUBLIC"].includes(effect.channelId)));
 console.log("PASS welcome invitation: actor-scoped guide action, stable private links, feature-off denial, and forged scope rejection");

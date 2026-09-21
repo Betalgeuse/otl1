@@ -1,7 +1,8 @@
+import { memberActionBlock } from "./community-member-actions";
 import { deliverReviewReminder, exactThreadReplyTimestamp } from "./community-review-reminder";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { ReminderBatch, ReminderBatchFinish, ReminderJob } from "./community-types";
-import { list, object, string } from "./input";
+import { type Json, list, object, string } from "./input";
 
 export type ReminderBatchStore = {
   claimReminderBatch(input: {
@@ -129,6 +130,7 @@ export async function sendReminderBatch(input: {
   readonly now: string;
   readonly store: ReminderBatchStore;
   readonly reviewThreadV2?: boolean;
+  readonly memberActions?: boolean;
 }): Promise<number> {
   const leaseToken = crypto.randomUUID();
   const review =
@@ -149,6 +151,7 @@ export async function sendReminderBatch(input: {
       batch: review,
       store: input.store,
       render: renderReminderBatch,
+      ...(input.memberActions === undefined ? {} : { memberActions: input.memberActions }),
     });
   const claimInput = {
     teamId: input.teamId,
@@ -207,14 +210,16 @@ export async function sendReminderBatch(input: {
     }
     const deliverableText = renderReminderBatch(batch.jobs);
     if (!deliverableText) throw new CommunitySlackError("invalid_batch");
+    const blocks: Json[] = deliverableText
+      .split("\n\n")
+      .filter((value) => value.includes("<@"))
+      .map((value) => ({ type: "section", text: { type: "mrkdwn", text: value } }));
+    if (input.memberActions) blocks.push(memberActionBlock());
     await callSlack(input.token, "chat.postMessage", {
       channel: input.channelId,
       text: deliverableText,
       ...(batch.threadTs ? { thread_ts: batch.threadTs } : {}),
-      blocks: deliverableText
-        .split("\n\n")
-        .filter((value) => value.includes("<@"))
-        .map((value) => ({ type: "section", text: { type: "mrkdwn", text: value } })),
+      blocks,
     });
     await input.store.finishReminderBatch({
       teamId: input.teamId,
@@ -244,6 +249,7 @@ export async function sendReminderBatches(input: {
   readonly now: string;
   readonly store: ReminderBatchStore;
   readonly reviewThreadV2?: boolean;
+  readonly memberActions?: boolean;
 }): Promise<number> {
   let delivered = 0;
   for (let batch = 0; batch < 10; batch += 1) {

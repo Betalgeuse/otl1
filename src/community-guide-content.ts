@@ -1,3 +1,4 @@
+import { inviteButton } from "./community-member-actions";
 import type { CommunityEnv } from "./community-runtime";
 import { InputError } from "./input";
 
@@ -115,15 +116,7 @@ export function guideBlocks(userId: string, guide: WelcomeGuideContent, rendered
     ...sections,
     {
       type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "친구 초대하기" },
-          action_id: "community_referral_link",
-          value: JSON.stringify({ ownerId: "actor", key: "referral_link" }),
-          accessibility_label: "내 초대 링크 받기",
-        },
-      ],
+      elements: [inviteButton()],
     },
     {
       type: "image",
