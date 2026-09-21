@@ -1,5 +1,7 @@
 # 시스템 구조
 
+현재 동작의 불변조건과 이벤트별 결과는 [실행 명세](SPEC.md)에 있습니다. 이 문서는 그 동작을 구현하는 DB·Worker·Durable Object 경계를 설명합니다.
+
 Slack이 입력을 전달하고 Cloudflare Worker가 검증·분류·저장을 맡습니다. Neon PostgreSQL이 기록의 원본이며, Durable Object가 예약과 잔디 갱신 순서를 조정합니다.
 
 ```mermaid
