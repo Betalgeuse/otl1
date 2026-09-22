@@ -106,11 +106,11 @@ assert.match(page, /data-reaction-stage/);
 assert.match(page, /src="\/assets\/otl1-avatar\.jpg"/);
 for (const html of [page, referral]) {
   assert.match(html, /property="og:site_name" content="ONE THING 1 LINE"/);
-  assert.match(html, /property="og:image" content="https:\/\/otl1\.hyuk\.me\/assets\/otl1-avatar\.jpg"/);
+  assert.match(html, /property="og:image" content="https:\/\/otl1\.hyuk\.me\/assets\/otl1-avatar\.jpg\?v=20260922-2"/);
   assert.match(html, /property="og:image:width" content="512"/);
   assert.match(html, /property="og:image:height" content="512"/);
   assert.match(html, /name="twitter:card" content="summary"/);
-  assert.match(html, /name="twitter:image" content="https:\/\/otl1\.hyuk\.me\/assets\/otl1-avatar\.jpg"/);
+  assert.match(html, /name="twitter:image" content="https:\/\/otl1\.hyuk\.me\/assets\/otl1-avatar\.jpg\?v=20260922-2"/);
 }
 assert.match(page, /property="og:url" content="https:\/\/otl1\.hyuk\.me\/"/);
 assert.match(referral, /property="og:url" content="__REFERRAL_URL__"/);
