@@ -52,6 +52,8 @@ export type CommunityEnv = {
   readonly COMMUNITY_GUIDE_CANVAS_URL?: string;
   readonly COMMUNITY_GUIDE_ANCHOR_TS?: string;
   readonly COMMUNITY_INTRO_CHANNEL_ID?: string;
+  readonly COMMUNITY_INTRO_CANVAS_ID?: string;
+  readonly COMMUNITY_INTRO_CANVAS_URL?: string;
   readonly AI?: IntentAI;
   readonly INTENT_RATE_LIMITER?: {
     limit(input: { readonly key: string }): Promise<{ readonly success: boolean }>;
@@ -95,6 +97,7 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
     "community_introduction_directory",
   ].includes(actionId);
   const referralLinkAction = actionId === "community_referral_link";
+  const guideAction = actionId === "community_guide_open";
   const expandedChannelAllowed =
     (bugAction &&
       [
@@ -113,6 +116,13 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
         env.COMMUNITY_WELCOME_CHANNEL_ID,
         env.COMMUNITY_PUBLIC_CHANNEL_ID,
         env.COMMUNITY_RELEASE_CHANNEL_ID,
+      ].includes(channelId)) ||
+    (guideAction &&
+      [
+        env.COMMUNITY_WELCOME_CHANNEL_ID,
+        env.COMMUNITY_PUBLIC_CHANNEL_ID,
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+        env.COMMUNITY_INTRO_CHANNEL_ID,
       ].includes(channelId));
   const feedbackActionDenied = channelId === env.COMMUNITY_FEEDBACK_CHANNEL_ID && !bugAction;
   if (
@@ -123,6 +133,13 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
         env.COMMUNITY_WELCOME_CHANNEL_ID,
         env.COMMUNITY_PUBLIC_CHANNEL_ID,
         env.COMMUNITY_RELEASE_CHANNEL_ID,
+      ].includes(channelId)) ||
+    (guideAction &&
+      ![
+        env.COMMUNITY_WELCOME_CHANNEL_ID,
+        env.COMMUNITY_PUBLIC_CHANNEL_ID,
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+        env.COMMUNITY_INTRO_CHANNEL_ID,
       ].includes(channelId)) ||
     (![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) &&
       !expandedChannelAllowed) ||

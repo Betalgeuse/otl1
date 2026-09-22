@@ -172,6 +172,7 @@ export async function communityInteraction(
     !["view_submission", "block_actions"].includes(string(data.type))
   )
     throw new InputError("지원하지 않는 요청 형식입니다.");
+  if (id === "community_guide_open") return new Response(null, { status: 200 });
   const metadata = view ? object(JSON.parse(string(view.private_metadata))) : null;
   if (metadata && metadata.userId !== scope.userId)
     throw new InputError("본인이 연 화면에서 다시 시도해 주세요.");

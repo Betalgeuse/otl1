@@ -1,4 +1,5 @@
 import type { Board, Cell } from "./board";
+import { isOptionalDay } from "./calendar";
 import { date, InputError, list, object, palette, string } from "./input";
 import { sign, verify } from "./signing";
 
@@ -64,7 +65,7 @@ export async function readBoardLink(token: string, secret: string): Promise<Boar
       date: cellDate,
       status,
       future: stamp > todayStamp,
-      optional: false,
+      optional: isOptionalDay(cellDate),
       today: stamp === todayStamp,
     };
   });

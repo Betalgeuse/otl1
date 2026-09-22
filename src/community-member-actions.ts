@@ -1,5 +1,11 @@
-import { introductionButton } from "./community-introduction";
+import { slackCanvasUrl } from "./community-canvas";
+import { introductionButton, introductionDirectoryButton } from "./community-introduction";
 import type { Json } from "./input";
+
+export type MemberNavigation = {
+  readonly guideUrl?: string;
+  readonly introductionUrl?: string;
+};
 
 export function inviteButton(): Json {
   return {
@@ -11,6 +17,24 @@ export function inviteButton(): Json {
   };
 }
 
-export function memberActionBlock(): Json {
-  return { type: "actions", elements: [introductionButton(), inviteButton()] };
+export function memberActionBlock(navigation: MemberNavigation = {}): Json {
+  return {
+    type: "actions",
+    elements: [
+      ...(navigation.guideUrl
+        ? [
+            {
+              type: "button",
+              text: { type: "plain_text", text: "사용설명서 보기" },
+              url: slackCanvasUrl(navigation.guideUrl),
+              action_id: "community_guide_open",
+              accessibility_label: "ONE THING 1 LINE 사용설명서 보기",
+            },
+          ]
+        : []),
+      introductionButton(undefined, "자기소개 쓰기"),
+      introductionDirectoryButton(navigation.introductionUrl),
+      inviteButton(),
+    ],
+  };
 }

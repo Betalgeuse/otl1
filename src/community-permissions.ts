@@ -50,6 +50,7 @@ const memberActions = new Set([
   "community_introduction",
   "community_introduction_submit",
   "community_introduction_directory",
+  "community_guide_open",
   "community_referral_link",
   "community_bug_open",
   "community_bug_submit",

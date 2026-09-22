@@ -1,4 +1,4 @@
-import { memberActionBlock } from "./community-member-actions";
+import { type MemberNavigation, memberActionBlock } from "./community-member-actions";
 import { exactMessageTimestamp, reminderRetryCode } from "./community-reminder-batch";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
@@ -73,6 +73,7 @@ export async function sendCommonDeliveries(input: {
   readonly store: CommonStore;
   readonly reviewThreadV2?: boolean;
   readonly memberActions?: boolean;
+  readonly navigation?: MemberNavigation;
 }): Promise<number> {
   let sent = 0;
   for (let index = 0; index < 4; index += 1) {
@@ -110,7 +111,7 @@ export async function sendCommonDeliveries(input: {
           ? {
               blocks: [
                 { type: "section", text: { type: "mrkdwn", text: delivery.text } },
-                memberActionBlock(),
+                memberActionBlock(input.navigation),
               ],
             }
           : {}),

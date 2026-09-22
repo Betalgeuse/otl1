@@ -26,6 +26,8 @@
         "canvases:write",
         "pins:read",
         "pins:write",
+        "bookmarks:read",
+        "bookmarks:write",
         "reactions:write",
         "emoji:read"
       ]

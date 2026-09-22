@@ -1,4 +1,4 @@
-import { memberActionBlock } from "./community-member-actions";
+import { type MemberNavigation, memberActionBlock } from "./community-member-actions";
 import { deliverReviewReminder, exactThreadReplyTimestamp } from "./community-review-reminder";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { ReminderBatch, ReminderBatchFinish, ReminderJob } from "./community-types";
@@ -131,6 +131,7 @@ export async function sendReminderBatch(input: {
   readonly store: ReminderBatchStore;
   readonly reviewThreadV2?: boolean;
   readonly memberActions?: boolean;
+  readonly navigation?: MemberNavigation;
 }): Promise<number> {
   const leaseToken = crypto.randomUUID();
   const review =
@@ -152,6 +153,7 @@ export async function sendReminderBatch(input: {
       store: input.store,
       render: renderReminderBatch,
       ...(input.memberActions === undefined ? {} : { memberActions: input.memberActions }),
+      ...(input.navigation === undefined ? {} : { navigation: input.navigation }),
     });
   const claimInput = {
     teamId: input.teamId,
@@ -214,7 +216,7 @@ export async function sendReminderBatch(input: {
       .split("\n\n")
       .filter((value) => value.includes("<@"))
       .map((value) => ({ type: "section", text: { type: "mrkdwn", text: value } }));
-    if (input.memberActions) blocks.push(memberActionBlock());
+    if (input.memberActions) blocks.push(memberActionBlock(input.navigation));
     await callSlack(input.token, "chat.postMessage", {
       channel: input.channelId,
       text: deliverableText,
@@ -250,6 +252,7 @@ export async function sendReminderBatches(input: {
   readonly store: ReminderBatchStore;
   readonly reviewThreadV2?: boolean;
   readonly memberActions?: boolean;
+  readonly navigation?: MemberNavigation;
 }): Promise<number> {
   let delivered = 0;
   for (let batch = 0; batch < 10; batch += 1) {

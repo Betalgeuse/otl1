@@ -45,6 +45,8 @@ const env = {
   SLACK_BOT_TOKEN: "fake",
   DATABASE_URL: "postgresql://test:test@test.neon.tech/db",
   COMMUNITY_INTRO_CHANNEL_ID: "CINTRO",
+  COMMUNITY_INTRO_CANVAS_ID: "FINTRO01",
+  COMMUNITY_INTRO_CANVAS_URL: "https://example.slack.com/docs/TQA/FINTRO01",
   COMMUNITY_ADMIN_ID: "UADMIN",
   COMMUNITY_BOT_USER_ID: "UBOT",
 };
@@ -105,14 +107,16 @@ try {
   };
   await showIntroductionDirectory(context);
   const directory = calls.find(
-    (call) => call.method === "chat.postEphemeral" && call.body.text.includes("우리의 자기소개"),
+    (call) => call.method === "chat.postEphemeral" && call.body.text.includes("자기소개 모음"),
   );
-  assert.match(directory.body.text, /<@UHAS>/);
-  assert.match(directory.body.text, /LinkedIn/);
-  assert.match(directory.body.text, /https:\/\/example\.com/);
+  assert.match(directory.body.text, /https:\/\/example\.slack\.com\/docs\/TQA\/FINTRO01/);
+  const canvas = calls.find((call) => call.method === "canvases.edit");
+  assert.match(canvas.body.changes[0].document_content.markdown, /!\[\]\(@UHAS\)/);
+  assert.match(canvas.body.changes[0].document_content.markdown, /LinkedIn/);
+  assert.match(canvas.body.changes[0].document_content.markdown, /https:\/\/example\.com/);
   assert.deepEqual(
     directory.body.blocks[1].elements.map((element) => element.text.text),
-    ["자기소개 쓰기", "모두 보기"],
+    ["자기소개 쓰기", "자기소개 모두 보기"],
   );
 
   await remindMissingIntroductions(context);
@@ -122,7 +126,7 @@ try {
   assert.match(reminder.body.text, /<@UNEW>/);
   assert.doesNotMatch(reminder.body.text, /<@UHAS>|<@UBOT>/);
   console.log(
-    "PASS introduction channel: join prompt, owner action, private directory, missing-member mention",
+    "PASS introduction channel: join prompt, owner action, readable Canvas directory, missing-member mention",
   );
 } finally {
   globalThis.fetch = original;

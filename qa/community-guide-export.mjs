@@ -121,6 +121,11 @@ try {
     config.vars.COMMUNITY_CHAPTER_CHANNEL_IDS,
     "C_REPLACE_DEVELOPERS,C_REPLACE_ENGLISH,C_REPLACE_INVESTMENT,C_REPLACE_SCIENTIST",
   );
+  assert.equal(config.vars.COMMUNITY_INTRO_CANVAS_ID, "FREPLACEINTROCANVAS");
+  assert.equal(
+    config.vars.COMMUNITY_INTRO_CANVAS_URL,
+    "https://example.slack.com/docs/TREPLACE/FREPLACEINTROCANVAS",
+  );
   assert.equal(existsSync(join(destination, "migrations", "028_welcome_guide_roles.sql")), true);
   assert.equal(
     existsSync(join(destination, "migrations", "039_bot_owned_welcome_guide.sql")),

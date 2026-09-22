@@ -1,4 +1,4 @@
-import { memberActionBlock } from "./community-member-actions";
+import { type MemberNavigation, memberActionBlock } from "./community-member-actions";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { ReminderBatch, ReminderBatchFinish, ReminderJob } from "./community-types";
 import { type Json, list, object, string } from "./input";
@@ -54,6 +54,7 @@ export async function deliverReviewReminder(input: {
   readonly store: ReviewReminderStore;
   readonly render: (jobs: readonly ReminderJob[]) => string | null;
   readonly memberActions?: boolean;
+  readonly navigation?: MemberNavigation;
 }): Promise<number> {
   const text = input.render(input.batch.jobs);
   const threadTs = input.batch.threadTs;
@@ -83,7 +84,7 @@ export async function deliverReviewReminder(input: {
       .split("\n\n")
       .filter((value) => value.includes("<@"))
       .map((value) => ({ type: "section", text: { type: "mrkdwn", text: value } }));
-    if (input.memberActions) blocks.push(memberActionBlock());
+    if (input.memberActions) blocks.push(memberActionBlock(input.navigation));
     const messageTs =
       reconciled ??
       string(
