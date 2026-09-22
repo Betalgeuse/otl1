@@ -127,7 +127,8 @@ globalThis.fetch = async (url, options = {}) => {
       members: ["UOWNER", "ULEGACY", ...Array.from({ length: 12 }, (_item, index) => `UREM${String(index + 1).padStart(3,"0")}`)],
       response_metadata: { next_cursor: "" } });
     if (method === "users.info") return Response.json({ ok: true, user: { id: payload.user,
-      team_id: "TINT", profile: { email: "member@example.invalid" }, is_bot: false,
+      name: payload.user.toLowerCase(), real_name: "Member", team_id: "TINT",
+      profile: { email: "member@example.invalid", display_name: "", real_name: "Member" }, is_bot: false,
       is_app_user: false, deleted: false } });
     if (method === "conversations.open") return Response.json({ ok: true, channel: { id: "DPRIVATE" } });
     if (method === "chat.postEphemeral") return Response.json({ ok: true, message_ts: `${++slackTs}.000` });
@@ -147,7 +148,7 @@ globalThis.fetch = async (url, options = {}) => {
 const env = {
   SLACK_TEAM_ID: "TINT", COMMUNITY_ADMIN_ID: "UADMIN", COMMUNITY_PUBLIC_CHANNEL_ID: "CPUBLIC",
   COMMUNITY_CHANNEL_ID: "CADMIN", COMMUNITY_ENABLED: "true", REFERRALS_ENABLED: "true",
-  PUBLIC_APPLICATIONS_ENABLED: "true", LIFECYCLE_MODE: "disabled",
+  PUBLIC_APPLICATIONS_ENABLED: "true", REVIEW_THREAD_V2: "true", LIFECYCLE_MODE: "disabled",
   SLACK_BOT_TOKEN: "xoxb-fake", SLACK_SIGNING_SECRET: "slack-test-secret",
   DATABASE_URL: "postgresql://user:pass@fake.neon.tech/test",
   INTEREST_RUNTIME_DATABASE_URL: "postgresql://user:pass@fake.neon.tech/test", BOARD_SIGNING_SECRET: "board-test",
@@ -240,6 +241,28 @@ try {
   assert.match(firstGoal.gardenDeliveryKey ?? "", /^garden:/);
   assert.equal(await scalar("SELECT count(*) FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='UFIRST'"), "1");
   assert.equal(await scalar("SELECT count(*) FROM otl.grass_seasons WHERE team_id='TINT' AND user_id='UFIRST' AND closed_at IS NULL"), "1");
+  assert.equal(await scalar("SELECT count(*) FROM otl.community_garden_deliveries WHERE team_id='TINT' AND user_id='UFIRST' AND thread_ts='1790049051.898349' AND route_provenance='recorded'"), "1");
+  await psql("UPDATE otl.community_garden_deliveries SET status='cancelled' WHERE team_id='TINT' AND user_id='UFIRST' AND status='pending'");
+
+  const observedFloor = Number(await scalar(`SELECT floor(extract(epoch FROM
+    coalesce(membership_observed_at,now())))::bigint FROM otl.workspace_channels
+    WHERE team_id='TINT' AND channel_id='CPUBLIC'`));
+  const joinedAt = `${observedFloor + 1}.111111`;
+  assert.equal((await slackRequest("/slack/events", { type: "event_callback", team_id: "TINT",
+    event_id: "EvFirstMemberJoin", event: { type: "message", subtype: "channel_join",
+      channel: "CPUBLIC", user: "UJOINED", ts: joinedAt, event_ts: joinedAt } })).status, 200);
+  assert.equal(slackEffects.filter((effect) => effect.method === "users.info" && effect.payload.user === "UJOINED").length, 1);
+  assert.equal(await scalar("SELECT count(*) FROM otl.workspace_channel_memberships WHERE team_id='TINT' AND channel_id='CPUBLIC' AND user_id='UJOINED' AND is_current"), "1");
+  assert.equal(await scalar("SELECT count(*) FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='UJOINED'"), "1");
+  assert.equal(await scalar("SELECT count(*) FROM otl.grass_seasons WHERE team_id='TINT' AND user_id='UJOINED' AND closed_at IS NULL"), "1");
+  const joinedGoalTs = `${Math.floor(Date.now() / 1000)}.222222`;
+  assert.equal((await slackRequest("/slack/events", { type: "event_callback", team_id: "TINT",
+    event_id: "EvFirstMemberGoal", event: { type: "message", channel: "CPUBLIC",
+      user: "UJOINED", ts: joinedGoalTs, text: "원씽: 신규 회원 첫 목표 완료 기준 정하기" } })).status, 200);
+  assert.equal(await scalar(`SELECT count(*) FROM otl.community_garden_deliveries
+    WHERE team_id='TINT' AND user_id='UJOINED' AND thread_ts='${joinedGoalTs}'
+      AND source_ts='${joinedGoalTs}' AND route_kind='goal_prompt' AND route_provenance='recorded'`), "1");
+  await psql("UPDATE otl.community_garden_deliveries SET status='cancelled' WHERE team_id='TINT' AND user_id='UJOINED' AND status='pending'");
   const adminDeliveryAt = Date.now();
   loseAcceptedAdminResponse = true;
   await runMembershipDue(env, db, "CPUBLIC", adminDeliveryAt);

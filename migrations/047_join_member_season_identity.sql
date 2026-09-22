@@ -1,13 +1,9 @@
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
-SELECT pg_advisory_xact_lock(hashtextextended('otl:first-goal-season:046',0));
+SELECT pg_advisory_xact_lock(hashtextextended('otl:join-member-season-identity:047',0));
 
-ALTER FUNCTION otl.community_execute(text,jsonb)
-  RENAME TO community_execute_before_first_goal_season;
-REVOKE EXECUTE ON FUNCTION otl.community_execute_before_first_goal_season(text,jsonb) FROM PUBLIC;
-
-CREATE FUNCTION otl.community_execute(op text,p jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION otl.community_execute(op text,p jsonb) RETURNS jsonb
 LANGUAGE plpgsql SET search_path=pg_catalog,otl AS $$
 DECLARE
   result jsonb;
@@ -67,29 +63,5 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION otl.community_execute(text,jsonb) FROM PUBLIC;
 
-WITH eligible AS (
-  SELECT cm.team_id,cm.channel_id,cm.user_id,transaction_timestamp() observed
-  FROM otl.workspace_channel_memberships cm
-  JOIN otl.workspace_members wm USING(team_id,user_id)
-  WHERE cm.is_current AND NOT coalesce(wm.is_bot,false)
-    AND NOT coalesce(wm.is_app_user,false) AND NOT coalesce(wm.slack_deleted,false)
-), inserted AS (
-  INSERT INTO otl.member_lifecycles(
-    team_id,channel_id,user_id,state,revision,rollout_at,last_transition_at
-  )
-  SELECT e.team_id,e.channel_id,e.user_id,'active',0,e.observed,e.observed FROM eligible e
-  ON CONFLICT(team_id,user_id) DO NOTHING RETURNING team_id,user_id
-)
-INSERT INTO otl.grass_seasons(team_id,channel_id,user_id,opened_at,opened_on,opened_reason)
-SELECT l.team_id,l.channel_id,l.user_id,transaction_timestamp(),
-  (transaction_timestamp() AT TIME ZONE 'Asia/Seoul')::date,'rollout'
-FROM otl.member_lifecycles l
-JOIN eligible e USING(team_id,channel_id,user_id)
-WHERE l.state IN('active','grace') AND NOT EXISTS(
-  SELECT 1 FROM otl.grass_seasons s
-  WHERE s.team_id=l.team_id AND s.user_id=l.user_id AND s.closed_at IS NULL
-)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO otl.schema_migrations(version) VALUES('046-first-goal-season');
+INSERT INTO otl.schema_migrations(version) VALUES('047-join-member-season-identity');
 COMMIT;

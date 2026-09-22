@@ -64,6 +64,7 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/043_member_review_garden_route.sql",
   "migrations/044_member_goal_garden_route.sql",
   "migrations/046_first_goal_season.sql",
+  "migrations/047_join_member_season_identity.sql",
 ];
 
 // `src` and `site` are copied as directories, but these paths keep the membership
