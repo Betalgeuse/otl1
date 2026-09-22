@@ -133,7 +133,7 @@ assert.equal(publicConfig.vars.COMMUNITY_ADMIN_ID, "U_REPLACE_ADMIN");
 assert.equal(publicConfig.vars.LIFECYCLE_MODE, "disabled");
 assert.equal(publicConfig.vars.REVIEW_THREAD_V2, "true");
 assert.equal(publicConfig.vars.GARDEN_RECONCILIATION, "false");
-assert.equal(publicConfig.vars.REFERRALS_ENABLED, "false");
+assert.equal(publicConfig.vars.REFERRALS_ENABLED, "true");
 assert.equal(publicConfig.vars.PUBLIC_APPLICATIONS_ENABLED, "false");
 assert.equal(publicConfig.vars.PUBLIC_INTEREST_ENABLED, "false");
 assert.equal(publicConfig.vars.REFERRAL_ADMIN_DATABASE_URL, undefined);
@@ -144,7 +144,7 @@ assert.deepEqual(publicConfig.r2_buckets, [
   { binding: "INVITE_PRIVATE_OBJECTS", bucket_name: "replace-with-invite-private-bucket" },
 ]);
 assert.equal(publicConfig.compatibility_date, "2026-08-14");
-assert.throws(() => assertSanitizedCoreConfig({ ...publicConfig, vars: { ...publicConfig.vars, REFERRALS_ENABLED: "true" } }));
+assert.throws(() => assertSanitizedCoreConfig({ ...publicConfig, vars: { ...publicConfig.vars, REFERRALS_ENABLED: "false" } }));
 
 const sourceSiteConfig = {
   account_id: "private-account",

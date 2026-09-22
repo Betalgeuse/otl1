@@ -112,7 +112,8 @@ console.log("PASS default-off membership tick: zero DB and effects");
 const { readFile } = await import("node:fs/promises");
 const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
 assert.equal(config.vars.REVIEW_THREAD_V2, "true");
-for (const name of ["GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED"])
+assert.equal(config.vars.REFERRALS_ENABLED, "true");
+for (const name of ["GARDEN_RECONCILIATION", "PUBLIC_APPLICATIONS_ENABLED"])
   assert.equal(config.vars[name], "false");
 assert.equal(config.vars.LIFECYCLE_MODE, "disabled");
 assert.ok(config.r2_buckets.some((binding) => binding.binding === "INVITE_PRIVATE_OBJECTS"));

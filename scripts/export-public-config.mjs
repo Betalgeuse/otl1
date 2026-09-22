@@ -17,7 +17,7 @@ const PUBLIC_VARS = Object.freeze({
   LIFECYCLE_MODE: "disabled",
   REVIEW_THREAD_V2: "true",
   GARDEN_RECONCILIATION: "false",
-  REFERRALS_ENABLED: "false",
+  REFERRALS_ENABLED: "true",
   PUBLIC_APPLICATIONS_ENABLED: "false",
   PUBLIC_INTEREST_ENABLED: "false",
   PUBLIC_APPLICATION_ORIGIN: "https://your-site.workers.dev",
