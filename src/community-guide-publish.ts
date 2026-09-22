@@ -1,5 +1,10 @@
-import { canonicalGuideContent, parseGuideFileIds } from "./community-guide-content";
+import {
+  canonicalGuideContent,
+  parseGuideFileIds,
+  renderGuideChannels,
+} from "./community-guide-content";
 import { WELCOME_GUIDE_RELEASE } from "./community-guide-release";
+import { syncWelcomeGuideSurface } from "./community-guide-surface";
 import type { CommunityEnv } from "./community-runtime";
 import { InputError, string } from "./input";
 import { NeonStore } from "./store";
@@ -10,6 +15,14 @@ export type WelcomeGuideAdminEnv = Pick<
   | "COMMUNITY_WELCOME_CHANNEL_ID"
   | "COMMUNITY_ADMIN_ID"
   | "COMMUNITY_GUIDE_FILE_IDS"
+  | "SLACK_BOT_TOKEN"
+  | "COMMUNITY_PUBLIC_CHANNEL_ID"
+  | "COMMUNITY_FEEDBACK_CHANNEL_ID"
+  | "COMMUNITY_RELEASE_CHANNEL_ID"
+  | "COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS"
+  | "COMMUNITY_GUIDE_CANVAS_ID"
+  | "COMMUNITY_GUIDE_CANVAS_URL"
+  | "COMMUNITY_GUIDE_ANCHOR_TS"
 > & { readonly GUIDE_ADMIN_DATABASE_URL: string };
 
 export type WelcomeGuideRelease = {
@@ -74,7 +87,9 @@ async function storePublishedGuide(
 
 export async function publishWelcomeGuide(env: WelcomeGuideAdminEnv): Promise<string> {
   const guide = await inspectWelcomeGuideSource(env);
-  return storePublishedGuide(env, guide);
+  const hash = await storePublishedGuide(env, guide);
+  await syncWelcomeGuideSurface(guide, renderGuideChannels(guide.body, env), env);
+  return hash;
 }
 
 export async function executeWelcomeGuideCommand(
@@ -82,6 +97,9 @@ export async function executeWelcomeGuideCommand(
   env: WelcomeGuideAdminEnv,
 ): Promise<WelcomeGuideCommandResult> {
   const guide = await inspectWelcomeGuideSource(env);
-  if (command.apply) await storePublishedGuide(env, guide);
+  if (command.apply) {
+    await storePublishedGuide(env, guide);
+    await syncWelcomeGuideSurface(guide, renderGuideChannels(guide.body, env), env);
+  }
   return { applied: command.apply, version: guide.version, contentHash: guide.hash };
 }

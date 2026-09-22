@@ -34,7 +34,10 @@ const env = {
   GUIDE_ADMIN_DATABASE_URL: "postgresql://admin",
   BOARD_SIGNING_SECRET: "unused",
   PUBLIC_BASE_URL: "unused",
-  COMMUNITY_WELCOME_CHANNEL_ID: "CWELCOME",
+  COMMUNITY_WELCOME_CHANNEL_ID: "CWELCOME1",
+  COMMUNITY_GUIDE_CANVAS_ID: "FCANVAS01",
+  COMMUNITY_GUIDE_CANVAS_URL: "https://example.slack.com/docs/TQA/FCANVAS01",
+  COMMUNITY_GUIDE_ANCHOR_TS: "1790000000.100000",
   COMMUNITY_BOT_USER_ID: "UBOT",
   COMMUNITY_ADMIN_ID: "UADMIN",
   COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
@@ -65,13 +68,19 @@ globalThis.fetch = async (url, options) => {
     });
   if (parsed.pathname.endsWith("chat.postMessage"))
     return Response.json({ ok: true, ts: "456.789", message: { user: "UBOT", bot_id: "BGUIDE" } });
+  if (
+    parsed.pathname.endsWith("canvases.edit") ||
+    parsed.pathname.endsWith("chat.update") ||
+    parsed.pathname.endsWith("pins.add")
+  )
+    return Response.json({ ok: true });
   throw new Error(`unexpected endpoint ${parsed.pathname} ${String(options?.method)}`);
 };
 
 await executeWelcomeGuideCommand({ kind: "publish", apply: true }, env);
 await replaceWelcomeGuideForUser("UREPAIR", env);
 await deliverWelcomeGuide(
-  { type: "member_joined_channel", channel: "CWELCOME", user: "UJOIN" },
+  { type: "member_joined_channel", channel: "CWELCOME1", user: "UJOIN" },
   env,
 );
 

@@ -1,8 +1,13 @@
 const PUBLIC_VARS = Object.freeze({
   COMMUNITY_WELCOME_CHANNEL_ID: "C_REPLACE_WELCOME",
   COMMUNITY_GUIDE_FILE_IDS: "FREPLACELOGO,FREPLACEDAILY",
-  COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS: "C_REPLACE_DEVELOPERS,C_REPLACE_ENGLISH,C_REPLACE_INVESTMENT",
-  COMMUNITY_CHAPTER_CHANNEL_IDS: "C_REPLACE_DEVELOPERS,C_REPLACE_ENGLISH,C_REPLACE_INVESTMENT,C_REPLACE_SCIENTIST",
+  COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS:
+    "C_REPLACE_DEVELOPERS,C_REPLACE_ENGLISH,C_REPLACE_INVESTMENT",
+  COMMUNITY_GUIDE_CANVAS_ID: "FREPLACECANVAS",
+  COMMUNITY_GUIDE_CANVAS_URL: "https://example.slack.com/docs/TREPLACE/FREPLACECANVAS",
+  COMMUNITY_GUIDE_ANCHOR_TS: "1000000000.000000",
+  COMMUNITY_CHAPTER_CHANNEL_IDS:
+    "C_REPLACE_DEVELOPERS,C_REPLACE_ENGLISH,C_REPLACE_INVESTMENT,C_REPLACE_SCIENTIST",
   COMMUNITY_INTRO_CHANNEL_ID: "C_REPLACE_INTRO",
   DATABASE_MAINTENANCE: "false",
   DAILY_SCRUM_CHANNEL_ID: "C_REPLACE_DAILY",
@@ -81,6 +86,9 @@ export function sanitizePackageMetadata(source) {
 }
 
 export function assertPublicGuideReleaseSource(source) {
-  if (/\b[CF][A-Z0-9]{10,}\b/.test(source) || /https?:\/\/[^\s<>]+\.slack\.com\/archives\//i.test(source))
+  if (
+    /\b[CF][A-Z0-9]{10,}\b/.test(source) ||
+    /https?:\/\/[^\s<>]+\.slack\.com\/archives\//i.test(source)
+  )
     throw Error("Public welcome guide source contains a live Slack identifier or workspace URL.");
 }

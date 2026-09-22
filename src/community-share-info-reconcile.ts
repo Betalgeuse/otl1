@@ -21,7 +21,8 @@ export async function reconcileShareInfoChannels(
       limit: 20,
     });
     const messages = list(history.messages).map(object).toReversed();
-    for (const event of messages) {
+    for (const message of messages) {
+      const event = object({ ...message, channel: channelId });
       const source = string(event.ts);
       const userId = string(event.user ?? "");
       if (!/^[UW][A-Z0-9]+$/.test(userId)) continue;

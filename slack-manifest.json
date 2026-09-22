@@ -22,6 +22,10 @@
         "chat:write",
         "chat:write.public",
         "im:write",
+        "canvases:read",
+        "canvases:write",
+        "pins:read",
+        "pins:write",
         "reactions:write",
         "emoji:read"
       ]
