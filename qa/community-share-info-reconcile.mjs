@@ -39,14 +39,12 @@ globalThis.fetch = async (url, options = {}) => {
       messages: [
         {
           type: "message",
-          channel: payload.channel,
           user: "UQA",
           ts: payload.channel === "CSHARE" ? "100.1" : "200.1",
           text: "놓친 정보 공유 글",
         },
         {
           type: "message",
-          channel: payload.channel,
           user: "UBOT",
           bot_id: "BQA",
           ts: "300.1",
