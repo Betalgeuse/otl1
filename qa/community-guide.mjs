@@ -117,6 +117,7 @@ assert.equal(publishCalls, 1);
 assert.equal(canvasEdits.length, 1);
 assert.equal(canvasEdits[0].canvas_id, "FCANVAS01");
 assert.equal(canvasEdits[0].changes[0].operation, "replace");
+assert.doesNotMatch(canvasEdits[0].changes[0].document_content.markdown, /^#/);
 assert.equal(messageUpdates.length, 1);
 assert.equal(messageUpdates[0].ts, "1790000000.100000");
 assert.equal(messageUpdates[0].blocks[0].accessory.url, env.COMMUNITY_GUIDE_CANVAS_URL);
