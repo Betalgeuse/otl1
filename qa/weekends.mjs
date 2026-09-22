@@ -73,6 +73,8 @@ try {
   assert.doesNotMatch(sent[1].text, /<!channel>|<!here>|<@/);
   assert.match(sent[0].text, /선택|멘션 없이/);
   assert.match(sent[1].text, /선택|멘션 없이/);
+  assert.match(sent[0].text, /오늘 안에 끝낼 만큼 작고, 완료 여부가 분명한/);
+  assert.match(sent[1].text, /발표 자료 준비하기.*발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기/s);
   assert.equal(dueCalls, 0);
   await runCommunitySchedule(env, store, new Date("2026-09-14T01:00:00Z"));
   assert.equal(sent.length, 3);

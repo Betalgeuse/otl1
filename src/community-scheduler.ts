@@ -43,6 +43,13 @@ type Schedule = {
   readonly reviewTime: string;
 };
 
+const goalWritingGuide = `
+
+*작고, 검증 가능하게 적어보세요.*
+• 이걸 해내면 다른 일이 더 쉬워지거나 필요 없어지나요?
+• 오늘 안에 끝낼 만큼 작고, 완료 여부가 분명한가요?
+예: \`발표 자료 준비하기\` → \`발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기\``;
+
 function parseSchedule(value: unknown): Schedule {
   const body = object(value);
   if (typeof body.enabled !== "boolean") throw new InputError("Invalid schedule enabled flag");
@@ -54,9 +61,9 @@ function parseSchedule(value: unknown): Schedule {
 }
 function promptText(date: string, kind: Kind): string {
   if (isWeekend(date))
-    return `${date} 주말 *ONE THING*은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 이 스레드나 채널에 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
+    return `${date} 주말 *ONE THING*은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 골라보세요.${goalWritingGuide}\n\n이 글의 스레드나 채널에 한 문장으로 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
   return kind === "goal"
-    ? `${date} 오늘의 *ONE THING*!!! :seedling: 오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지는 무엇인가요? 그 일과 이유를 이 글의 스레드에 남겨주세요. 가장 중요한 일부터 같이 해봅시다 :muscle:`
+    ? `${date} 오늘의 *ONE THING*!!! :seedling:\n오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지는 무엇인가요?${goalWritingGuide}\n\n이 글의 스레드에 한 문장으로 남겨주세요. 멘션은 필요 없어요. 가장 중요한 일부터 같이 해봅시다 :muscle:`
     : `${date} 오늘 *ONE THING*은 어떠셨나요? :memo: 해낸 만큼, 느낀 점 한 줄을 이 글의 스레드에 남겨주세요. 다 못 했어도 괜찮아요!!! :penguin:`;
 }
 async function commonText(

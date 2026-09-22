@@ -116,6 +116,9 @@ try {
   const common = posts.find((post) => /오늘의 \*ONE THING\*/.test(post.text));
   assert.match(common.text, /<@U1>/);
   assert.doesNotMatch(common.text, /<@UDORM>/);
+  assert.match(common.text, /다른 일이 더 쉬워지거나 필요 없어지/);
+  assert.match(common.text, /오늘 안에 끝낼 만큼 작고, 완료 여부가 분명한/);
+  assert.match(common.text, /발표 자료 준비하기.*발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기/s);
   console.log(
     "PASS schedule overlap: common and personal due at the same KST minute each post exactly once",
   );
