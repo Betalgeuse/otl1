@@ -83,4 +83,8 @@ if (
 const result = JSON.parse(body.rows[0][0]);
 if (typeof result !== "object" || result === null || Array.isArray(result))
   throw new Error("Invalid reconciliation result");
+if (options.userId && result.fallbackRoutes > 0)
+  throw new Error(
+    "Refusing user-scoped daily prompt fallback; route the garden to the member message thread.",
+  );
 console.log(JSON.stringify(result, null, 2));
