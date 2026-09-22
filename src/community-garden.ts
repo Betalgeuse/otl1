@@ -2,35 +2,149 @@ import { communityConfirmationMessage } from "./community-messages";
 import { statusMessage } from "./community-records";
 import { type CommunityContext, ephemeral, payloadRecord, post } from "./community-runtime";
 import { callSlack } from "./community-social";
-import { object, string } from "./input";
+import { type Json, object, string } from "./input";
+
+export type GardenPublication = {
+  readonly sent: string;
+  readonly prior: readonly { readonly body: unknown }[];
+  readonly messageText: string;
+  readonly projectionKey: string;
+};
+export type PreparedGarden = {
+  readonly prior: readonly { readonly body: unknown }[];
+  readonly message: { readonly [key: string]: Json };
+};
+
+function markedBlocks(value: unknown, marker: string): readonly Json[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((block) => payloadRecord(block).type !== "actions")
+    .map((block, index) =>
+      index === 0 ? { ...payloadRecord(block), block_id: marker } : payloadRecord(block),
+    );
+}
+
+export async function findGardenMessage(
+  context: CommunityContext,
+  marker: string,
+): Promise<string | null> {
+  let cursor = "";
+  do {
+    const result = await callSlack(context.env.SLACK_BOT_TOKEN, "conversations.replies", {
+      channel: context.scope.channelId,
+      ts: context.thread,
+      limit: 100,
+      ...(cursor ? { cursor } : {}),
+    });
+    if (Array.isArray(result.messages))
+      for (const message of result.messages) {
+        const item = object(message);
+        if (
+          Array.isArray(item.blocks) &&
+          item.blocks.some((block) => object(block).block_id === marker)
+        )
+          return string(item.ts);
+      }
+    const metadata = result.response_metadata;
+    cursor = metadata ? string(object(metadata).next_cursor) : "";
+  } while (cursor);
+  return null;
+}
+
+export async function postGarden(
+  context: CommunityContext,
+  forDate: string,
+  marker: string,
+  projectionKey: string,
+  revision: number,
+): Promise<GardenPublication> {
+  return postPreparedGarden(
+    context,
+    forDate,
+    marker,
+    projectionKey,
+    revision,
+    await prepareGardenPublication(context, forDate),
+  );
+}
+
+export async function prepareGardenPublication(
+  context: CommunityContext,
+  forDate: string,
+): Promise<PreparedGarden> {
+  const day = await context.store.day({ ...context.scope, date: forDate });
+  return {
+    prior: await context.store.listRecords(context.scope, "card"),
+    message: payloadRecord(await statusMessage(context, day, null)),
+  };
+}
+
+export async function postPreparedGarden(
+  context: CommunityContext,
+  forDate: string,
+  marker: string,
+  projectionKey: string,
+  revision: number,
+  prepared: PreparedGarden,
+): Promise<GardenPublication> {
+  const { message, prior } = prepared;
+  const blocks = markedBlocks(message.blocks, marker);
+  const reconciled = await findGardenMessage(context, marker);
+  const sent = reconciled ?? (await post(context, { ...message, blocks }));
+  await context.store.putRecord({
+    ...context.scope,
+    key: `card:refresh:${sent}`,
+    kind: "card",
+    body: {
+      ts: sent,
+      text: string(message.text),
+      date: forDate,
+      thread: context.thread,
+      source: context.source,
+      revision,
+      projectionKey,
+    },
+  });
+  return { sent, prior, messageText: string(message.text), projectionKey };
+}
+
+export async function finishGardenPublication(
+  context: CommunityContext,
+  publication: GardenPublication,
+  forDate: string,
+  undoKey: string | null,
+): Promise<void> {
+  await retireGardenCards(context, publication);
+  try {
+    await showGardenControls(context, forDate, undoKey);
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        event: "community.garden.controls_failed",
+        type: error instanceof Error ? error.name : "Unknown",
+      }),
+    );
+  }
+}
 
 export async function publishGardenNow(
   context: CommunityContext,
   forDate: string,
   undoKey: string | null,
 ): Promise<string> {
-  const value = (key: string) =>
-    JSON.stringify({
-      ownerId: context.scope.userId,
-      key,
-      thread: context.thread,
-      source: context.source,
-    });
   const day = await context.store.day({ ...context.scope, date: forDate });
-  const prior = await context.store.listRecords(context.scope, "card");
-  const message = payloadRecord(await statusMessage(context, day, null));
-  const blocks = Array.isArray(message.blocks)
-    ? message.blocks.filter((block) => object(block).type !== "actions")
-    : [];
-  const sent = await post(context, { ...message, blocks });
-  await context.store.putRecord({
-    ...context.scope,
-    key: `card:refresh:${sent}`,
-    kind: "card",
-    body: { ts: sent, text: string(message.text), date: forDate },
-  });
+  const message = payloadRecord(await statusMessage(context, day, undoKey));
+  return ephemeral(context, message);
+}
+
+export async function retireGardenCards(
+  context: CommunityContext,
+  publication: GardenPublication,
+): Promise<void> {
+  const { sent, prior } = publication;
   for (const record of prior) {
     const data = object(record.body);
+    if (data.projectionKey !== publication.projectionKey) continue;
     const ts = string(data.ts);
     if (
       ts === sent ||
@@ -63,6 +177,20 @@ export async function publishGardenNow(
       );
     }
   }
+}
+
+export async function showGardenControls(
+  context: CommunityContext,
+  forDate: string,
+  undoKey: string | null,
+): Promise<void> {
+  const value = (key: string) =>
+    JSON.stringify({
+      ownerId: context.scope.userId,
+      key,
+      thread: context.thread,
+      source: context.source,
+    });
   await ephemeral(
     context,
     communityConfirmationMessage(`${forDate} 내 잔디 관리`, [
@@ -83,5 +211,4 @@ export async function publishGardenNow(
         : []),
     ]),
   );
-  return sent;
 }

@@ -1,3 +1,4 @@
+import { CommunityScheduleStore, parseCommunityRecord } from "./community-schedule-store";
 import type {
   ChangeResult,
   CommunityDay,
@@ -5,16 +6,11 @@ import type {
   CommunityScope,
   DayChange,
   DayScope,
-  GroupSchedule,
+  GardenSeason,
   MemberIntroduction,
   Outcome,
-  PreferencePatch,
-  RecordKey,
-  ReminderJob,
-  SupportPreferences,
 } from "./community-types";
 import { date, InputError, type Json, list, object, string } from "./input";
-import type { NeonStore } from "./store";
 
 function bool(value: unknown): boolean {
   if (typeof value !== "boolean") throw new InputError("Boolean required");
@@ -49,30 +45,6 @@ function day(value: unknown): CommunityDay {
     revision: v.revision,
   };
 }
-function time(value: unknown): string {
-  const result = string(value);
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(result))
-    throw new InputError("시간은 HH:MM으로 입력해 주세요.");
-  return result;
-}
-function preferences(value: unknown): SupportPreferences {
-  const v = object(value);
-  if (v.timezone !== "Asia/Seoul") throw new InputError("Invalid timezone");
-  return {
-    ...scope(v),
-    enabled: bool(v.enabled),
-    goalTime: time(v.goalTime),
-    reviewTime: time(v.reviewTime),
-    timezone: v.timezone,
-  };
-}
-function record(value: Json): CommunityRecord | null {
-  if (value === null) return null;
-  const v = object(value);
-  const body = Object.entries(value).find(([key]) => key === "body")?.[1] ?? null;
-  return { ...scope(v), key: string(v.key), kind: string(v.kind), status: string(v.status), body };
-}
-
 function introduction(value: unknown): MemberIntroduction | null {
   if (value === null) return null;
   const v = object(value);
@@ -81,6 +53,7 @@ function introduction(value: unknown): MemberIntroduction | null {
   return {
     teamId: string(v.teamId),
     userId: string(v.userId),
+    confirmedName: v.confirmedName === null ? null : string(v.confirmedName),
     intro: string(v.intro),
     linkedin: v.linkedin === null ? null : string(v.linkedin),
     details: v.details === null ? null : string(v.details),
@@ -90,14 +63,20 @@ function introduction(value: unknown): MemberIntroduction | null {
   };
 }
 
-export class CommunityStore {
-  constructor(private readonly db: Pick<NeonStore, "queryJson">) {}
-  private call(operation: string, payload: Json): Promise<Json> {
-    return this.db.queryJson("SELECT otl.community_execute($1,$2::jsonb)", [
-      operation,
-      JSON.stringify(payload),
-    ]);
-  }
+function gardenSeason(value: Json): GardenSeason | null {
+  if (value === null) return null;
+  const input = object(value);
+  if (typeof input.seasonId !== "number" || !Number.isSafeInteger(input.seasonId))
+    throw new InputError("Invalid garden season");
+  return {
+    seasonId: input.seasonId,
+    openedOn: date(input.openedOn),
+    closedOn: input.closedOn === null ? null : date(input.closedOn),
+    days: list(input.days).map(day),
+  };
+}
+
+export class CommunityStore extends CommunityScheduleStore {
   private introductionCall(operation: string, payload: Json): Promise<Json> {
     return this.db.queryJson("SELECT otl.introduction_execute($1,$2::jsonb)", [
       operation,
@@ -119,20 +98,64 @@ export class CommunityStore {
   async members(teamId: string, channelId: string): Promise<readonly string[]> {
     return list(await this.call("members", { teamId, channelId })).map(string);
   }
+  async lifecycleEligibility(input: CommunityScope): Promise<{
+    readonly state: "active" | "grace" | "dormant";
+    readonly revision: number | null;
+  }> {
+    const value = object(await this.call("lifecycle_eligibility", input));
+    const state = string(value.state);
+    if (state !== "active" && state !== "grace" && state !== "dormant")
+      throw new InputError("Invalid lifecycle eligibility");
+    const revision = value.revision;
+    if (
+      revision !== null &&
+      (typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 0)
+    )
+      throw new InputError("Invalid lifecycle revision");
+    return { state, revision };
+  }
   async history(input: CommunityScope): Promise<readonly CommunityDay[]> {
     return list(await this.call("history", input)).map(day);
+  }
+  async seasonHistory(input: CommunityScope, seasonId?: number): Promise<GardenSeason | null> {
+    if (seasonId !== undefined && (!Number.isSafeInteger(seasonId) || seasonId < 1))
+      throw new InputError("Invalid garden season");
+    return gardenSeason(
+      await this.db.queryJson(
+        `SELECT coalesce((SELECT jsonb_build_object(
+          'seasonId',s.season_id,'openedOn',s.opened_on,'closedOn',s.closed_on,
+          'days',coalesce((SELECT jsonb_agg(otl.community_day_json(d) ORDER BY d.day)
+            FROM otl.community_days d WHERE d.team_id=s.team_id AND d.channel_id=s.channel_id
+              AND d.user_id=s.user_id AND d.day>=s.opened_on
+              AND (s.closed_on IS NULL OR d.day<=s.closed_on)),'[]'::jsonb))
+          FROM otl.grass_seasons s WHERE s.team_id=$1 AND s.channel_id=$2 AND s.user_id=$3
+            AND (nullif($4,'') IS NULL OR s.season_id=nullif($4,'')::bigint)
+            AND (nullif($4,'') IS NOT NULL OR s.closed_at IS NULL)
+          ORDER BY s.season_id DESC LIMIT 1),'null'::jsonb)`,
+        [
+          input.teamId,
+          input.channelId,
+          input.userId,
+          seasonId === undefined ? "" : String(seasonId),
+        ],
+      ),
+    );
   }
   async listRecords(input: CommunityScope, kind: string): Promise<readonly CommunityRecord[]> {
     const values = await this.call("list_records", { ...input, kind });
     if (!Array.isArray(values)) throw new InputError("Record list required");
     return values.map((value: Json) => {
-      const result = record(value);
+      const result = parseCommunityRecord(value);
       if (!result) throw new InputError("Record missing");
       return result;
     });
   }
   async introduction(teamId: string, userId: string): Promise<MemberIntroduction | null> {
     return introduction(await this.introductionCall("get", { teamId, userId }));
+  }
+  async introductionNameInput(teamId: string, userId: string): Promise<string | null> {
+    const value = await this.introductionCall("name_input", { teamId, userId });
+    return value === null ? null : string(value);
   }
   async introductions(teamId: string): Promise<readonly MemberIntroduction[]> {
     return list(await this.introductionCall("list", { teamId })).map((value) => {
@@ -144,6 +167,7 @@ export class CommunityStore {
   async prepareIntroduction(input: {
     readonly teamId: string;
     readonly userId: string;
+    readonly confirmedName: string;
     readonly intro: string;
     readonly linkedin: string | null;
     readonly details: string | null;
@@ -170,8 +194,29 @@ export class CommunityStore {
       throw new InputError("ONE THING은 1~200자로 적어 주세요.");
     if (input.action === "reflection" && (!input.text?.trim() || [...input.text].length > 2000))
       throw new InputError("후기는 1~2000자로 적어 주세요.");
-    const v = object(await this.call("change", input));
-    return {
+    const { delivery, reviewThreadV2, ...change } = input;
+    const v = object(await this.call("change", change));
+    let returnTransition: ChangeResult["returnTransition"];
+    if (v.returnTransition !== undefined) {
+      const transition = object(v.returnTransition);
+      if (transition.kind !== "welcome_back") throw new InputError("Invalid return transition");
+      const lifecycleRevision = transition.lifecycleRevision;
+      const seasonId = transition.seasonId;
+      if (
+        typeof lifecycleRevision !== "number" ||
+        typeof seasonId !== "number" ||
+        !Number.isSafeInteger(lifecycleRevision) ||
+        !Number.isSafeInteger(seasonId)
+      )
+        throw new InputError("Invalid return transition revision");
+      returnTransition = {
+        kind: "welcome_back",
+        lifecycleRevision,
+        seasonId,
+        effectKey: string(transition.effectKey),
+      };
+    }
+    const result: ChangeResult = {
       day: day(v.day),
       changed: bool(v.changed),
       conflict: bool(v.conflict),
@@ -179,56 +224,31 @@ export class CommunityStore {
       firstRegistration: v.firstRegistration === true,
       firstReflection: bool(v.firstReflection),
       undoKey: string(v.undoKey),
+      ...(returnTransition ? { returnTransition } : {}),
     };
-  }
-  async enrollReminders(input: CommunityScope): Promise<SupportPreferences> {
-    return preferences(await this.call("enroll_reminders", input));
-  }
-  async preferences(
-    input: CommunityScope,
-    patch: PreferencePatch = {},
-  ): Promise<SupportPreferences> {
-    if (patch.goalTime !== undefined) time(patch.goalTime);
-    if (patch.reviewTime !== undefined) time(patch.reviewTime);
-    return preferences(await this.call("preferences", { ...input, ...patch }));
-  }
-  async putRecord(input: Omit<CommunityRecord, "status">): Promise<CommunityRecord> {
-    const result = record(await this.call("put_record", input));
-    if (!result) throw new InputError("Record missing");
-    return result;
-  }
-  async setGroupSchedule(input: CommunityScope, settings: GroupSchedule): Promise<CommunityRecord> {
-    time(settings.goalTime);
-    time(settings.reviewTime);
-    const result = record(await this.call("set_group_schedule", { ...input, ...settings }));
-    if (!result) throw new InputError("Schedule missing");
-    return result;
-  }
-  async getRecord(input: RecordKey): Promise<CommunityRecord | null> {
-    return record(await this.call("get_record", input));
-  }
-  async claimRecord(input: RecordKey): Promise<boolean> {
-    return bool(await this.call("claim_record", input));
-  }
-  async finishRecord(input: RecordKey, status: "sent" | "failed" | "cancelled"): Promise<boolean> {
-    return bool(await this.call("finish_record", { ...input, status }));
-  }
-  async due(teamId: string, channelId: string, now: string): Promise<readonly ReminderJob[]> {
-    if (!Number.isFinite(Date.parse(now))) throw new InputError("Invalid time");
-    return list(await this.call("due", { teamId, channelId, now })).map((item) => {
-      const v = object(item);
-      if (v.kind !== "goal" && v.kind !== "review") throw new InputError("Invalid reminder kind");
-      return { ...scope(v), key: string(v.key), date: date(v.date), kind: v.kind };
-    });
-  }
-  async claimReminder(input: RecordKey, now = new Date().toISOString()): Promise<boolean> {
-    if (!Number.isFinite(Date.parse(now))) throw new InputError("Invalid time");
-    return bool(await this.call("claim_reminder", { ...input, now }));
-  }
-  async finishReminder(
-    input: RecordKey,
-    status: "sent" | "failed" | "cancelled",
-  ): Promise<boolean> {
-    return this.finishRecord(input, status);
+    if (!result.changed || result.conflict || delivery === undefined || reviewThreadV2 !== true)
+      return result;
+    const season = await this.seasonHistory(input);
+    if (!season || result.day.date < season.openedOn) return result;
+    if (
+      change.action !== "goal" &&
+      result.day.outcome === "pending" &&
+      result.day.reflection === ""
+    )
+      return result;
+    const route =
+      change.action === "goal" ? "route_member_goal_garden" : "route_member_review_garden";
+    const routed = await this.db.queryJson(`SELECT otl.${route}($1::jsonb)`, [
+      JSON.stringify({
+        teamId: input.teamId,
+        channelId: input.channelId,
+        userId: input.userId,
+        date: result.day.date,
+        sourceTs: delivery.source,
+        threadTs: delivery.thread,
+      }),
+    ]);
+    if (routed === null) return result;
+    return { ...result, gardenDeliveryKey: string(object(routed).deliveryKey) };
   }
 }

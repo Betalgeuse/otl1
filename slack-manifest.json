@@ -21,6 +21,7 @@
         "groups:history",
         "chat:write",
         "chat:write.public",
+        "im:write",
         "reactions:write",
         "emoji:read"
       ]
@@ -33,7 +34,8 @@
         "app_mention",
         "message.channels",
         "message.groups",
-        "member_joined_channel"
+        "member_joined_channel",
+        "team_join"
       ]
     },
     "interactivity": {

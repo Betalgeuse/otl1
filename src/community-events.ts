@@ -1,27 +1,28 @@
-import { adminCommand, captureFeedback } from "./community-admin";
-import { groupCard, settingsCard } from "./community-controls";
-import { decideCommunityRecord } from "./community-decision";
-import { prepareRecordEdit } from "./community-edits";
+import { bugTextEntryState } from "./community-bug-entry-session";
+import { parseBugIntakeCandidate } from "./community-bug-intent";
+import { digestBugText } from "./community-bug-private";
+import { replayBugDelivery } from "./community-bugs";
 import { enrollReminderMember } from "./community-enrollment";
 import { messageDate } from "./community-followup";
 import { deliverWelcomeGuide } from "./community-guide";
 import { incomingMessageBody } from "./community-intake";
 import { handleIntroductionChannelMessage } from "./community-introduction-channel";
-import { classifyCommunityIntent } from "./community-language";
-import { communityConfirmationMessage } from "./community-messages";
-import { answerCommunityQuestion } from "./community-questions";
-import { applyChange, confirmChange, publishStatus } from "./community-records";
-import { handleReflectionReport } from "./community-reflection";
+import { handleLifecycleAdminMessage } from "./community-lifecycle-admin";
+import { lifecycleAdminStore } from "./community-lifecycle-runtime-store";
+import { dispatchCommunityMessage, dispatchFeedbackBugMessage } from "./community-message-router";
 import {
-  type CommunityContext,
-  type CommunityEnv,
-  ephemeral,
-  post,
-  scopedValue,
-  textReply,
-} from "./community-runtime";
+  handleReferralCapacityAdminMessage,
+  referralCapacityAdminStore,
+} from "./community-referral-capacity-admin";
+import { handleReferralTeamJoin } from "./community-referral-join";
+import { handleReferralLinkMessage } from "./community-referral-link";
+import { referralSlackPort } from "./community-referral-slack";
+import { CommunityReferralStore } from "./community-referral-store";
+import { replayReflectionOutcomeDelivery } from "./community-reflection-outcome";
+import { type CommunityEnv, textReply } from "./community-runtime";
+import { handleShareInfoMessage } from "./community-share-info";
+import { callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
-import type { DayChange } from "./community-types";
 import { welcomeTownhallMember } from "./community-welcome";
 import { InputError, koreaDate, object, string } from "./input";
 import { messageEvent } from "./slack-message-event";
@@ -37,21 +38,126 @@ export async function handleCommunityEvent(
     data.team_id !== env.SLACK_TEAM_ID
   )
     return false;
-  const event = messageEvent(object(data.event));
+  const rawEvent = object(data.event);
+  if (rawEvent.type === "team_join") {
+    if (env.REFERRALS_ENABLED === "true") {
+      const joined = object(rawEvent.user);
+      const referral = new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+        teamId: env.SLACK_TEAM_ID,
+        channelId: env.COMMUNITY_PUBLIC_CHANNEL_ID ?? "",
+        userId: env.COMMUNITY_ADMIN_ID ?? "",
+      });
+      await handleReferralTeamJoin(
+        { teamId: env.SLACK_TEAM_ID, eventId: string(data.event_id), userId: string(joined.id) },
+        env,
+        referral,
+        referralSlackPort(env),
+      );
+    }
+    return true;
+  }
+  if (rawEvent.type !== "message" && rawEvent.type !== "app_mention") return false;
+  const event = messageEvent(rawEvent);
+  if (typeof event.text === "string" && event.text.trim().startsWith("생애주기 ")) {
+    if (event.type !== "message" || event.bot_id || event.subtype !== undefined || event.edit_ts)
+      return true;
+    const adminChannel = env.COMMUNITY_CHANNEL_ID;
+    const userId = string(event.user);
+    if (
+      !adminChannel ||
+      adminChannel === env.COMMUNITY_PUBLIC_CHANNEL_ID ||
+      event.channel !== adminChannel ||
+      userId !== env.COMMUNITY_ADMIN_ID
+    )
+      throw new InputError("운영자 전용 기능입니다.");
+    const source = string(event.ts);
+    const stamp = Number(source);
+    if (!Number.isFinite(stamp) || Math.abs(Date.now() / 1000 - stamp) > 300) return true;
+    return handleLifecycleAdminMessage(
+      {
+        teamId: env.SLACK_TEAM_ID,
+        channelId: adminChannel,
+        userId,
+        text: string(event.text).trim(),
+        key: string(data.event_id),
+        now: new Date(stamp * 1_000).toISOString(),
+      },
+      env,
+      lifecycleAdminStore(env.LIFECYCLE_ADMIN_DATABASE_URL),
+      async (replyText) => {
+        await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
+          channel: userId,
+          text: replyText,
+        });
+      },
+    );
+  }
+  if (
+    typeof event.text === "string" &&
+    (event.text.trim().startsWith("초대 한도 ") || event.text.trim().startsWith("초대 기본 한도 "))
+  ) {
+    if (event.type !== "message" || event.bot_id || event.subtype !== undefined || event.edit_ts)
+      return true;
+    const adminChannel = env.COMMUNITY_CHANNEL_ID;
+    const userId = string(event.user);
+    if (
+      !adminChannel ||
+      adminChannel === env.COMMUNITY_PUBLIC_CHANNEL_ID ||
+      event.channel !== adminChannel ||
+      userId !== env.COMMUNITY_ADMIN_ID
+    )
+      throw new InputError("운영자 전용 기능입니다.");
+    const stamp = Number(string(event.ts));
+    if (!Number.isFinite(stamp) || Math.abs(Date.now() / 1000 - stamp) > 300) return true;
+    return handleReferralCapacityAdminMessage(
+      {
+        teamId: env.SLACK_TEAM_ID,
+        channelId: adminChannel,
+        userId,
+        text: string(event.text).trim(),
+        key: string(data.event_id),
+        now: new Date(stamp * 1_000).toISOString(),
+      },
+      env,
+      referralCapacityAdminStore(env.REFERRAL_ADMIN_DATABASE_URL),
+      async (replyText) => {
+        await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
+          channel: userId,
+          text: replyText,
+        });
+      },
+    );
+  }
   if (await deliverWelcomeGuide(event, env)) return true;
   if (await handleIntroductionChannelMessage(event, env)) return true;
   await enrollReminderMember(event, env);
   if (await welcomeTownhallMember(event, env)) return true;
+  const shareContext = {
+    env,
+    store: new CommunityStore(new NeonStore(env.DATABASE_URL)),
+    scope: {
+      teamId: env.SLACK_TEAM_ID,
+      channelId: string(event.channel),
+      userId: string(event.user),
+    },
+    thread: string(event.thread_ts ?? event.ts),
+    source: string(event.ts),
+    date: koreaDate(Number(event.ts)),
+    key: `share-info:${string(event.ts)}`,
+  };
+  if (await handleShareInfoMessage(event, shareContext)) return true;
   if (
     ![
       env.COMMUNITY_CHANNEL_ID,
       env.COMMUNITY_PUBLIC_CHANNEL_ID,
       env.COMMUNITY_RELEASE_CHANNEL_ID,
+      env.COMMUNITY_FEEDBACK_CHANNEL_ID,
     ].includes(string(event.channel))
   )
     return false;
+  const isFeedbackChannel = event.channel === env.COMMUNITY_FEEDBACK_CHANNEL_ID;
   if (
-    event.type !== "message" ||
+    !["message", ...(isFeedbackChannel ? ["app_mention"] : [])].includes(string(event.type)) ||
     event.bot_id ||
     (event.subtype !== undefined && event.subtype !== "thread_broadcast")
   )
@@ -73,32 +179,98 @@ export async function handleCommunityEvent(
   const scope = { teamId: env.SLACK_TEAM_ID, channelId: string(event.channel), userId };
   const store = new CommunityStore(new NeonStore(env.DATABASE_URL));
   const key = `incoming:${source}${event.edit_ts ? `:edit:${string(event.edit_ts)}` : ""}`;
+  if (env.REFERRALS_ENABLED === "true" && text === "내 초대 링크" && !isFeedbackChannel) {
+    if (event.edit_ts) return true;
+    await store.putRecord({
+      ...scope,
+      key,
+      kind: "incoming",
+      body: incomingMessageBody(
+        {
+          date: koreaDate(stamp),
+          thread: string(event.thread_ts ?? source),
+          rawText,
+          normalizedText: text,
+          editTs: null,
+        },
+        null,
+      ),
+    });
+    if (!(await store.claimRecord({ ...scope, key }))) return true;
+    try {
+      await handleReferralLinkMessage(
+        { teamId: env.SLACK_TEAM_ID, channelId: string(event.channel), userId, text },
+        env,
+        new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+          teamId: env.SLACK_TEAM_ID,
+          channelId: string(event.channel),
+          userId,
+        }),
+        referralSlackPort(env),
+      );
+      await store.finishRecord({ ...scope, key }, "sent");
+    } catch (error) {
+      await store.finishRecord({ ...scope, key }, "failed");
+      throw error;
+    }
+    return true;
+  }
   const thread = string(event.thread_ts ?? event.ts);
   const date = await messageDate(store, scope, string(env.COMMUNITY_ADMIN_ID), source, thread);
-  const context = { env, store, scope, key, thread, source, date };
+  const textEntryState =
+    thread === source ? "missing" : await bugTextEntryState(store, scope, thread);
+  const context = {
+    env,
+    store,
+    scope,
+    key,
+    thread,
+    source,
+    date,
+    bugTextEntryState: textEntryState,
+  };
+  const bugCandidate = parseBugIntakeCandidate(
+    text,
+    [env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_FEEDBACK_CHANNEL_ID].includes(scope.channelId),
+  );
+  if (isFeedbackChannel && !bugCandidate && thread === source) return true;
+  const textEntryInput = textEntryState !== "missing";
+  const feedbackBugInput = isFeedbackChannel && (bugCandidate !== null || thread !== source);
   await store.putRecord({
     ...scope,
     key,
     kind: "incoming",
-    body: incomingMessageBody({
-      date,
-      thread,
-      rawText,
-      normalizedText: text,
-      editTs: event.edit_ts ? string(event.edit_ts) : null,
-    }),
+    body: incomingMessageBody(
+      {
+        date,
+        thread,
+        rawText,
+        normalizedText: text,
+        editTs: event.edit_ts ? string(event.edit_ts) : null,
+      },
+      bugCandidate || feedbackBugInput || textEntryInput
+        ? { messageType: "bug_intake", contentDigest: await digestBugText(text) }
+        : null,
+    ),
   });
-  if (!(await store.claimRecord({ ...scope, key }))) return true;
+  if (!(await store.claimRecord({ ...scope, key }))) {
+    await replayBugDelivery(context);
+    if (!isFeedbackChannel && !bugCandidate && textEntryState === "missing")
+      await replayReflectionOutcomeDelivery(context);
+    return true;
+  }
   try {
     if (event.edit_ts && !/후기|회고|수정|정정|변경/.test(text)) {
       await store.finishRecord({ ...scope, key }, "sent");
       return true;
     }
-    await processMessage(
-      context,
-      text,
-      Boolean(env.COMMUNITY_BOT_USER_ID && rawText.includes(`<@${env.COMMUNITY_BOT_USER_ID}>`)),
-    );
+    if (isFeedbackChannel) await dispatchFeedbackBugMessage(context, text);
+    else
+      await dispatchCommunityMessage(
+        context,
+        text,
+        Boolean(env.COMMUNITY_BOT_USER_ID && rawText.includes(`<@${env.COMMUNITY_BOT_USER_ID}>`)),
+      );
     await store.finishRecord({ ...scope, key }, "sent");
   } catch (error) {
     console.error(
@@ -116,139 +288,4 @@ export async function handleCommunityEvent(
     );
   }
   return true;
-}
-
-async function processMessage(
-  context: CommunityContext,
-  text: string,
-  addressed: boolean,
-): Promise<void> {
-  if (await captureFeedback(context, text)) return;
-  if (
-    context.scope.channelId === context.env.COMMUNITY_RELEASE_CHANNEL_ID &&
-    ![context.env.COMMUNITY_CHANNEL_ID, context.env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(
-      context.scope.channelId,
-    )
-  )
-    return;
-  if (await adminCommand(context, text)) return;
-  if (/^(개인 )?알림 ?설정$/.test(text)) {
-    await settingsCard(context);
-    return;
-  }
-  if (/^(공통 알림|공통 안내) ?설정$/.test(text)) {
-    if (context.scope.userId !== context.env.COMMUNITY_ADMIN_ID) {
-      await textReply(context, "공통 안내는 운영자만 설정할 수 있어요.");
-      return;
-    }
-    await groupCard(context);
-    return;
-  }
-  if (/^샤라웃( 보내기)?$/.test(text)) {
-    await post(
-      context,
-      communityConfirmationMessage("오늘 ONE THING을 함께한 동료에게 한마디!!! 🙌", [
-        {
-          label: "샤라웃 보내기",
-          actionId: "community_shoutout",
-          value: scopedValue(context.scope, context.date),
-        },
-      ]),
-    );
-    return;
-  }
-  if (await handleReflectionReport(context, text)) return;
-  if (await prepareRecordEdit(context, text)) return;
-  if (await answerCommunityQuestion(context, text, addressed)) return;
-  const day = await context.store.day({ ...context.scope, date: context.date });
-  if (/^(내 상태|원씽 보기|상태 보기)$/.test(text)) {
-    await publishStatus(context, day, null);
-    return;
-  }
-  if (text.length > 1000) {
-    await textReply(
-      context,
-      "내용이 길어요. ONE THING은 200자, 후기는 이 대화에서 1,000자 이내로 알려주세요.",
-    );
-    return;
-  }
-  if (!context.env.AI) {
-    await textReply(context, "자연어 연결을 사용할 수 없어요. 잠시 후 다시 알려주세요.");
-    return;
-  }
-  const allowed = await context.env.INTENT_RATE_LIMITER?.limit({
-    key: `community:${context.scope.userId}`,
-  });
-  if (allowed && !allowed.success) {
-    await textReply(context, "잠시 후 다시 알려주세요. 기록은 바꾸지 않았어요.");
-    return;
-  }
-  const intent = decideCommunityRecord(
-    await classifyCommunityIntent(context.env.AI, { goal: day.goal || null, text }),
-    text,
-  );
-  const base = {
-    ...context.scope,
-    date: context.date,
-    key: `change:${context.key}`,
-    expectedRevision: day.revision,
-  };
-  switch (intent.intent) {
-    case "ignore":
-      return;
-    case "unclear":
-      if (!intent.currentDateSafe) {
-        await ephemeral(context, {
-          text: "날짜가 있는 수행 기록은 한 날짜와 완료·부분 완료·미완료·휴식을 함께 알려주세요. 아직 기록을 바꾸지 않았어요.",
-        });
-        return;
-      }
-      await confirmChange(
-        context,
-        day,
-        text,
-        day.goal ? (intent.reflectionText ? "reflection" : "complete") : "goal",
-      );
-      return;
-    case "goal": {
-      const goal = intent.goalText ?? text;
-      if (intent.needsConfirmation || context.date !== koreaDate(Date.now() / 1000) || day.goal) {
-        await confirmChange(context, day, goal, "goal");
-        return;
-      }
-      await applyChange(context, { ...base, action: "goal", text: goal });
-      return;
-    }
-    case "rest":
-      if (intent.needsConfirmation || context.date !== koreaDate(Date.now() / 1000)) {
-        await confirmChange(context, day, text, "rest");
-        return;
-      }
-      await applyChange(context, { ...base, action: "rest" });
-      return;
-    case "completion":
-    case "reflection": {
-      const reflectionText = intent.reflectionText;
-      if (
-        intent.needsConfirmation ||
-        !day.goal ||
-        intent.outcome === "unknown" ||
-        context.date !== koreaDate(Date.now() / 1000)
-      ) {
-        await confirmChange(context, day, text, reflectionText ? "reflection" : "complete");
-        return;
-      }
-      const outcome = intent.outcome;
-      const change: DayChange = reflectionText
-        ? { ...base, action: "reflection", text: reflectionText, outcome }
-        : { ...base, action: outcome };
-      await applyChange(context, change);
-      return;
-    }
-    default:
-      return exhaustive(intent.intent);
-  }
-}
-function exhaustive(value: never): never {
-  throw new TypeError(String(value));
 }

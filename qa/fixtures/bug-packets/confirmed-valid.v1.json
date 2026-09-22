@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "bug_packet.v1",
+  "bugId": "BUG-QACONFIRM01",
+  "status": "confirmed",
+  "revision": 1,
+  "fields": {
+    "actual": "저장 버튼을 눌러도 기록이 남지 않습니다.",
+    "expected": "저장 뒤 오늘 기록이 다시 보입니다.",
+    "steps": [
+      "오늘 기록 화면을 엽니다.",
+      "저장 버튼을 누릅니다."
+    ],
+    "location": "오늘 기록 화면",
+    "occurredAt": "2026-09-16T10:00:00+09:00",
+    "frequency": "always",
+    "impact": "blocked"
+  },
+  "confirmation": {
+    "reporterConfirmed": true,
+    "confirmedAt": "2026-09-16T10:02:00+09:00"
+  },
+  "source": {
+    "kind": "qa_fixture",
+    "opaqueRef": "qa:confirmed-001"
+  },
+  "evidenceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "packetDigest": "a951aa1aae3dfc5ef1adc84bdae90df5fd1ce3033440777b99fbb292fee03d42"
+}

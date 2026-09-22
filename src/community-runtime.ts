@@ -1,4 +1,5 @@
-import type { ClockBinding } from "./community-clock";
+import type { ClockBinding } from "./community-bug-clock-client";
+import type { InviteReconcileBucket } from "./community-referral-reconcile";
 import { callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
 import type { CommunityScope } from "./community-types";
@@ -9,22 +10,54 @@ export type CommunityEnv = {
   readonly SLACK_TEAM_ID: string;
   readonly SLACK_BOT_TOKEN: string;
   readonly DATABASE_URL: string;
+  readonly GUIDE_DATABASE_URL?: string;
   readonly BOARD_SIGNING_SECRET: string;
   readonly PUBLIC_BASE_URL: string;
   readonly COMMUNITY_ENABLED?: string;
+  readonly LIFECYCLE_MODE?: string;
+  readonly REVIEW_THREAD_V2?: string;
+  readonly GARDEN_RECONCILIATION?: string;
+  readonly REFERRALS_ENABLED?: string;
+  readonly PUBLIC_APPLICATIONS_ENABLED?: string;
+  readonly PUBLIC_INTEREST_ENABLED?: string;
+  readonly INTEREST_RUNTIME_DATABASE_URL?: string;
+  readonly INTEREST_ADMIN_DATABASE_URL?: string;
+  readonly INTEREST_MEMBER_DATABASE_URL?: string;
+  readonly INTEREST_ADMIN_CHANNEL_ID?: string;
+  readonly INTEREST_ACTION_SECRET?: string;
+  readonly SITE_CORE_HMAC_SECRET?: string;
+  readonly INVITE_EMAIL_PEPPER?: string;
+  readonly LIFECYCLE_ACTION_SECRET?: string;
+  readonly LIFECYCLE_ADMIN_DATABASE_URL?: string;
+  readonly REFERRAL_ADMIN_DATABASE_URL?: string;
+  readonly INVITE_PRIVATE_KEK?: string;
+  readonly INVITE_PRIVATE_KEK_VERSION?: string;
+  readonly REFERRAL_TOKEN_SECRET?: string;
+  readonly PUBLIC_APPLICATION_ORIGIN?: string;
+  readonly INVITE_PRIVATE_OBJECTS?: InviteReconcileBucket;
   readonly COMMUNITY_BOT_USER_ID?: string;
   readonly DATABASE_MAINTENANCE?: string;
   readonly COMMUNITY_CLOCK?: ClockBinding;
   readonly COMMUNITY_CHANNEL_ID?: string;
   readonly COMMUNITY_ADMIN_ID?: string;
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
+  readonly COMMUNITY_FEEDBACK_CHANNEL_ID?: string;
+  readonly COMMUNITY_SHAREINFO_CHANNEL_ID?: string;
   readonly COMMUNITY_RELEASE_CHANNEL_ID?: string;
   readonly COMMUNITY_WELCOME_CHANNEL_ID?: string;
+  readonly COMMUNITY_GUIDE_FILE_IDS?: string;
+  readonly COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS?: string;
   readonly COMMUNITY_INTRO_CHANNEL_ID?: string;
-  readonly COMMUNITY_GUIDE_SOURCE_TS?: string;
   readonly AI?: IntentAI;
   readonly INTENT_RATE_LIMITER?: {
     limit(input: { readonly key: string }): Promise<{ readonly success: boolean }>;
+  };
+  readonly BUG_PRIVATE_KEK?: string;
+  readonly BUG_PRIVATE_KEK_VERSION?: string;
+  readonly BUG_PRIVATE_OBJECTS?: {
+    put(key: string, value: ArrayBuffer): Promise<unknown>;
+    get?(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
+    delete(key: string): Promise<void>;
   };
 };
 export type CommunityContext = {
@@ -35,6 +68,7 @@ export type CommunityContext = {
   readonly thread: string;
   readonly source: string;
   readonly key: string;
+  readonly bugTextEntryState?: "missing" | "active" | "expired" | "consumed";
 };
 export function scopedValue(scope: CommunityScope, key: string): string {
   return JSON.stringify({ ownerId: scope.userId, key });
@@ -45,18 +79,49 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
   const channelId = data.container
     ? string(object(data.container).channel_id)
     : string(object(JSON.parse(string(object(data.view).private_metadata))).channelId);
+  const bugAction = [
+    "community_bug_open",
+    "community_bug_submit",
+    "community_bug_confirm",
+    "community_bug_answer",
+  ].includes(actionId);
   const introductionAction = [
     "community_introduction",
     "community_introduction_submit",
     "community_introduction_directory",
   ].includes(actionId);
+  const referralLinkAction = actionId === "community_referral_link";
+  const expandedChannelAllowed =
+    (bugAction &&
+      [
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+        env.COMMUNITY_INTRO_CHANNEL_ID,
+        env.COMMUNITY_FEEDBACK_CHANNEL_ID,
+      ].includes(channelId)) ||
+    (introductionAction &&
+      [
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+        env.COMMUNITY_INTRO_CHANNEL_ID,
+        env.COMMUNITY_PUBLIC_CHANNEL_ID,
+      ].includes(channelId)) ||
+    (referralLinkAction &&
+      [
+        env.COMMUNITY_WELCOME_CHANNEL_ID,
+        env.COMMUNITY_PUBLIC_CHANNEL_ID,
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+      ].includes(channelId));
+  const feedbackActionDenied = channelId === env.COMMUNITY_FEEDBACK_CHANNEL_ID && !bugAction;
   if (
     teamId !== env.SLACK_TEAM_ID ||
+    feedbackActionDenied ||
+    (referralLinkAction &&
+      ![
+        env.COMMUNITY_WELCOME_CHANNEL_ID,
+        env.COMMUNITY_PUBLIC_CHANNEL_ID,
+        env.COMMUNITY_RELEASE_CHANNEL_ID,
+      ].includes(channelId)) ||
     (![env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].includes(channelId) &&
-      !(
-        introductionAction &&
-        [env.COMMUNITY_RELEASE_CHANNEL_ID, env.COMMUNITY_INTRO_CHANNEL_ID].includes(channelId)
-      )) ||
+      !expandedChannelAllowed) ||
     (channelId === env.COMMUNITY_CHANNEL_ID && userId !== env.COMMUNITY_ADMIN_ID) ||
     !/^[UW][A-Z0-9]+$/.test(userId)
   )

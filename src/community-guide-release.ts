@@ -1,0 +1,37 @@
+/** Reviewed, repo-owned welcome copy. Bump the version for every content change. */
+export const WELCOME_GUIDE_RELEASE = {
+  version: "v0.0.57",
+  body: `@channel
+OT1L v0.0.57 · welcome 가이드 업데이트
+
+OT1L (*ONE THING* 1 Line)에 오신 것을 환영합니다! Slack 채널 구조는 Toss를 차용했습니다.
+
+• ONE THING은 이렇게 함께해요
+  ◦ 업무·공부·운동·개인 프로젝트 등 어떤 내용이든 괜찮습니다.
+  ◦ 오전 10시와 오후 6시는 함께 시작하고 돌아보는 안내 시각이지 마감 시간이 아닙니다. 본인에게 편한 시간에 목표와 결과를 남겨주세요.
+  ◦ 여러 할 일 중 “이걸 해내면 다른 일이 더 쉬워지거나 필요 없어지는가?”를 생각하며 오늘 가장 중요한 한 가지를 고릅니다.
+  ◦ 오늘 안에 끝낼 만큼 작고, 완료 여부가 분명한 문장으로 적으면 실행하기 쉬워집니다.
+  ◦ 예: \`발표 자료 준비하기\`보다 \`발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기\`
+  ◦ SET: 한 가지를 정하고, DO: 다른 일보다 먼저 실행하고, REVIEW: 완료 상태와 후기를 남깁니다.
+
+• Main (Just 1 thing!)
+  ▪︎ #daily-scrum: 오전 10시 안내에서 또는 본인에게 편한 시간에 *ONE THING*을 남기고, 실행 뒤 완료 상태와 후기를 작성합니다.
+
+• Sub channel
+  ◦ All: 전사 누구나 자유롭게 공유하고 대화할 수 있습니다.
+    ▪︎ #all-freetalk-qna-feedback: 자유롭게 대화하고 Q&A를 나눌 수 있습니다.
+    ▪︎ #townhall: 모두에게 알릴 소식과 서로를 격려하는 이야기를 나눌 수 있습니다.
+  ◦ Chapter: 직군·전공별로 자유롭게 소통할 수 있습니다.
+    ▪︎ #chapter-developers: 개발자들을 위한 채널입니다.
+    ▪︎ #chapter-english: 영어 공부를 함께합니다.
+    ▪︎ #chapter-investment: 투자 이야기를 나눕니다.
+
+• 함께할 사람 초대하기
+친구 초대하기 버튼에서 내 전용 링크를 받아 지인에게 아래 문장과 함께 보내주세요. OT1L은 지인 초대로 함께합니다.
+
+> 매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야. 같이 할래?
+
+• Slack이 처음이에요
+  ◦ #all-freetalk-qna-feedback에 자유롭게 문의하세요.
+  ◦ Slack 사용이 어려우면 #all-freetalk-qna-feedback에 편하게 물어봐 주세요.`,
+} as const;

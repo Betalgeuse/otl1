@@ -3,7 +3,7 @@ import { mock } from 'bun:test';
 mock.module('cloudflare:workers',()=>({DurableObject:class {}}));
 const publications=[];
 mock.module('../src/community-records.ts',()=>({statusMessage:async()=>({text:"board"}),publishStatus:async(context,day)=>{publications.push({context,day});},applyChange:async()=>{},undoChange:async()=>{}}));
-mock.module('../src/community-store.ts',()=>({CommunityStore:class {async day(scope){return {...scope,goal:'existing',outcome:'complete',revision:4};}}}));
+mock.module('../src/community-store.ts',()=>({CommunityStore:class {async day(scope){return {...scope,goal:'existing',outcome:'complete',revision:4};}async introduction(){return null;}async introductionNameInput(){return null;}}}));
 const { ephemeral } = await import('../src/community-runtime.ts');
 const { communityInteraction } = await import('../src/community-interactions.ts');
 const env={COMMUNITY_ENABLED:'true',SLACK_TEAM_ID:'TQA',SLACK_BOT_TOKEN:'test',DATABASE_URL:'postgresql://user:pass@qa.neon.tech/db',COMMUNITY_CHANNEL_ID:'CADMIN',COMMUNITY_ADMIN_ID:'UADMIN',COMMUNITY_PUBLIC_CHANNEL_ID:'CPUBLIC'};
@@ -19,6 +19,18 @@ try{
  assert.equal(modal.callback_id,'community_palette_submit');
  assert.deepEqual(JSON.parse(modal.private_metadata),{userId:'UMEMBER',channelId:'CPUBLIC',source:'10.000001',thread:'9.000001',date:'2026-09-11'});
  calls=[];
+ const publishedIntroduction={
+  type:'block_actions',team:{id:'TQA'},user:{id:'UMEMBER'},container:{channel_id:'CPUBLIC',message_ts:'12.000001'},
+  actions:[{action_id:'community_introduction',value:JSON.stringify({ownerId:'UNEW',key:'introduction-welcome'}),action_ts:'13.000001'}],trigger_id:'intro-trigger'
+ };
+ assert.equal((await communityInteraction(publishedIntroduction,env,()=>{})).status,200);
+ const introductionModal=calls.find(c=>c.url.endsWith('/views.open')).body.view;
+ assert.equal(introductionModal.callback_id,'community_introduction_submit');
+ assert.equal(JSON.parse(introductionModal.private_metadata).userId,'UMEMBER','a public welcome card opens the clicking member\'s own introduction');
+ calls=[];
+ const foreignIntroductionSubmission={type:'view_submission',team:payload.team,user:{id:'UOTHER'},view:{...introductionModal,id:'VINTRO',state:{values:{}}}};
+ await assert.rejects(()=>communityInteraction(foreignIntroductionSubmission,env,()=>{}),/본인이 연/);
+ assert.equal(calls.length,0,'a different member cannot submit another member\'s introduction modal');
  const submitted={type:'view_submission',team:payload.team,user:{id:'UOTHER'},view:{...modal,id:'VQA',state:{values:{}}}};
  await assert.rejects(()=>communityInteraction(submitted,env,()=>{}),/본인이 연/);
  assert.equal(calls.length,0);

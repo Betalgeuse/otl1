@@ -1,25 +1,28 @@
-import { publishRelease, releasePreview } from "./community-admin";
+import { parseBugAnswerActionId } from "./community-bug-actions";
+import { handleBugAction, handleBugView } from "./community-bug-interactions";
 import { armCommunityClock } from "./community-clock";
-import { openSettings, openShoutout, readSettings, stopSettings } from "./community-controls";
-import { enablePublicSchedule } from "./community-cutover";
-import { confirmedRecordEdit } from "./community-edits";
+import { openSettings, openShoutout, readSettings } from "./community-controls";
+import { handleInterestInteraction } from "./community-interest-interactions";
 import { introductionModal, parseIntroduction, submitIntroduction } from "./community-introduction";
 import { showIntroductionDirectory } from "./community-introduction-channel";
+import { handleInviteAdminAction } from "./community-invite-admin";
+import { parseLifecycleAction } from "./community-lifecycle-interactions";
+import { CommunityLifecycleRuntimeStore } from "./community-lifecycle-runtime-store";
 import { escapeSlackText } from "./community-messages";
 import { openCommunityPalette, submitCommunityPalette } from "./community-palette";
 import { authorizeCommunityAction } from "./community-permissions";
-import { applyChange, publishStatus, undoChange } from "./community-records";
+import { processRecordAction } from "./community-record-interactions";
+import { handleReferralLinkMessage } from "./community-referral-link";
+import { referralSlackPort } from "./community-referral-slack";
+import { CommunityReferralStore } from "./community-referral-store";
 import {
   actionIdentity,
   type CommunityContext,
   type CommunityEnv,
   ephemeral,
   post,
-  textReply,
 } from "./community-runtime";
-import { runCommunitySchedule } from "./community-scheduler";
 import { CommunityStore } from "./community-store";
-import type { DayChange } from "./community-types";
 import { date, InputError, koreaDate, object, string } from "./input";
 import { NeonStore } from "./store";
 
@@ -33,9 +36,137 @@ export async function communityInteraction(
   const action = actions[0] ? object(actions[0]) : null;
   const view = data.view ? object(data.view) : null;
   const id = string(action?.action_id ?? view?.callback_id ?? "");
+  if (data.type === "block_actions" && action && id.startsWith("community_interest_")) {
+    await handleInterestInteraction(data, env);
+    if (env.COMMUNITY_PUBLIC_CHANNEL_ID)
+      waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+    return new Response(null, { status: 200 });
+  }
+  if (data.type === "block_actions" && action && id.startsWith("community_invite_")) {
+    if (env.REFERRALS_ENABLED !== "true") throw new InputError("지금은 신청을 처리할 수 없습니다.");
+    const teamId = string(object(data.team).id);
+    const userId = string(object(data.user).id);
+    const dmChannelId = string(object(data.container).channel_id);
+    if (!/^D[A-Z0-9]+$/.test(dmChannelId))
+      throw new InputError("비공개 관리자 카드에서 처리해 주세요.");
+    const store = new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+      teamId: env.SLACK_TEAM_ID,
+      channelId: env.COMMUNITY_PUBLIC_CHANNEL_ID ?? "",
+      userId: env.COMMUNITY_ADMIN_ID ?? "",
+    });
+    await handleInviteAdminAction(
+      {
+        teamId,
+        userId,
+        actionId: id,
+        value: string(action.value),
+        actionTs: string(action.action_ts),
+      },
+      env,
+      store,
+      referralSlackPort(env),
+    );
+    if (env.COMMUNITY_PUBLIC_CHANNEL_ID)
+      waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+    return new Response(null, { status: 200 });
+  }
+  if (data.type === "block_actions" && action && id === "community_referral_link") {
+    const scope = actionIdentity(data, env, id);
+    authorizeCommunityAction(id, scope, env);
+    const value = object(JSON.parse(string(action.value)));
+    if (string(value.ownerId) !== "actor" || string(value.key) !== "referral_link")
+      throw new InputError("이 동작은 사용할 수 없습니다.");
+    const slack = referralSlackPort(env);
+    waitUntil(
+      (async () => {
+        if (env.REFERRALS_ENABLED !== "true") {
+          await slack.postEphemeral({
+            channelId: scope.channelId,
+            userId: scope.userId,
+            text: "지금은 초대 링크를 사용할 수 없어요. 운영자에게 문의해 주세요.",
+          });
+          return;
+        }
+        const store = new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+          teamId: env.SLACK_TEAM_ID,
+          channelId: env.COMMUNITY_PUBLIC_CHANNEL_ID ?? "",
+          userId: env.COMMUNITY_ADMIN_ID ?? "",
+        });
+        await handleReferralLinkMessage(
+          {
+            teamId: scope.teamId,
+            channelId: scope.channelId,
+            userId: scope.userId,
+            text: "내 초대 링크",
+          },
+          env,
+          store,
+          slack,
+        );
+      })().catch(async (error: unknown) => {
+        console.error(
+          JSON.stringify({
+            event: "community.referral_link.failed",
+            type: error instanceof Error ? error.name : "Unknown",
+          }),
+        );
+        try {
+          await slack.postEphemeral({
+            channelId: scope.channelId,
+            userId: scope.userId,
+            text: "초대 링크를 확인하지 못했어요. 잠시 후 다시 눌러 주세요.",
+          });
+        } catch (replyError: unknown) {
+          console.error(
+            JSON.stringify({
+              event: "community.referral_link.failure_notice_failed",
+              type: replyError instanceof Error ? replyError.name : "Unknown",
+            }),
+          );
+        }
+      }),
+    );
+    return new Response(null, { status: 200 });
+  }
+  if (data.type === "block_actions" && action && id.startsWith("lifecycle_")) {
+    if (env.LIFECYCLE_MODE !== "enforce" || !env.LIFECYCLE_ACTION_SECRET)
+      throw new InputError("지금은 생애주기 동작을 처리할 수 없습니다.");
+    const teamId = string(object(data.team).id);
+    const actorId = string(object(data.user).id);
+    const dmChannelId = string(object(data.container).channel_id);
+    if (!/^D[A-Z0-9]+$/.test(dmChannelId))
+      throw new InputError("비공개 생애주기 안내에서 처리해 주세요.");
+    const binding = await parseLifecycleAction(
+      string(action.value),
+      actorId,
+      env.COMMUNITY_ADMIN_ID,
+      env.LIFECYCLE_ACTION_SECRET,
+    );
+    if (
+      binding.actionId !== id ||
+      binding.teamId !== teamId ||
+      teamId !== env.SLACK_TEAM_ID ||
+      ![env.COMMUNITY_PUBLIC_CHANNEL_ID, env.COMMUNITY_CHANNEL_ID].includes(binding.channelId)
+    )
+      throw new InputError("이 동작은 사용할 수 없습니다.");
+    if (binding.actionId === "lifecycle_restore_error")
+      throw new InputError("증거가 있는 관리자 정정 요청이 필요합니다.");
+    const actionTs = string(action.action_ts);
+    if (!/^\d{10}\.\d{1,6}$/.test(actionTs))
+      throw new InputError("동작 시각을 확인할 수 없습니다.");
+    await new CommunityLifecycleRuntimeStore(new NeonStore(env.DATABASE_URL)).action(
+      binding,
+      new Date(Number(actionTs) * 1_000).toISOString(),
+    );
+    return new Response(null, { status: 200 });
+  }
   if (!id.startsWith("community_")) return null;
-  const scope = actionIdentity(data, env, id);
-  authorizeCommunityAction(id, scope, env);
+  const bugAnswerAction = parseBugAnswerActionId(id);
+  if (!bugAnswerAction && (id === "community_bug_answer" || id.startsWith("community_bug_answer:")))
+    throw new InputError("지원하지 않는 동작입니다.");
+  const routedId = bugAnswerAction ? "community_bug_answer" : id;
+  const scope = actionIdentity(data, env, routedId);
+  authorizeCommunityAction(routedId, scope, env);
   if (
     (data.type === "view_submission") !== id.endsWith("_submit") ||
     !["view_submission", "block_actions"].includes(string(data.type))
@@ -61,6 +192,8 @@ export async function communityInteraction(
     key: `interaction:${action?.action_ts ?? view?.id}`,
   };
   if (view) {
+    const bugResponse = await handleBugView(id, view, context, waitUntil);
+    if (bugResponse) return bugResponse;
     if (id === "community_introduction_submit") {
       const parsed = parseIntroduction(object(view.state).values);
       if ("errors" in parsed)
@@ -102,6 +235,12 @@ export async function communityInteraction(
           response_action: "errors",
           errors: { message: "응원을 1~500자로 적어 주세요." },
         });
+      const eligibleMembers = await store.members(scope.teamId, scope.channelId);
+      if (!eligibleMembers.includes(scope.userId) || !eligibleMembers.includes(target))
+        return Response.json({
+          response_action: "errors",
+          errors: { target: "지금 응원할 수 있는 동료를 골라주세요." },
+        });
       waitUntil(
         (async () => {
           const key = `shoutout:${view.id}`;
@@ -128,7 +267,9 @@ export async function communityInteraction(
   const key = string(value.key);
   const resolvedOwnerId = ownerId === "actor" ? scope.userId : ownerId;
   if (
-    !["community_shoutout", "community_introduction_directory"].includes(id) &&
+    !["community_shoutout", "community_introduction", "community_introduction_directory"].includes(
+      id,
+    ) &&
     resolvedOwnerId !== scope.userId
   )
     throw new InputError("본인 기록만 변경할 수 있어요.");
@@ -155,6 +296,16 @@ export async function communityInteraction(
     await introductionModal(context, string(data.trigger_id));
     return new Response(null, { status: 200 });
   }
+  const bugResponse = await handleBugAction(
+    id,
+    bugAnswerAction,
+    context,
+    key,
+    value,
+    data.trigger_id,
+    waitUntil,
+  );
+  if (bugResponse) return bugResponse;
   if (id === "community_introduction_directory") {
     waitUntil(
       showIntroductionDirectory(context).catch((error: unknown) =>
@@ -169,7 +320,7 @@ export async function communityInteraction(
     return new Response(null, { status: 200 });
   }
   waitUntil(
-    processAction(context, id, key).catch(async (error: unknown) => {
+    processRecordAction(context, id, key, value).catch(async (error: unknown) => {
       console.error(
         JSON.stringify({
           event: "community.action.failed",
@@ -185,101 +336,4 @@ export async function communityInteraction(
     }),
   );
   return new Response(null, { status: 200 });
-}
-
-async function processAction(context: CommunityContext, id: string, key: string): Promise<void> {
-  if (id === "community_live_schedule") {
-    await enablePublicSchedule(context);
-    return;
-  }
-  if (id === "community_undo") {
-    await undoChange(context, key);
-    return;
-  }
-  if (id === "community_stop") {
-    await stopSettings(context);
-    return;
-  }
-  if (id === "community_status") {
-    const day = await context.store.day({ ...context.scope, date: date(key) });
-    await publishStatus(context, day, null);
-    return;
-  }
-  if (id === "community_release_preview") {
-    await releasePreview(context, key);
-    return;
-  }
-  if (id === "community_publish") {
-    await publishRelease(context, key, context.key);
-    return;
-  }
-  if (id === "community_test_schedule" || id === "community_test_group") {
-    let goalTime: string;
-    let reviewTime: string;
-    if (id === "community_test_group") {
-      const record = await context.store.getRecord({ ...context.scope, key: "group-schedule" });
-      if (!record) {
-        await textReply(context, "공통 안내를 먼저 설정해 주세요.");
-        return;
-      }
-      const data = object(record.body);
-      goalTime = string(data.goalTime);
-      reviewTime = string(data.reviewTime);
-    } else {
-      const p = await context.store.preferences(context.scope);
-      goalTime = p.goalTime;
-      reviewTime = p.reviewTime;
-    }
-    for (const time of new Set([goalTime, reviewTime]))
-      await runCommunitySchedule(
-        {
-          ...context.env,
-          COMMUNITY_CHANNEL_ID: context.scope.channelId,
-          COMMUNITY_ADMIN_ID: string(context.env.COMMUNITY_ADMIN_ID),
-        },
-        context.store,
-        new Date(`${context.date}T${time}:00+09:00`),
-      );
-    await textReply(
-      context,
-      "설정 시각으로 검사했어요. 실제 예약 조건을 사용한 QA 시간 테스트이며 이미 보낸 알림은 다시 보내지 않아요.",
-    );
-    return;
-  }
-  const pending = await context.store.getRecord({ ...context.scope, key });
-  if (pending?.kind !== "pending") throw new InputError("확인할 요청이 없어요.");
-  const data = object(pending.body);
-  const action = string(data.action);
-  const selected = id.replace("community_", "");
-  if (!["confirm", "complete", "partial", "not_done", "rest", "reflection"].includes(selected))
-    throw new InputError("지원하지 않는 동작입니다.");
-  if (!(await context.store.claimRecord({ ...context.scope, key }))) {
-    await ephemeral(context, { text: "이미 처리한 선택이에요." });
-    return;
-  }
-  const targetDate = date(data.date);
-  const revision = Number(data.revision);
-  if (!Number.isSafeInteger(revision)) throw new InputError("기록 버전을 확인할 수 없어요.");
-  const appliedContext = {
-    ...context,
-    date: targetDate,
-    source: string(data.source),
-    thread: string(data.thread),
-  };
-  const base = { ...context.scope, date: targetDate, key, expectedRevision: revision };
-  let change: DayChange;
-  if (selected === "confirm" && action === "edit") change = confirmedRecordEdit(base, data);
-  else if (selected === "confirm" && action === "goal")
-    change = { ...base, action: "goal", text: string(data.text) };
-  else if (selected === "rest") change = { ...base, action: "rest" };
-  else if (selected === "reflection")
-    change = { ...base, action: "reflection", text: string(data.text) };
-  else if (selected === "complete" || selected === "partial" || selected === "not_done")
-    change =
-      action === "reflection"
-        ? { ...base, action: "reflection", text: string(data.text), outcome: selected }
-        : { ...base, action: selected };
-  else throw new InputError("선택 내용을 확인해 주세요.");
-  await applyChange(appliedContext, change);
-  await context.store.finishRecord({ ...context.scope, key }, "sent");
 }

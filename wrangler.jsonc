@@ -3,13 +3,16 @@
   "name": "onething-community",
   "main": "src/index.ts",
   "compatibility_date": "2025-12-01",
+  "placement": {
+    "region": "aws:ap-southeast-1"
+  },
   "workers_dev": true,
   "vars": {
     "COMMUNITY_WELCOME_CHANNEL_ID": "C_REPLACE_WELCOME",
+    "COMMUNITY_GUIDE_FILE_IDS": "FREPLACELOGO,FREPLACEDAILY",
+    "COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS": "C_REPLACE_DEVELOPERS,C_REPLACE_ENGLISH,C_REPLACE_INVESTMENT",
     "COMMUNITY_INTRO_CHANNEL_ID": "C_REPLACE_INTRO",
-    "COMMUNITY_GUIDE_SOURCE_TS": "0.000001",
     "DATABASE_MAINTENANCE": "false",
-    "INVITATIONS_ENABLED": "false",
     "DAILY_SCRUM_CHANNEL_ID": "C_REPLACE_DAILY",
     "LLM_PILOT_CHANNEL_ID": "C_REPLACE_ADMIN",
     "LLM_PILOT_USER_ID": "U_REPLACE_ADMIN",
@@ -18,7 +21,15 @@
     "COMMUNITY_ADMIN_ID": "U_REPLACE_ADMIN",
     "COMMUNITY_BOT_USER_ID": "U_REPLACE_BOT",
     "COMMUNITY_RELEASE_CHANNEL_ID": "C_REPLACE_TOWNHALL",
-    "COMMUNITY_PUBLIC_CHANNEL_ID": "C_REPLACE_DAILY"
+    "COMMUNITY_FEEDBACK_CHANNEL_ID": "C_REPLACE_FEEDBACK",
+    "COMMUNITY_PUBLIC_CHANNEL_ID": "C_REPLACE_DAILY",
+    "LIFECYCLE_MODE": "disabled",
+    "REVIEW_THREAD_V2": "true",
+    "GARDEN_RECONCILIATION": "false",
+    "REFERRALS_ENABLED": "true",
+    "PUBLIC_APPLICATIONS_ENABLED": "false",
+    "PUBLIC_INTEREST_ENABLED": "false",
+    "PUBLIC_APPLICATION_ORIGIN": "https://your-site.workers.dev"
   },
   "ai": {
     "binding": "AI"
@@ -50,9 +61,21 @@
     }
   ],
   "triggers": {
-    "crons": []
+    "crons": [
+      "*/5 * * * *"
+    ]
   },
   "observability": {
     "enabled": true
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "BUG_PRIVATE_OBJECTS",
+      "bucket_name": "replace-with-private-bucket"
+    },
+    {
+      "binding": "INVITE_PRIVATE_OBJECTS",
+      "bucket_name": "replace-with-invite-private-bucket"
+    }
+  ]
 }

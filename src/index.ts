@@ -1,15 +1,18 @@
 export { CommunityClock } from "./community-clock";
 
 import { readBoardLink } from "./board-link";
-import { communityCron } from "./community-cron";
+import { armBugDeliveryClock, BUG_CLOCK_CAPABILITIES } from "./community-bug-clock-client";
+import { armCommunityClock } from "./community-clock-client";
 import { handleCommunityEvent } from "./community-events";
 import { communityInteraction } from "./community-interactions";
+import { handleInterestIntakeRequest } from "./community-interest-intake";
+import { CommunityInterestStore } from "./community-interest-store";
+import { handleReferralIntakeRequest } from "./community-referral-intake";
+import { CommunityReferralStore } from "./community-referral-store";
 import type { CommunityEnv } from "./community-runtime";
 import { confirmMention, eventPayload, handleMention, verificationResponse } from "./events";
 import { BodySizeError, InputError, koreaDate, object, readBody } from "./input";
 import { handleIntentPilot, type PilotEnv } from "./intent-pilot";
-import { processInvitation } from "./invitations/process";
-import { type InvitationStore, NeonInvitations } from "./invitations/store";
 import { paletteModal } from "./palette-modal";
 import { processRecord } from "./process";
 import { renderBoard } from "./render/board";
@@ -17,6 +20,7 @@ import { command, interaction } from "./requests";
 import { verifySlack } from "./signing";
 import { openView, reply } from "./slack-api";
 import { NeonStore, type Store } from "./store";
+import { createWorkerHandler } from "./worker-entry";
 
 export type Env = PilotEnv &
   CommunityEnv & {
@@ -27,14 +31,11 @@ export type Env = PilotEnv &
     readonly BOARD_SIGNING_SECRET: string;
     readonly PUBLIC_BASE_URL: string;
     readonly DAILY_SCRUM_CHANNEL_ID: string;
-    readonly INVITE_SIGNING_SECRET?: string;
-    readonly INVITATIONS_ENABLED?: string;
   };
 export type Context = { waitUntil(promise: Promise<unknown>): void };
 export type Runtime = {
   readonly env: Env;
   readonly store: Store;
-  readonly invitations: InvitationStore;
 };
 
 export async function handleRequest(
@@ -45,8 +46,55 @@ export async function handleRequest(
   const url = new URL(request.url);
   const env = runtime.env;
   try {
-    if (request.method === "GET" && url.pathname === "/health")
-      return Response.json({ status: "ok" });
+    if (request.method === "GET" && url.pathname === "/health") {
+      return Response.json({ status: "ok", capabilities: BUG_CLOCK_CAPABILITIES });
+    }
+    if (url.pathname.startsWith("/internal/interest/")) {
+      if (env.DATABASE_MAINTENANCE === "true")
+        return new Response("Maintenance", { status: 503, headers: { "Retry-After": "30" } });
+      if (
+        env.PUBLIC_INTEREST_ENABLED !== "true" ||
+        !env.INTEREST_RUNTIME_DATABASE_URL ||
+        !env.INTEREST_ADMIN_CHANNEL_ID ||
+        env.INTEREST_ADMIN_CHANNEL_ID === env.COMMUNITY_PUBLIC_CHANNEL_ID
+      )
+        return new Response("Unavailable", { status: 503 });
+      const interest = new CommunityInterestStore(new NeonStore(env.INTEREST_RUNTIME_DATABASE_URL));
+      const response = await handleInterestIntakeRequest(request, env, {
+        submit: (input) => interest.submit(input),
+        withdraw: (input) => interest.withdraw(input),
+        claimServiceNonce: (digest, expiresAt) =>
+          interest.claimServiceNonce(digest, expiresAt, env.SLACK_TEAM_ID),
+      });
+      if (response.status === 202 && env.COMMUNITY_PUBLIC_CHANNEL_ID)
+        ctx.waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+      return response;
+    }
+    if (url.pathname.startsWith("/internal/referrals/")) {
+      if (env.DATABASE_MAINTENANCE === "true")
+        return new Response("Maintenance", { status: 503, headers: { "Retry-After": "30" } });
+      const applicationOptional = [
+        "/internal/referrals/resolve",
+        "/internal/referrals/withdraw",
+      ].includes(url.pathname);
+      if (
+        env.REFERRALS_ENABLED !== "true" ||
+        (!applicationOptional && env.PUBLIC_APPLICATIONS_ENABLED !== "true")
+      )
+        return new Response("Unavailable", { status: 503 });
+      const response = await handleReferralIntakeRequest(
+        request,
+        env,
+        new CommunityReferralStore(new NeonStore(env.DATABASE_URL), {
+          teamId: env.SLACK_TEAM_ID,
+          channelId: env.COMMUNITY_PUBLIC_CHANNEL_ID ?? "",
+          userId: env.COMMUNITY_ADMIN_ID ?? "",
+        }),
+      );
+      if (response.status === 202 && env.COMMUNITY_PUBLIC_CHANNEL_ID)
+        ctx.waitUntil(armCommunityClock(env, env.COMMUNITY_PUBLIC_CHANNEL_ID));
+      return response;
+    }
     if (env.DATABASE_MAINTENANCE === "true" && url.pathname.startsWith("/slack/"))
       return new Response("잠시 데이터 정리 중입니다. 곧 다시 시도해 주세요.", {
         status: 503,
@@ -66,6 +114,9 @@ export async function handleRequest(
       const body = await readBody(request);
       const timestamp = await verifySlack(request, body, env.SLACK_SIGNING_SECRET);
       if (timestamp === null) return new Response("Unauthorized", { status: 401 });
+      ctx.waitUntil(
+        armBugDeliveryClock(env, { reason: "activity", observedAt: timestamp * 1_000 }),
+      );
       const data = env.COMMUNITY_ENABLED === "true" ? object(JSON.parse(body)) : eventPayload(body);
       const verification = verificationResponse(data);
       if (verification) return verification;
@@ -88,6 +139,10 @@ export async function handleRequest(
     const body = await readBody(request);
     const timestamp = await verifySlack(request, body, env.SLACK_SIGNING_SECRET);
     if (timestamp === null) return new Response("Unauthorized", { status: 401 });
+    if (url.pathname === "/slack/interactions")
+      ctx.waitUntil(
+        armBugDeliveryClock(env, { reason: "activity", observedAt: timestamp * 1_000 }),
+      );
     if (url.pathname === "/slack/interactions") {
       const raw = new URLSearchParams(body).get("payload");
       if (raw) {
@@ -144,34 +199,9 @@ export async function handleRequest(
     )
       return new Response("Forbidden", { status: 403 });
     switch (operation.kind) {
-      case "invitation":
-        if (env.INVITATIONS_ENABLED !== "true" || !env.INVITE_SIGNING_SECRET) {
-          return Response.json({
-            response_type: "ephemeral",
-            text: "초대제는 준비 중입니다. 지금은 채널에 ‘내 상태’라고 입력해 잔디를 확인할 수 있습니다.",
-          });
-        }
-        ctx.waitUntil(
-          processInvitation(operation, {
-            store: runtime.invitations,
-            botToken: env.SLACK_BOT_TOKEN,
-            secret: env.INVITE_SIGNING_SECRET,
-          }),
-        );
-        return new Response(null, { status: 200 });
       case "errors":
         return Response.json({ response_action: "errors", errors: operation.errors });
       case "settings":
-        if (
-          env.INVITATIONS_ENABLED === "true" &&
-          !(await runtime.invitations.member(operation.identity.teamId, operation.identity.userId))
-            .admitted
-        ) {
-          return Response.json({
-            response_type: "ephemeral",
-            text: "기존 참여자의 초대를 먼저 수락해 주세요.",
-          });
-        }
         await openView(env.SLACK_BOT_TOKEN, {
           trigger_id: operation.triggerId,
           view: paletteModal(operation.palette, {
@@ -238,42 +268,4 @@ function exhaustive(value: never): never {
   throw new InputError(`Unsupported operation: ${String(value)}`);
 }
 
-export default {
-  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    await communityCron(env, controller.scheduledTime);
-  },
-  async fetch(request: Request, env: Env, ctx: Context): Promise<Response> {
-    const configured =
-      [
-        env.SLACK_TEAM_ID,
-        env.SLACK_SIGNING_SECRET,
-        env.SLACK_BOT_TOKEN,
-        env.DATABASE_URL,
-        env.BOARD_SIGNING_SECRET,
-        env.PUBLIC_BASE_URL,
-      ].every(Boolean) &&
-      (env.INVITATIONS_ENABLED !== "true" || Boolean(env.INVITE_SIGNING_SECRET));
-    if (new URL(request.url).pathname === "/health")
-      return Response.json({ status: "ok", configured });
-    if (!configured) return new Response("Setup required", { status: 503 });
-    try {
-      return await handleRequest(
-        request,
-        {
-          env,
-          store: new NeonStore(env.DATABASE_URL),
-          invitations: new NeonInvitations(env.DATABASE_URL),
-        },
-        ctx,
-      );
-    } catch (error) {
-      console.error(
-        JSON.stringify({
-          event: "configuration.failed",
-          errorType: error instanceof Error ? error.name : "Unknown",
-        }),
-      );
-      return new Response("Setup required", { status: 503 });
-    }
-  },
-} satisfies ExportedHandler<CloudflareBindings>;
+export default createWorkerHandler(handleRequest);

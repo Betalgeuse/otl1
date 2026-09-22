@@ -1,8 +1,10 @@
 import { isWeekend } from "./calendar";
+import { enqueueCommonDelivery, sendCommonDeliveries } from "./community-common-delivery";
 import { customBotEmoji } from "./community-emoji";
-import { CommunitySlackError, callSlack } from "./community-social";
+import { collectCurrentChannelMembers } from "./community-membership";
+import { sendReminderBatches } from "./community-reminder-batch";
 import type { CommunityStore } from "./community-store";
-import type { CommunityScope, ReminderJob } from "./community-types";
+import type { ChannelMembershipSnapshot } from "./community-types";
 import { InputError, object, string } from "./input";
 
 export type CommunityScheduleEnv = {
@@ -10,18 +12,29 @@ export type CommunityScheduleEnv = {
   readonly SLACK_BOT_TOKEN: string;
   readonly COMMUNITY_CHANNEL_ID: string;
   readonly COMMUNITY_ADMIN_ID: string;
+  readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
+  readonly COMMUNITY_BOT_USER_ID?: string;
+  readonly REVIEW_THREAD_V2?: string;
 };
+export type ScheduleClock = { readonly now: () => Date };
 type ScheduleStore = Pick<
   CommunityStore,
   | "getRecord"
   | "putRecord"
   | "claimRecord"
   | "finishRecord"
-  | "due"
-  | "claimReminder"
-  | "finishReminder"
-  | "day"
-  | "preferences"
+  | "reconcileChannelMembers"
+  | "members"
+  | "reminderTriggerDue"
+  | "claimReminderBatch"
+  | "claimReviewReminderBatch"
+  | "claimGoalReminderBatch"
+  | "finishReminderBatch"
+  | "finishReviewReminderBatch"
+  | "pruneReminderBatch"
+  | "claimCommonDelivery"
+  | "finishCommonDelivery"
+  | "finishReviewRoot"
 >;
 type Kind = "goal" | "review";
 type Schedule = {
@@ -29,6 +42,13 @@ type Schedule = {
   readonly goalTime: string;
   readonly reviewTime: string;
 };
+
+const goalWritingGuide = `
+
+*작고, 검증 가능하게 적어보세요.*
+• 이걸 해내면 다른 일이 더 쉬워지거나 필요 없어지나요?
+• 오늘 안에 끝낼 만큼 작고, 완료 여부가 분명한가요?
+예: \`발표 자료 준비하기\` → \`발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기\``;
 
 function parseSchedule(value: unknown): Schedule {
   const body = object(value);
@@ -41,127 +61,94 @@ function parseSchedule(value: unknown): Schedule {
 }
 function promptText(date: string, kind: Kind): string {
   if (isWeekend(date))
-    return `${date} 주말 *ONE THING*은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 이 스레드나 채널에 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
+    return `${date} 주말 *ONE THING*은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 골라보세요.${goalWritingGuide}\n\n이 글의 스레드나 채널에 한 문장으로 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
   return kind === "goal"
-    ? `${date} 오늘의 *ONE THING*!!! :seedling: 오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지는 무엇인가요? 그 일과 이유를 이 글의 스레드에 남겨주세요. 가장 중요한 일부터 같이 해봅시다 :muscle:`
+    ? `${date} 오늘의 *ONE THING*!!! :seedling:\n오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지는 무엇인가요?${goalWritingGuide}\n\n이 글의 스레드에 한 문장으로 남겨주세요. 멘션은 필요 없어요. 가장 중요한 일부터 같이 해봅시다 :muscle:`
     : `${date} 오늘 *ONE THING*은 어떠셨나요? :memo: 해낸 만큼, 느낀 점 한 줄을 이 글의 스레드에 남겨주세요. 다 못 했어도 괜찮아요!!! :penguin:`;
 }
-async function commonPrompt(
+async function commonText(
   env: CommunityScheduleEnv,
-  store: ScheduleStore,
-  scope: CommunityScope,
   date: string,
   kind: Kind,
-): Promise<boolean> {
-  const dispatch = { ...scope, key: `common:${date}:${kind}` };
-  await store.putRecord({ ...dispatch, kind: "dispatch", body: { date, kind } });
-  if (!(await store.claimRecord(dispatch))) return false;
-  try {
-    const response = await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
-      channel: scope.channelId,
-      text: `${await customBotEmoji(env.SLACK_BOT_TOKEN, promptText(date, kind))}${isWeekend(date) ? "" : " <!channel>"}`,
-    });
-    const ts = string(response.ts);
-    if (!/^\d+\.\d+$/.test(ts)) throw new InputError("Slack timestamp missing");
-    await store.putRecord({ ...scope, key: `prompt:${ts}`, kind: "prompt", body: { date, kind } });
-    await store.putRecord({
-      ...scope,
-      key: `common-thread:${date}:${kind}`,
-      kind: "prompt",
-      body: { date, kind, ts },
-    });
-    await store.finishRecord(dispatch, "sent");
-    return true;
-  } catch (error) {
-    if (error instanceof CommunitySlackError || error instanceof InputError) {
-      await store.finishRecord(dispatch, "failed");
-    }
-    throw error;
-  }
+  memberIds: readonly string[],
+): Promise<string> {
+  const base = await customBotEmoji(env.SLACK_BOT_TOKEN, promptText(date, kind));
+  return `${base}${memberIds.length ? `\n${memberIds.map((id) => `<@${id}>`).join(" ")}` : ""}`;
 }
-async function personalReminder(
-  env: CommunityScheduleEnv,
-  store: ScheduleStore,
-  scope: CommunityScope,
-  job: ReminderJob,
-  nowDate: Date,
-): Promise<boolean> {
-  const minute = new Date(nowDate.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(11, 16);
-  if (minute < "08:00" || minute >= "22:00") return false;
-  if (!(await store.claimReminder(job, nowDate.toISOString()))) return false;
-  const [day, prefs] = await Promise.all([store.day(job), store.preferences(job)]);
-  const eligible =
-    prefs.enabled &&
-    !day.resting &&
-    (job.kind === "goal" ? day.goal === "" : day.goal !== "" && day.reflection === "");
-  if (!eligible) {
-    await store.finishReminder(job, "cancelled");
-    return false;
-  }
-  const thread = await store.getRecord({ ...scope, key: `common-thread:${job.date}:${job.kind}` });
-  const ts = thread ? object(thread.body).ts : undefined;
-  const text = await customBotEmoji(
-    env.SLACK_BOT_TOKEN,
-    job.kind === "goal"
-      ? `<@${job.userId}> 오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지를 여기 남겨볼까요? 중요한 일부터 시작해봐요!!! :seedling:`
-      : `<@${job.userId}> 오늘 *ONE THING*은 어떠셨나요? 해낸 만큼 후기 한 줄 남겨주세요!!! :memo: 오늘 쉬실 거라면 그렇게 말해주셔도 돼요.`,
-  );
-  try {
-    await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
-      channel: job.channelId,
-      ...(typeof ts === "string" ? { thread_ts: ts } : {}),
-      text: `${text}\n개인 안내를 끄려면 “알림 설정”이라고 남겨주세요.`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `${text}\n개인 안내를 끄려면 “알림 설정”이라고 남겨주세요.`,
-          },
-        },
-      ],
-    });
-    await store.finishReminder(job, "sent");
-    return true;
-  } catch (error) {
-    if (error instanceof CommunitySlackError) await store.finishReminder(job, "failed");
-    throw error;
-  }
-}
-
 export async function runCommunitySchedule(
   env: CommunityScheduleEnv,
   store: ScheduleStore,
   nowDate: Date,
+  clock: ScheduleClock = { now: () => nowDate },
 ): Promise<{ readonly common: number; readonly personal: number }> {
   const scope = {
     teamId: env.SLACK_TEAM_ID,
     channelId: env.COMMUNITY_CHANNEL_ID,
     userId: env.COMMUNITY_ADMIN_ID,
   };
+  const now = nowDate.toISOString();
+  const observedAt = clock.now().toISOString();
   const local = new Date(nowDate.getTime() + 9 * 60 * 60 * 1000).toISOString();
   const date = local.slice(0, 10);
   const minute = local.slice(11, 16);
-  let common = 0;
-  let personal = 0;
   const settings = await store.getRecord({ ...scope, key: "group-schedule" });
-  if (settings) {
-    const schedule = parseSchedule(settings.body);
-    if (schedule.enabled) {
-      for (const kind of ["goal", "review"] as const) {
-        if (isWeekend(date) && kind === "review") continue;
-        const due = kind === "goal" ? schedule.goalTime : schedule.reviewTime;
-        const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
-        const late = minutes(minute) - minutes(due);
-        if (late >= 0 && late <= 5 && (await commonPrompt(env, store, scope, date, kind))) common++;
-      }
-    }
+  const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
+  const schedule = settings ? parseSchedule(settings.body) : null;
+  const scheduledKinds = (["goal", "review"] as const).filter((kind) => {
+    if (!schedule?.enabled) return false;
+    if (isWeekend(date) && kind === "review") return false;
+    const due = isWeekend(date)
+      ? "10:00"
+      : kind === "goal"
+        ? schedule.goalTime
+        : schedule.reviewTime;
+    const late = minutes(minute) - minutes(due);
+    return late >= 0 && late <= 5;
+  });
+  let snapshot: ChannelMembershipSnapshot | null = null;
+  const publicChannel = env.COMMUNITY_PUBLIC_CHANNEL_ID === scope.channelId;
+  const targetedDue =
+    !isWeekend(date) && publicChannel
+      ? await store.reminderTriggerDue(scope.teamId, scope.channelId, now)
+      : false;
+  if (!isWeekend(date) && publicChannel && (scheduledKinds.length > 0 || targetedDue)) {
+    snapshot = await collectCurrentChannelMembers(
+      env.SLACK_BOT_TOKEN,
+      scope.channelId,
+      env.COMMUNITY_BOT_USER_ID ?? "",
+      observedAt,
+    );
+    await store.reconcileChannelMembers(scope, snapshot);
   }
-  if (isWeekend(date)) return { common, personal };
-  for (const job of await store.due(scope.teamId, scope.channelId, nowDate.toISOString())) {
-    if (job.teamId !== scope.teamId || job.channelId !== scope.channelId || job.date !== date)
-      continue;
-    if (await personalReminder(env, store, scope, job, nowDate)) personal++;
+  let common = 0;
+  const eligibleMembers =
+    snapshot && scheduledKinds.length ? await store.members(scope.teamId, scope.channelId) : [];
+  for (const kind of scheduledKinds) {
+    await enqueueCommonDelivery(
+      store,
+      scope,
+      date,
+      kind,
+      await commonText(env, date, kind, eligibleMembers),
+    );
   }
+  common += await sendCommonDeliveries({
+    token: env.SLACK_BOT_TOKEN,
+    now,
+    scope,
+    store,
+    reviewThreadV2: env.REVIEW_THREAD_V2 === "true",
+    memberActions: publicChannel,
+  });
+  if (isWeekend(date) || (publicChannel && !targetedDue)) return { common, personal: 0 };
+  const personal = await sendReminderBatches({
+    token: env.SLACK_BOT_TOKEN,
+    teamId: scope.teamId,
+    channelId: scope.channelId,
+    now,
+    store,
+    reviewThreadV2: env.REVIEW_THREAD_V2 === "true",
+    memberActions: publicChannel,
+  });
   return { common, personal };
 }

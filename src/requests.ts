@@ -1,13 +1,11 @@
 import type { Palette } from "./board";
 import { DEFAULT_PALETTE, date, InputError, list, object, slackResponseUrl, string } from "./input";
-import { type InvitationOperation, invitationCommand } from "./invitations/requests";
 import { ownedAction, sharedVisibility } from "./owned-action";
 import { modalPalette } from "./palette-modal";
 import type { StoreCommand } from "./store";
 
 export type Identity = { readonly teamId: string; readonly userId: string };
 export type Operation =
-  | InvitationOperation
   | {
       readonly kind: "denied";
       readonly identity: Identity;
@@ -51,8 +49,6 @@ export function command(
   const text = (form.get("text") ?? "").trim();
   const identity = { teamId: string(form.get("team_id")), userId: string(form.get("user_id")) };
   const responseUrl = slackResponseUrl(form.get("response_url"));
-  const invitation = invitationCommand(text, { identity, responseUrl });
-  if (invitation) return invitation;
   if (text.length > 200 || /[\r\n]/.test(text))
     throw new InputError("오늘의 ONE THING을 200자 이내 한 줄로 작성해 주세요.");
   const history = /^기록\s+(.+)$/.exec(text);

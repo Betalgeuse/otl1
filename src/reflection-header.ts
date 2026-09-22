@@ -1,6 +1,10 @@
 import { InputError, date as parseDate } from "./input";
 
 type HeaderOutcome = "complete" | "partial" | "not_done" | "rest";
+export type ReflectionDraftHeader = {
+  readonly date: string | null;
+  readonly text: string;
+};
 export type ReflectionHeader = {
   readonly date: string | null;
   readonly outcome: HeaderOutcome;
@@ -18,6 +22,8 @@ const STATUSES: readonly (readonly [RegExp, HeaderOutcome])[] = [
   [/^(?:휴식|쉬었어요)/, "rest"],
   [/^(?:완료(?:했어요|했습니다|했다)?|달성(?:했어요|했습니다|했다)?)/, "complete"],
 ];
+const COMBINED_REVIEW =
+  /^(일부\s*완료|부분\s*완료|절반|미완료|미완|못했어요|휴식|쉬었어요|완료(?:했어요|했습니다|했다)?|달성(?:했어요|했습니다|했다)?)[.!。！,:：]*\s*\n\s*(?:후기|회고)\s*[:：]?\s*/u;
 
 function headerDate(token: string, today: string): string {
   const numbers = token.match(/\d+/g) ?? [];
@@ -29,7 +35,10 @@ function headerDate(token: string, today: string): string {
   return value;
 }
 
-export function parseReflectionHeader(text: string, today: string): ReflectionHeader | null {
+export function parseReflectionDraftHeader(
+  text: string,
+  today: string,
+): ReflectionDraftHeader | null {
   const original = text.trim();
   if (
     !original ||
@@ -54,28 +63,74 @@ export function parseReflectionHeader(text: string, today: string): ReflectionHe
     throw new InputError("후기는 한 번에 한 날짜씩 남겨주세요.");
   const dateToken = before?.[1] ?? before?.[2] ?? after?.[1] ?? after?.[2];
   const date = dateToken ? headerDate(dateToken, today) : null;
+  const body = rest.trim();
+  return body ? { date, text: body } : null;
+}
+
+export function parseReflectionHeader(text: string, today: string): ReflectionHeader | null {
+  const original = text.trim();
+  if (
+    !original ||
+    original.length > 1000 ||
+    /[>"“”「」`]|<@|친구가|동료가|[가-힣]+님이|인용|번역해|ignore|system|분류|출력|규칙.*무시/i.test(
+      original,
+    )
+  )
+    return null;
+  let rest = original
+    .replace(/\r\n?/g, "\n")
+    .replace(/^[-*]\s+/, "")
+    .replaceAll("**", "");
+  const combined = COMBINED_REVIEW.exec(rest);
+  if (combined) {
+    const body = rest.slice(combined[0].length).trimStart();
+    rest = `후기: ${combined[1]}${body ? `. ${body}` : ""}`;
+  }
+  const before = DATE_PREFIX.exec(rest);
+  if (before) rest = rest.slice(before[0].length);
+  const marker = /^(?:후기|회고)[ \t]*(?:[:：][ \t]*|\n\s*)/.exec(rest);
+  const directStatus = marker ? null : STATUSES.find(([pattern]) => pattern.test(rest));
+  if (!marker && !directStatus) return null;
+  if (marker) rest = rest.slice(marker[0].length).trimStart();
+  const after = DATE_PREFIX.exec(rest);
+  if (after) rest = rest.slice(after[0].length);
+  if ((before && after) || EXTRA_DATE.test(rest))
+    throw new InputError("후기는 한 번에 한 날짜씩 남겨주세요.");
+  const dateToken = before?.[1] ?? before?.[2] ?? after?.[1] ?? after?.[2];
+  const date = dateToken ? headerDate(dateToken, today) : null;
   for (const [pattern, outcome] of STATUSES) {
     const status = pattern.exec(rest);
     if (!status) continue;
     const tail = rest.slice(status[0].length);
-    if (tail && !/^[ \t]*(?:[.!。！,:：]|\n|$)/.test(tail)) return null;
-    if (/^[ \t]*[?？]/.test(tail)) return null;
-    if (/^[\s.!。！,:：]*(?:예정|아니|아님|아직|사실\s*아직|못|하지\s*못|미완|취소)/.test(tail))
+    const tentativeNarrative = !marker && /^[\s.!。！,:：…]*[?？]+\s*\([^?？]+\)\s*$/u.test(tail);
+    const checkedTail = tentativeNarrative ? tail.replace(/[?？]+/gu, "") : tail;
+    if (!marker && !/[\p{L}\p{N}]/u.test(checkedTail.replace(/^[\s.!。！,:：…]+/u, "")))
+      return null;
+    if (checkedTail && !/^[ \t]*(?:[.!。！,:：…]|\n|$)/.test(checkedTail)) return null;
+    if (/^[ \t]*[?？]/.test(checkedTail)) return null;
+    if (
+      /^[\s.!。！,:：…]*(?:예정|아니|아님|아직|사실\s*아직|못|하지\s*못|미완|취소)/.test(
+        checkedTail,
+      )
+    )
       return null;
     if (
       /실패|거짓|예문|실제로|사실|농담|(?:이?라)는|오타|정정|취소|예시|가정|라고\s*쓰|처리되|처리해|했으면|했더라면|아니라|[?？]/.test(
-        tail,
+        checkedTail,
       )
     )
       return null;
     if (
       outcome === "complete" &&
-      /못|않|아니|아님|미완|부분|절반|거의|아직|안\s*(?:했|한|끝|달성|완료)/.test(tail)
+      /못|않|아니|아님|미완|부분|절반|거의|아직|안\s*(?:했|한|끝|달성|완료)/.test(checkedTail)
     )
       return null;
-    if (outcome !== "complete" && /(?:모두|전부|다)\s*(?:완료|달성|했)|완료했|달성했/.test(tail))
+    if (
+      outcome !== "complete" &&
+      /(?:모두|전부|다)\s*(?:완료|달성|했)|완료했|달성했/.test(checkedTail)
+    )
       return null;
-    const substance = tail.replace(/:[a-zA-Z0-9_+-]+:/g, "");
+    const substance = checkedTail.replace(/:[a-zA-Z0-9_+-]+:/g, "");
     const hasReflection = outcome !== "rest" && /[\p{L}\p{N}]/u.test(substance);
     return { date, outcome, text: original, hasReflection };
   }

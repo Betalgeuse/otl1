@@ -25,6 +25,10 @@ export const RELEASES = [
     version: "v0.0.22",
     text: "기존 Slack 반복 알림을 우리 봇의 오전 10시·오후 6시 안내로 전환했어요. *ONE THING*과 후기는 봇이 연 스레드에 남겨주세요!",
   },
+  {
+    version: "v0.0.55",
+    text: "<!channel> welcome-start-here 안내를 새로 정리했어요. 같이하면 좋을 지인이 떠오르면 두 이미지와 아래 문장을 보내고 자유롭게 초대해주세요.\n\n“매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야. 같이 할래?”",
+  },
 ] as const;
 
 function controlScope(context: CommunityContext) {

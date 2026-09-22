@@ -9,11 +9,13 @@
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "test:unit": "node scripts/test-unit.mjs",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "reconcile:garden": "node scripts/reconcile-garden-projections.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
     "typescript": "7.1.0-dev.20260809.1",
-    "wrangler": "4.62.0"
+    "wrangler": "4.62.0",
+    "zod": "4.4.3"
   }
 }

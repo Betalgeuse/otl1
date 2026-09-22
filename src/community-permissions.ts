@@ -28,6 +28,7 @@ const adminActions = new Set([
   "community_publish",
   "community_test_schedule",
   "community_test_group",
+  "community_test_public_collection",
   "community_live_schedule",
 ]);
 const memberActions = new Set([
@@ -49,6 +50,11 @@ const memberActions = new Set([
   "community_introduction",
   "community_introduction_submit",
   "community_introduction_directory",
+  "community_referral_link",
+  "community_bug_open",
+  "community_bug_submit",
+  "community_bug_confirm",
+  "community_bug_answer",
 ]);
 
 export function authorizeCommunityAction(

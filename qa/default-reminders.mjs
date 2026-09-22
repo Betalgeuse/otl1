@@ -15,6 +15,7 @@ BEGIN
  r:=otl.community_execute('enroll_reminders',s);
  ASSERT r->>'enabled'='true' AND r->>'goalTime'='11:00' AND r->>'reviewTime'='20:00','new primary defaults';
  ASSERT r->>'preferenceSource'='default' AND (r->>'eligibleFrom')::date=(now() AT TIME ZONE 'Asia/Seoul')::date+1,'tomorrow eligibility';
+ PERFORM otl.community_execute('reconcile_channel_members',s||jsonb_build_object('complete',true,'observedAt','2030-01-07T00:00:00Z','members',jsonb_build_array(jsonb_build_object('userId','member','isBot',false,'isAppUser',false,'deleted',false))));
  ASSERT otl.community_execute('due',s||jsonb_build_object('now',now()))='[]'::jsonb,'no same-day reminders';
  ASSERT otl.community_execute('preferences',s||jsonb_build_object('channelId','admin'))->>'enabled'='false','QA defaults off';
  r:=otl.community_execute('preferences',s||jsonb_build_object('userId','read-only'));
@@ -63,5 +64,5 @@ BEGIN
 END $$;
 ROLLBACK;
 `;
-execFileSync('psql', ['-h','/tmp/otl-community-pg','-p','55439','-d',database,'-X','-v','ON_ERROR_STOP=1'], {input:sql,encoding:'utf8',stdio:['pipe','pipe','pipe']});
+execFileSync('psql', ['-h',process.env.COMMUNITY_PG_SOCKET ?? '/tmp/otl-community-pg','-p',process.env.COMMUNITY_PG_PORT ?? '55439','-d',database,'-X','-v','ON_ERROR_STOP=1'], {input:sql,encoding:'utf8',stdio:['pipe','pipe','pipe']});
 console.log('PASS reminder SQL: defaults, enrollment, opt-out persistence, tomorrow eligibility, weekday/quiet limits, active humans, due/claim rechecks, complete vs review, rest, one claim, preserved snapshot');

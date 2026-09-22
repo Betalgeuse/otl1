@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {generateEncouragement} from '../src/community-language.ts';
+import {generateEncouragement} from '../src/community-encouragement.ts';
 const unknown={run:async()=>({response:JSON.stringify({text:'unapproved output'})})};
 for(const kind of ['goal','completion','reflection','first_goal','first_reflection','rest']) {
  const input={kind,text:'합성 검증',userId:'synthetic'};

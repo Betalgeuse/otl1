@@ -3,10 +3,42 @@ SLACK_TEAM_ID=
 SLACK_SIGNING_SECRET=
 SLACK_BOT_TOKEN=
 DATABASE_URL=
+# Least-privilege NOLOGIN-derived credentials created by bootstrap-guide-db-roles.mjs.
+GUIDE_DATABASE_URL=
+# Keep this admin credential outside the Worker; it is only for the publisher CLI.
+GUIDE_ADMIN_DATABASE_URL=
 BOARD_SIGNING_SECRET=
 PUBLIC_BASE_URL=
-INVITE_SIGNING_SECRET=
 COMMUNITY_OWNER_ID=
+BUG_PRIVATE_KEK=
+BUG_PRIVATE_KEK_VERSION=
 
 # Bot user ID used to recognize an optional mention.
 COMMUNITY_BOT_USER_ID=
+COMMUNITY_FEEDBACK_CHANNEL_ID=
+
+# Exactly two ordered Slack file IDs: logo first, daily scrum screen second.
+COMMUNITY_WELCOME_CHANNEL_ID=
+COMMUNITY_GUIDE_FILE_IDS=
+COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS=
+COMMUNITY_ADMIN_ID=
+
+# Invite/lifecycle secrets: create separately in the Core Worker before enabling rollout flags.
+SITE_CORE_HMAC_SECRET=
+# Site Worker only: official https://join.slack.com/t/<workspace>/shared_invite/<token> URL.
+SLACK_SHARED_INVITE_URL=
+INVITE_EMAIL_PEPPER=
+INVITE_PRIVATE_KEK=
+INVITE_PRIVATE_KEK_VERSION=
+REFERRAL_TOKEN_SECRET=
+LIFECYCLE_ACTION_SECRET=
+# Dedicated otl_lifecycle_admin_login credential; never reuse DATABASE_URL.
+LIFECYCLE_ADMIN_DATABASE_URL=
+# Dedicated otl_referral_admin_login credential from bootstrap-referral-admin-db-role.mjs.
+REFERRAL_ADMIN_DATABASE_URL=
+# Interest runtime, private-admin, and active-member confirmation roles stay separate from DATABASE_URL.
+INTEREST_RUNTIME_DATABASE_URL=
+INTEREST_ADMIN_DATABASE_URL=
+INTEREST_MEMBER_DATABASE_URL=
+INTEREST_ADMIN_CHANNEL_ID=
+INTEREST_ACTION_SECRET=

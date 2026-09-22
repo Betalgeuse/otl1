@@ -1,19 +1,22 @@
 import { classifyRecordEdit, parseEditDate } from "./community-edit-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { type CommunityContext, ephemeral, scopedValue } from "./community-runtime";
+import { targetDateContext } from "./community-temporal";
 import type { DayChange } from "./community-types";
 import { InputError, koreaDate, object, string } from "./input";
 
 export async function prepareRecordEdit(context: CommunityContext, text: string): Promise<boolean> {
-  const hasDate = /어제|그제|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|\d{1,2}월\s*\d{1,2}일/.test(text);
+  const today = koreaDate(Date.now() / 1000);
+  const targetContext = targetDateContext(text, context.date, today);
+  const hasTarget = targetContext.kind === "different" || targetContext.kind === "conflicting";
   const hasEdit = /수정|바꿔|바꾸|정정|변경/.test(text) && /목표|원씽|후기/.test(text);
-  if (!hasEdit && !(hasDate && /달성|완료|했|쉬|후기/.test(text))) return false;
+  if (!hasEdit && !(hasTarget && /달성|완료|했|쉬|후기|수정|정정|변경|바꾸/.test(text)))
+    return false;
   if (text.length > 1000) {
     await ephemeral(context, { text: "수정할 내용을 1,000자 이내로 알려주세요." });
     return true;
   }
   const history = await context.store.history(context.scope);
-  const today = koreaDate(Date.now() / 1000);
   let target: ReturnType<typeof parseEditDate>;
   try {
     target = parseEditDate(

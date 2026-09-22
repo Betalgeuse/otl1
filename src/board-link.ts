@@ -1,4 +1,4 @@
-import { type Board, buildBoard, type Snapshot } from "./board";
+import type { Board, Cell } from "./board";
 import { date, InputError, list, object, palette, string } from "./input";
 import { sign, verify } from "./signing";
 
@@ -44,17 +44,36 @@ export async function readBoardLink(token: string, secret: string): Promise<Boar
     throw new InputError(
       "보드 주소가 만료되었습니다. 채널에 ‘내 상태’라고 입력해 다시 확인해 주세요.",
     );
-  const snapshot: Snapshot = {
-    startDate: date(decoded.origin),
+  const origin = Date.parse(`${date(decoded.origin)}T00:00:00Z`);
+  const today = date(decoded.today);
+  const todayStamp = Date.parse(`${today}T00:00:00Z`);
+  let previous = 0;
+  const cells = list(decoded.cells).map((value): Cell => {
+    const cell = object(value);
+    const status = string(cell.status);
+    if (status !== "empty" && status !== "written" && status !== "complete")
+      throw new InputError("잘못된 칸 상태입니다.");
+    const cellDate = date(cell.date);
+    const stamp = Date.parse(`${cellDate}T00:00:00Z`);
+    const day = Math.floor((stamp - origin) / 86_400_000) + 1;
+    if (day <= previous || day < 1 || stamp > todayStamp + 14 * 86_400_000)
+      throw new InputError("잔디 날짜 순서가 올바르지 않습니다.");
+    previous = day;
+    return {
+      day,
+      date: cellDate,
+      status,
+      future: stamp > todayStamp,
+      optional: false,
+      today: stamp === todayStamp,
+    };
+  });
+  if (cells.length < 1 || cells.length > 512)
+    throw new InputError("잔디 칸 수가 올바르지 않습니다.");
+  return {
+    cells,
     palette: palette(decoded.palette),
-    goals: list(decoded.cells).flatMap((value) => {
-      const cell = object(value);
-      const status = string(cell.status);
-      if (status === "empty") return [];
-      if (status !== "written" && status !== "complete")
-        throw new InputError("잘못된 칸 상태입니다.");
-      return [{ date: date(cell.date), text: "", completed: status === "complete" }];
-    }),
+    startDate: date(decoded.startDate),
+    endDate: cells.at(-1)?.date ?? today,
   };
-  return buildBoard(snapshot, date(decoded.today), date(decoded.startDate));
 }

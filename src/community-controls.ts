@@ -1,3 +1,4 @@
+import { preparePublicCollectionTest } from "./community-admin-collection";
 import { armCommunityClock } from "./community-clock";
 import { communityConfirmationMessage } from "./community-messages";
 import { isCommunityAdmin, requireCommunityAdmin } from "./community-permissions";
@@ -53,6 +54,7 @@ export async function settingsCard(context: CommunityContext): Promise<void> {
 }
 export async function groupCard(context: CommunityContext): Promise<void> {
   requireCommunityAdmin(context.scope, context.env);
+  const collectionTest = await preparePublicCollectionTest(context);
   await post(
     context,
     communityConfirmationMessage(
@@ -68,6 +70,7 @@ export async function groupCard(context: CommunityContext): Promise<void> {
           actionId: "community_test_group",
           value: scopedValue(context.scope, context.date),
         },
+        ...(collectionTest ? [collectionTest] : []),
         ...(context.scope.channelId === context.env.COMMUNITY_CHANNEL_ID
           ? [
               {

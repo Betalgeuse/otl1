@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ONE THING 운영자에게 비공개 참여 문의를 남깁니다.">
+  <title>ONE THING · 비공개 참여 문의</title><link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body class="application-page interest-page">
+  <a class="skip-link" href="#application">문의 양식으로 건너뛰기</a>
+  <header class="site-header"><nav class="site-nav" aria-label="주요 탐색"><a class="wordmark" href="/">ONE<br>THING</a><a href="/#invitation">참여 방식</a></nav></header>
+  <main id="application">
+    <section class="application-intro">
+      <p class="eyebrow">소개 링크가 없어도, 이야기는 남길 수 있어요</p><h1>궁금한 마음을<br>전해 주세요.</h1>
+      <p>이 문의는 운영자에게만 전달됩니다. 문의만으로 회원이 되거나 초대를 받지는 않습니다. 참여하려면 기존 회원의 확인된 소개와 운영자 승인이 필요합니다.</p>
+    </section>
+    <section class="application-form-section" aria-labelledby="form-title">
+      <div class="chapter-label"><span>비공개 참여 문의</span><span>01</span></div>
+      <div class="application-grid">
+        <div><h2 id="form-title">한 문장으로<br>알려 주세요.</h2><p>아는 회원이 없다면 마지막 칸은 비워 두세요. 운영자가 내용을 검토하되, 문의가 참여 자격이나 소개를 대신하지는 않습니다.</p></div>
+        <form action="/interest" method="post" data-application-form>
+          <input type="hidden" name="submissionKey" value="__SUBMISSION_KEY__">
+          <label><span>이메일</span><input name="email" type="email" autocomplete="email" maxlength="320" required aria-describedby="email-help"><small id="email-help">운영자의 답장을 받을 주소입니다.</small></label>
+          <label><span>표시 이름</span><input name="displayName" autocomplete="name" maxlength="80" required></label>
+          <label><span>참여하고 싶은 이유 한 문장</span><textarea name="intent" rows="5" maxlength="1000" required></textarea></label>
+          <label><span>아는 회원이 있다면 단서 (선택)</span><input name="knownMemberClue" maxlength="200" aria-describedby="member-help"><small id="member-help">이름이나 관계만 간단히 적어 주세요. 이 내용만으로 소개가 확인되지는 않습니다.</small></label>
+          <label class="consent"><input name="consent" type="checkbox" value="interest-consent-v1" required><span>운영자가 이 문의를 검토하고 답장하기 위해 입력한 정보를 처리하는 데 동의합니다. 문의만으로 초대나 참여 자격이 생기지 않습니다. (interest-consent-v1)</span></label>
+          <label class="consent"><input name="inviteConsent" type="checkbox" value="invite-consent-v1" required><span>기존 회원의 소개가 확인되고 운영자가 나중에 승인한 경우에만 초대 절차를 위해 입력한 정보를 처리하는 데 동의합니다. 이 동의로 곧바로 Slack 초대가 발송되지는 않습니다. (invite-consent-v1)</span></label>
+          <label class="consent"><input name="shareNameEmailWithIntroducer" type="checkbox" value="yes"><span>소개 확인이 필요해지면, 운영자가 확인된 기존 회원 한 명에게 제 이름과 이메일을 제한적으로 보여주는 데 동의합니다. 선택 사항입니다. 동의하지 않으면 문의는 운영자만 검토하며, 봇에서 이 문의를 회원 소개에 연결하거나 초대 절차를 진행하지 않습니다. 참여를 원하면 기존 회원에게 개인 전용 신청 링크를 받아 신청해 주세요.</span></label>
+          <div class="cf-turnstile" data-sitekey="__TURNSTILE_SITE_KEY__" data-action="interest-submit" data-size="flexible"></div>
+          <p class="form-status" data-form-status role="status" aria-live="polite"></p>
+          <button class="button" type="submit" data-submit>비공개 문의 보내기</button>
+        </form>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><p>ONE THING</p><p>오늘 한 가지를, 함께 끝까지.</p><a href="/">소개 보기</a></footer>
+</body>
+</html>
