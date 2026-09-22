@@ -1,9 +1,5 @@
-import {
-  guideBlocks,
-  parseGuideFileIds,
-  renderGuideChannels,
-  type WelcomeGuideContent,
-} from "./community-guide-content";
+import { parseGuideFileIds, type WelcomeGuideContent } from "./community-guide-content";
+import { welcomeGuideLink } from "./community-guide-surface";
 import type { CommunityEnv } from "./community-runtime";
 import { callSlack } from "./community-social";
 import { InputError, list, object, string } from "./input";
@@ -28,10 +24,9 @@ type GuideDeliveryEnv = Pick<
   | "GUIDE_DATABASE_URL"
   | "COMMUNITY_WELCOME_CHANNEL_ID"
   | "COMMUNITY_BOT_USER_ID"
-  | "COMMUNITY_PUBLIC_CHANNEL_ID"
-  | "COMMUNITY_FEEDBACK_CHANNEL_ID"
-  | "COMMUNITY_RELEASE_CHANNEL_ID"
-  | "COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS"
+  | "COMMUNITY_GUIDE_CANVAS_ID"
+  | "COMMUNITY_GUIDE_CANVAS_URL"
+  | "COMMUNITY_GUIDE_ANCHOR_TS"
 > & {
   readonly GUIDE_ADMIN_DATABASE_URL?: string;
 };
@@ -106,7 +101,6 @@ async function deliverPublishedGuide(
       JSON.stringify(scope),
     ]),
   );
-  const renderedBody = renderGuideChannels(guide.body, env);
   const identity = { ...scope, version: guide.version, hash: guide.hash, reason };
   const claimed = await store.queryJson(`SELECT ${executeFunction}($1,$2::jsonb)`, [
     claimOperation,
@@ -116,10 +110,10 @@ async function deliverPublishedGuide(
     return { delivered: false, version: guide.version, contentHash: guide.hash };
   let sent: Record<string, unknown>;
   try {
+    const message = welcomeGuideLink(userId, env);
     sent = await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: channelId,
-      text: `<@${userId}> 어서 오세요!!! 처음 오셨다면 이 안내부터 함께 읽어주세요.\n\n${renderedBody}`,
-      blocks: guideBlocks(userId, guide, renderedBody),
+      ...message,
       unfurl_links: false,
       unfurl_media: false,
     });
