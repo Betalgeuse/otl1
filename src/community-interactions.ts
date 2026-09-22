@@ -79,7 +79,7 @@ export async function communityInteraction(
     const slack = referralSlackPort(env);
     waitUntil(
       (async () => {
-        if (env.REFERRALS_ENABLED !== "true" || env.PUBLIC_APPLICATIONS_ENABLED !== "true") {
+        if (env.REFERRALS_ENABLED !== "true") {
           await slack.postEphemeral({
             channelId: scope.channelId,
             userId: scope.userId,

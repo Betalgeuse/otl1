@@ -141,16 +141,17 @@ await press(click("UUNAVAILABLE"));
 assert.equal(issueInputs.at(-1)?.userId, "UUNAVAILABLE");
 assert.doesNotMatch(ephemeralEffects.at(-1)?.text, /\/r\//);
 
-// Given either referral capability is off, when a member presses the button,
-// then the action is acknowledged and privately explains that a link is unavailable without DB issuance.
+// Link issuance depends on referrals, while the temporary shared-Slack bypass
+// keeps member invite pages usable with attributed applications paused.
 const issuedBeforeDisabledPress = issueInputs.length;
 await press(click("UDISABLED"), { ...env, REFERRALS_ENABLED: "false" });
 assert.equal(issueInputs.length, issuedBeforeDisabledPress);
 assert.equal(ephemeralEffects.at(-1)?.userId, "UDISABLED");
 assert.doesNotMatch(ephemeralEffects.at(-1)?.text, /\/r\//);
-await press(click("UDISABLED"), { ...env, PUBLIC_APPLICATIONS_ENABLED: "false" });
-assert.equal(issueInputs.length, issuedBeforeDisabledPress);
-assert.doesNotMatch(ephemeralEffects.at(-1)?.text, /\/r\//);
+await press(click("UBYPASS"), { ...env, PUBLIC_APPLICATIONS_ENABLED: "false" });
+assert.equal(issueInputs.length, issuedBeforeDisabledPress + 1);
+assert.equal(issueInputs.at(-1)?.userId, "UBYPASS");
+assert.match(ephemeralEffects.at(-1)?.text, /^https:\/\/otl1\.hyuk\.me\/r\/[A-Za-z0-9_-]{32}/);
 
 // Public daily-scrum member surfaces may expose the same actor-scoped invite action.
 await press(click("UPUBLIC", { container: { channel_id: "CPUBLIC" } }));
