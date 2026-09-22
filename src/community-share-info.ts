@@ -1,5 +1,5 @@
 import { randomCustomEmoji } from "./community-emoji";
-import { type CommunityContext, post } from "./community-runtime";
+import { type CommunityContext, type CommunityEnv, post } from "./community-runtime";
 import { addReactions } from "./community-social";
 import { object, string } from "./input";
 import { INTENT_MODEL, type IntentAI } from "./intent";
@@ -83,18 +83,24 @@ function fallbackResult(text: string): ShareInfoResult {
   };
 }
 
+export function shareInfoChannelIds(
+  env: Pick<CommunityEnv, "COMMUNITY_SHAREINFO_CHANNEL_ID" | "COMMUNITY_CHAPTER_CHANNEL_IDS">,
+): readonly string[] {
+  return [
+    env.COMMUNITY_SHAREINFO_CHANNEL_ID,
+    ...(env.COMMUNITY_CHAPTER_CHANNEL_IDS?.split(",") ?? []),
+  ]
+    .map((value) => value?.trim())
+    .filter(
+      (value, index, values): value is string => Boolean(value) && values.indexOf(value) === index,
+    );
+}
+
 export async function handleShareInfoMessage(
   event: Record<string, unknown>,
   context: CommunityContext,
 ): Promise<boolean> {
-  const channelIds = new Set(
-    [
-      context.env.COMMUNITY_SHAREINFO_CHANNEL_ID,
-      ...(context.env.COMMUNITY_CHAPTER_CHANNEL_IDS?.split(",") ?? []),
-    ]
-      .map((value) => value?.trim())
-      .filter((value): value is string => Boolean(value)),
-  );
+  const channelIds = new Set(shareInfoChannelIds(context.env));
   if (!validMessage(event, channelIds)) return false;
   const channelId = string(event.channel);
   const text = string(event.text).trim();

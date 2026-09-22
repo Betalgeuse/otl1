@@ -41,6 +41,7 @@ const suites = [
   "community-record-decision",
   "community-social",
   "community-share-info",
+  "community-share-info-reconcile",
   "community-townhall",
   "community-welcome",
   "community-introduction",
