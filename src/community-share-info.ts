@@ -39,7 +39,7 @@ async function summarize(ai: IntentAI, text: string): Promise<ShareInfoResult> {
       {
         role: "system",
         content:
-          'Summarize a trusted Korean community information post. Return JSON only: {"summary":"한 줄 요약","thought":"관련 회원·자료·주제로 확장하는 한 줄 생각거리"}. Preserve facts, do not invent names or claims, do not give generic praise, and do not include markdown links. The thought may mention one related topic but must not mention a person unless the input explicitly names them.',
+          'Summarize a trusted Korean community information post. Return JSON only: {"summary":"한 줄 요약","thought":"관련 회원·자료·주제로 확장하는 한 줄 생각거리"}. Preserve facts, do not invent names or claims, do not give generic praise, and do not include markdown links. The thought may mention one related topic but must not mention a person unless the input explicitly names them. /no_think',
       },
       { role: "user", content: text.slice(0, MAX_TEXT) },
     ],
