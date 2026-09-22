@@ -104,6 +104,17 @@ assert.match(script, /classList\.add\("has-js"\)/);
 assert.match(css, /\.has-js \.site-links/);
 assert.match(page, /data-reaction-stage/);
 assert.match(page, /src="\/assets\/otl1-avatar\.jpg"/);
+for (const html of [page, referral]) {
+  assert.match(html, /property="og:site_name" content="ONE THING 1 LINE"/);
+  assert.match(html, /property="og:image" content="https:\/\/otl1\.hyuk\.me\/assets\/otl1-avatar\.jpg"/);
+  assert.match(html, /property="og:image:width" content="512"/);
+  assert.match(html, /property="og:image:height" content="512"/);
+  assert.match(html, /name="twitter:card" content="summary"/);
+  assert.match(html, /name="twitter:image" content="https:\/\/otl1\.hyuk\.me\/assets\/otl1-avatar\.jpg"/);
+}
+assert.match(page, /property="og:url" content="https:\/\/otl1\.hyuk\.me\/"/);
+assert.match(referral, /property="og:url" content="__REFERRAL_URL__"/);
+assert.match(worker, /replaceAll\("__REFERRAL_URL__", escapeHtml\(request\.url\)\)/);
 assert.match(page, /src="\/assets\/one-thing-korean-black\.jpg"/);
 assert.match(page, /href="https:\/\/product\.kyobobook\.co\.kr\/detail\/S000001619177"/);
 assert.match(page, /후원|협찬/);

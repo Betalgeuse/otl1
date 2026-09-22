@@ -161,6 +161,7 @@ async function referralPage(request: Request, env: SiteEnv, token: string): Prom
     : "지인의 소개로 이곳에 도착했어요.";
   const directJoinPage = html
     .replaceAll("__REFERRAL_TOKEN__", token)
+    .replaceAll("__REFERRAL_URL__", escapeHtml(request.url))
     .replaceAll("__TURNSTILE_SITE_KEY__", env.TURNSTILE_SITE_KEY)
     .replaceAll("__SHARE_TEXT__", SHARE_COPY(token))
     .replaceAll("__SUBMISSION_KEY__", crypto.randomUUID())
