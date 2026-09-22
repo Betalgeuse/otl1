@@ -38,6 +38,7 @@ const store = {
 const context = {
   env: {
     COMMUNITY_SHAREINFO_CHANNEL_ID: "CSHARE",
+    COMMUNITY_CHAPTER_CHANNEL_IDS: "CDEV,CSCI",
     SLACK_BOT_TOKEN: "xoxb-test",
     AI: {
       async run() {
@@ -58,10 +59,24 @@ try {
   assert.equal(await handleShareInfoMessage({ type: "message", channel: "CSHARE", user: "UQA", ts: "100.1", text: "새 자료를 공유합니다." }, context), true);
   assert.equal(await handleShareInfoMessage({ type: "message", channel: "CSHARE", user: "UBOT", bot_id: "BQA", ts: "100.3", text: "봇 글" }, context), false);
   assert.equal(await handleShareInfoMessage({ type: "message", channel: "CSHARE", user: "UQA", ts: "100.4", thread_ts: "100.1", text: "답글" }, context), false);
-  assert.equal(calls.filter((call) => call.method === "chat.postMessage").length, 2);
-  assert.equal(calls.filter((call) => call.method === "reactions.add").length, 1);
+  assert.equal(await handleShareInfoMessage({ type: "message", channel: "CSCI", user: "UQA", ts: "200.1", text: "새 과학 자료를 공유합니다." }, { ...context, scope: { ...context.scope, channelId: "CSCI" }, source: "200.1", thread: "200.1" }), true);
+  assert.equal(await handleShareInfoMessage(
+    { type: "message", channel: "CDEV", user: "UQA", ts: "250.1", text: "https://example.com 개발 자료를 공유합니다." },
+    {
+      ...context,
+      env: { ...context.env, AI: { async run() { throw new Error("model unavailable"); } } },
+      scope: { ...context.scope, channelId: "CDEV" },
+      source: "250.1",
+      thread: "250.1",
+    },
+  ), true);
+  assert.equal(await handleShareInfoMessage({ type: "message", channel: "COTHER", user: "UQA", ts: "300.1", text: "범위 밖 글" }, context), false);
+  assert.equal(calls.filter((call) => call.method === "chat.postMessage").length, 6);
+  assert.equal(calls.filter((call) => call.method === "reactions.add").length, 3);
   assert.match(calls.find((call) => call.method === "chat.postMessage" && call.payload.text.includes("한 줄 요약"))?.payload.thread_ts, /^100\.1$/);
-  console.log("PASS Share Info: top-level human post once, emoji and thanks immediately, Qwen summary/thought in the same parent thread, bot/reply duplicates ignored");
+  assert.equal(calls.filter((call) => call.method === "chat.postMessage" && call.payload.thread_ts === "200.1").length, 2);
+  assert.match(calls.find((call) => call.method === "chat.postMessage" && call.payload.thread_ts === "250.1" && call.payload.text.includes("한 줄 요약"))?.payload.text, /개발 자료를 공유합니다/);
+  console.log("PASS Share Info and Chapters: top-level human posts get emoji, thanks, and Qwen summary/thought in their own thread; bot/reply/unconfigured posts ignored");
 } finally {
   globalThis.fetch = originalFetch;
 }

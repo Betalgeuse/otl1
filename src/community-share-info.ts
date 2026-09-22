@@ -12,10 +12,11 @@ type ShareInfoResult = {
   readonly thought: string;
 };
 
-function validMessage(event: Record<string, unknown>, channelId: string): boolean {
+function validMessage(event: Record<string, unknown>, channelIds: ReadonlySet<string>): boolean {
   return (
     event.type === "message" &&
-    event.channel === channelId &&
+    typeof event.channel === "string" &&
+    channelIds.has(event.channel) &&
     event.bot_id === undefined &&
     event.subtype === undefined &&
     event.edit_ts === undefined &&
@@ -38,7 +39,7 @@ async function summarize(ai: IntentAI, text: string): Promise<ShareInfoResult> {
       {
         role: "system",
         content:
-          'Summarize a trusted Korean community information post. Return JSON only: {"summary":"한 줄 요약","thought":"관련 회원·자료·주제로 확장하는 한 줄 생각거리"}. Preserve facts, do not invent names or claims, do not give generic praise, and do not include markdown links. The thought may mention one related topic but must not mention a person unless the input explicitly names them.',
+          'Summarize a trusted Korean community information post. Return JSON only: {"summary":"한 줄 요약","thought":"관련 회원·자료·주제로 확장하는 한 줄 생각거리"}. Preserve facts, do not invent names or claims, do not give generic praise, and do not include markdown links. The thought may mention one related topic but must not mention a person unless the input explicitly names them. /no_think',
       },
       { role: "user", content: text.slice(0, MAX_TEXT) },
     ],
@@ -69,12 +70,33 @@ async function summarize(ai: IntentAI, text: string): Promise<ShareInfoResult> {
   throw lastError instanceof Error ? lastError : new TypeError("Share Info unavailable");
 }
 
+function fallbackResult(text: string): ShareInfoResult {
+  const compact = text
+    .replace(/<https?:\/\/[^>]+>/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const summary = compact.length > 180 ? `${compact.slice(0, 177)}...` : compact;
+  return {
+    summary: summary || "공유된 자료의 링크와 내용을 확인해 보세요.",
+    thought: "이 정보에서 지금 확인해야 할 기회·가정·다음 행동은 무엇인지 생각해 보세요.",
+  };
+}
+
 export async function handleShareInfoMessage(
   event: Record<string, unknown>,
   context: CommunityContext,
 ): Promise<boolean> {
-  const channelId = context.env.COMMUNITY_SHAREINFO_CHANNEL_ID;
-  if (!channelId || !validMessage(event, channelId)) return false;
+  const channelIds = new Set(
+    [
+      context.env.COMMUNITY_SHAREINFO_CHANNEL_ID,
+      ...(context.env.COMMUNITY_CHAPTER_CHANNEL_IDS?.split(",") ?? []),
+    ]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value)),
+  );
+  if (!validMessage(event, channelIds)) return false;
+  const channelId = string(event.channel);
   const text = string(event.text).trim();
   if (!text || text.length > MAX_TEXT) return true;
   const source = string(event.ts);
@@ -93,7 +115,18 @@ export async function handleShareInfoMessage(
       await store.finishRecord({ ...scope, key }, "sent");
       return true;
     }
-    const result = await summarize(context.env.AI, text);
+    let result: ShareInfoResult;
+    try {
+      result = await summarize(context.env.AI, text);
+    } catch (error) {
+      result = fallbackResult(text);
+      console.warn(
+        JSON.stringify({
+          event: "community.share_info.ai_fallback",
+          type: error instanceof Error ? error.name : "Unknown",
+        }),
+      );
+    }
     await post(
       { ...context, scope, source, thread, key },
       { text: `한 줄 요약: ${result.summary}\n생각거리: ${result.thought}` },
