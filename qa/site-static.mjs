@@ -58,6 +58,7 @@ for (const fragment of [
   "Strict-Transport-Security",
   "X-Content-Type-Options",
   "Referrer-Policy",
+  "form-action 'self' https://otl1.hyuk.me",
 ])
   assert.match(worker, new RegExp(fragment.replaceAll("'", "['\\']")));
 
