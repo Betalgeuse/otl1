@@ -180,7 +180,7 @@ try {
   await run(join(pgBin, "initdb"), ["-D", data, "--no-locale", "--encoding=UTF8", "--auth=trust"]);
   await run(join(pgBin, "pg_ctl"), ["-D", data, "-o", `-F -k ${socket} -p ${port}`, "-l", join(temp, "postgres.log"), "-w", "start"]);
   started = true;
-  for (const migration of migrations.filter((name) => Number(name.slice(0, 3)) <= 42)) {
+  for (const migration of migrations.filter((name) => !name.startsWith("045_"))) {
     if (migration.startsWith("006_"))
       await run(join(pgBin, "psql"), ["-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", `migrations/${migration}`, "-f", "migrations/007_normalized_legacy.sql"]);
     else if (!migration.startsWith("007_"))
@@ -195,12 +195,12 @@ try {
       VALUES('TINT','CPUBLIC','UOWNER',true,now(),now()),
         ('TINT','CPUBLIC','ULIFECYCLE',true,now(),now());
     INSERT INTO otl.member_lifecycles(team_id,channel_id,user_id,state,rollout_at,last_transition_at)
-      VALUES('TINT','CPUBLIC','UOWNER','active',now(),now()),
-        ('TINT','CPUBLIC','ULIFECYCLE','active',now(),now());
+      VALUES('TINT','CPUBLIC','UOWNER','active','2026-09-20T00:00:00Z','2026-09-20T00:00:00Z'),
+        ('TINT','CPUBLIC','ULIFECYCLE','active','2026-09-20T00:00:00Z','2026-09-20T00:00:00Z');
     INSERT INTO otl.referral_admins(team_id,user_id) VALUES('TINT','UADMIN');
     INSERT INTO otl.grass_seasons(team_id,channel_id,user_id,opened_at,opened_on,opened_reason)
-      VALUES('TINT','CPUBLIC','UOWNER',now(),(now() AT TIME ZONE 'Asia/Seoul')::date,'rollout'),
-        ('TINT','CPUBLIC','ULIFECYCLE',now(),(now() AT TIME ZONE 'Asia/Seoul')::date,'rollout');`);
+      VALUES('TINT','CPUBLIC','UOWNER','2026-09-20T00:00:00Z','2026-09-20','rollout'),
+        ('TINT','CPUBLIC','ULIFECYCLE','2026-09-20T00:00:00Z','2026-09-20','rollout');`);
   const ts = `${Math.floor(Date.now()/1000)}.001`;
   assert.equal((await slackRequest("/slack/events", { type: "event_callback", team_id: "TINT", event_id: "EvLink1",
     event: { type: "message", channel: "CPUBLIC", user: "UOWNER", ts, text: "내 초대 링크" } })).status, 200);
@@ -227,6 +227,19 @@ try {
   assert.match(receipt.receiptId, /^RCP-/);
   assert.equal(bucket.privatePuts, 1);
   const db = new NeonStore(env.DATABASE_URL);
+  await psql(`INSERT INTO otl.workspace_members(team_id,user_id,display_name,is_bot,is_app_user,slack_deleted)
+      VALUES('TINT','UFIRST','First Goal Member',false,false,false);
+    INSERT INTO otl.workspace_channel_memberships(team_id,channel_id,user_id,is_current,last_seen_at,synced_at)
+      VALUES('TINT','CPUBLIC','UFIRST',true,now(),now());`);
+  const firstGoal = await new CommunityStore(db).change({
+    teamId: "TINT", channelId: "CPUBLIC", userId: "UFIRST", date: "2026-09-22",
+    key: "first-goal-season", action: "goal", text: "첫 ONE THING 완료 기준 정하기",
+    syncLegacy: true, reviewThreadV2: true,
+    delivery: { source: "1790049051.898349", thread: "1790049051.898349", undoKey: null },
+  });
+  assert.match(firstGoal.gardenDeliveryKey ?? "", /^garden:/);
+  assert.equal(await scalar("SELECT count(*) FROM otl.member_lifecycles WHERE team_id='TINT' AND user_id='UFIRST'"), "1");
+  assert.equal(await scalar("SELECT count(*) FROM otl.grass_seasons WHERE team_id='TINT' AND user_id='UFIRST' AND closed_at IS NULL"), "1");
   const adminDeliveryAt = Date.now();
   loseAcceptedAdminResponse = true;
   await runMembershipDue(env, db, "CPUBLIC", adminDeliveryAt);
@@ -620,7 +633,7 @@ try {
   const routeScope = { teamId: "TINT", channelId: "CPUBLIC", userId: "ULEGACY",
     date: "2026-10-21" };
   const rootForEdit = await scalar("SELECT thread_ts FROM otl.community_review_roots WHERE team_id='TINT' AND day='2026-10-21'");
-  const beforeRoute = await scalar("SELECT count(*) FROM otl.community_garden_deliveries WHERE team_id='TINT' AND user_id='ULEGACY' AND day='2026-10-21' AND route_provenance='canonical_review'");
+  const beforeRoute = await scalar("SELECT count(*) FROM otl.community_garden_deliveries WHERE team_id='TINT' AND user_id='ULEGACY' AND day='2026-10-21' AND route_kind='review_prompt' AND route_provenance='recorded'");
   const firstDay = await commonStore.day(routeScope);
   const offEdit = await commonStore.change({ ...routeScope, key: "review-while-off",
     action: "reflection", text: "Stored while flag is off", outcome: "complete",
@@ -628,14 +641,14 @@ try {
     delivery: { source: "7000.1", thread: rootForEdit, undoKey: null } });
   assert.equal(offEdit.changed, true);
   assert.equal((await commonStore.day(routeScope)).reflection, "Stored while flag is off");
-  assert.equal(await scalar("SELECT count(*) FROM otl.community_garden_deliveries WHERE team_id='TINT' AND user_id='ULEGACY' AND day='2026-10-21' AND route_provenance='canonical_review'"), beforeRoute);
+  assert.equal(await scalar("SELECT count(*) FROM otl.community_garden_deliveries WHERE team_id='TINT' AND user_id='ULEGACY' AND day='2026-10-21' AND route_kind='review_prompt' AND route_provenance='recorded'"), beforeRoute);
   const secondDay = await commonStore.day(routeScope);
   const onEdit = await commonStore.change({ ...routeScope, key: "review-after-on",
     action: "reflection", text: "Stored after flag resumes", outcome: "complete",
     expectedRevision: secondDay.revision, reviewThreadV2: true,
     delivery: { source: "7000.2", thread: rootForEdit, undoKey: null } });
   assert.equal(onEdit.changed, true);
-  assert.equal(await scalar("SELECT count(*) FROM otl.community_garden_deliveries WHERE team_id='TINT' AND user_id='ULEGACY' AND day='2026-10-21' AND route_provenance='canonical_review'"), "1");
+  assert.equal(await scalar("SELECT count(*) FROM otl.community_garden_deliveries WHERE team_id='TINT' AND user_id='ULEGACY' AND day='2026-10-21' AND route_kind='review_prompt' AND route_provenance='recorded'"), "1");
   await psql(`INSERT INTO otl.community_garden_retirements(team_id,channel_id,user_id,day,
     canonical_projection_key,old_projection_key,old_message_ts,old_payload,status,replacement_message_ts)
     VALUES('TINT','CPUBLIC','ULEGACY','2026-10-21','canonical-test-projection',

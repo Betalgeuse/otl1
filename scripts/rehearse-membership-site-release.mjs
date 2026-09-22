@@ -185,8 +185,8 @@ async function cleanupDatabases() {
   receipt.checks.localCleanup = { exit: 0, observed: "disposable databases and roles removed" };
 }
 function preflight(config, site, vars, siteWorker, releaseNames = release) {
-  assert.equal(migrations.length, 42, "schema head must be 042");
-  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038", "039", "040", "041", "042"]);
+  assert.equal(migrations.length, 46, "schema head must be 046");
+  assert.deepEqual(releaseNames.map((name) => name.slice(0, 3)), ["029", "030", "031", "032", "033", "034", "035", "036", "037", "038", "039", "040", "041", "042", "043", "044", "045", "046"]);
   assert.equal(site.services?.find((item) => item.binding === "CORE")?.service, config.name, "CORE service binding missing");
   assert.equal(site.assets?.binding, "ASSETS", "ASSETS binding missing");
   assert.ok(config.r2_buckets?.some((item) => item.binding === "INVITE_PRIVATE_OBJECTS"), "invite R2 binding missing");
