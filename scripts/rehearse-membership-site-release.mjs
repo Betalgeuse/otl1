@@ -196,7 +196,8 @@ function preflight(config, site, vars, siteWorker, releaseNames = release) {
     "INTEREST_ADMIN_CHANNEL_ID", "INTEREST_ACTION_SECRET", "SLACK_SHARED_INVITE_URL"])
     assert.ok(vars.includes(`${name}=`), `${name} declaration missing`);
   assert.equal(config.vars.LIFECYCLE_MODE, "disabled");
-  for (const name of ["REVIEW_THREAD_V2", "GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED", "PUBLIC_INTEREST_ENABLED"])
+  assert.equal(config.vars.REVIEW_THREAD_V2, "true", "public garden routing must stay enabled");
+  for (const name of ["GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED", "PUBLIC_INTEREST_ENABLED"])
     assert.equal(config.vars[name], "false", `${name} must default off`);
   assert.equal(site.vars.PUBLIC_INTEREST_ENABLED, "false", "site interest must default off");
   assert.notEqual(site.vars.TURNSTILE_SITE_KEY, turnstileTestSiteKey, `${productionHostname} must not use the Cloudflare Turnstile test sitekey`);
@@ -277,7 +278,7 @@ try {
     operatorOnlySecrets: ["GUIDE_ADMIN_DATABASE_URL"],
     slackScopes: ["im:write", "users:read.email"], slackEvents: ["team_join"],
     domain: productionHostname, turnstileProductionSiteKey, turnstileSecret: "required by name before enablement",
-    flagsDefaultOff: ["LIFECYCLE_MODE", "REVIEW_THREAD_V2", "GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED", "PUBLIC_INTEREST_ENABLED"],
+    flagsDefaultOff: ["LIFECYCLE_MODE", "GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED", "PUBLIC_INTEREST_ENABLED"],
     previousProductionSha: "unavailable",
     previousWorkerVersions: { core: "unavailable", site: "undeployed or unavailable" },
     rollback: "disable flags; select prior core/site Worker versions; retain schema and forward-repair DB; restore prior garden payload if retired",

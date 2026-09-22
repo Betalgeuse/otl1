@@ -111,7 +111,8 @@ assert.equal(disabledTick.nextDue, null);
 console.log("PASS default-off membership tick: zero DB and effects");
 const { readFile } = await import("node:fs/promises");
 const config = JSON.parse(await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
-for (const name of ["REVIEW_THREAD_V2", "GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED"])
+assert.equal(config.vars.REVIEW_THREAD_V2, "true");
+for (const name of ["GARDEN_RECONCILIATION", "REFERRALS_ENABLED", "PUBLIC_APPLICATIONS_ENABLED"])
   assert.equal(config.vars[name], "false");
 assert.equal(config.vars.LIFECYCLE_MODE, "disabled");
 assert.ok(config.r2_buckets.some((binding) => binding.binding === "INVITE_PRIVATE_OBJECTS"));
@@ -123,7 +124,7 @@ for (const name of ["SITE_CORE_HMAC_SECRET", "INVITE_EMAIL_PEPPER", "INVITE_PRIV
   assert.match(generated, new RegExp(`\\b${name}: string;`));
 }
 assert.doesNotMatch(generated, /--env-file \/tmp\//);
-console.log("PASS binding contract: default-off flags, dedicated R2, blank secret names, canonical generated types");
+console.log("PASS binding contract: public garden routing on, unfinished flags off, dedicated R2, blank secret names, canonical generated types");
 
 
 const { execFile } = await import("node:child_process");

@@ -131,7 +131,7 @@ assert.equal(publicConfig.account_id, undefined);
 assert.equal(publicConfig.name, "onething-community");
 assert.equal(publicConfig.vars.COMMUNITY_ADMIN_ID, "U_REPLACE_ADMIN");
 assert.equal(publicConfig.vars.LIFECYCLE_MODE, "disabled");
-assert.equal(publicConfig.vars.REVIEW_THREAD_V2, "false");
+assert.equal(publicConfig.vars.REVIEW_THREAD_V2, "true");
 assert.equal(publicConfig.vars.GARDEN_RECONCILIATION, "false");
 assert.equal(publicConfig.vars.REFERRALS_ENABLED, "false");
 assert.equal(publicConfig.vars.PUBLIC_APPLICATIONS_ENABLED, "false");
