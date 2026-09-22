@@ -70,6 +70,19 @@ async function summarize(ai: IntentAI, text: string): Promise<ShareInfoResult> {
   throw lastError instanceof Error ? lastError : new TypeError("Share Info unavailable");
 }
 
+function fallbackResult(text: string): ShareInfoResult {
+  const compact = text
+    .replace(/<https?:\/\/[^>]+>/g, "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const summary = compact.length > 180 ? `${compact.slice(0, 177)}...` : compact;
+  return {
+    summary: summary || "공유된 자료의 링크와 내용을 확인해 보세요.",
+    thought: "이 정보에서 지금 확인해야 할 기회·가정·다음 행동은 무엇인지 생각해 보세요.",
+  };
+}
+
 export async function handleShareInfoMessage(
   event: Record<string, unknown>,
   context: CommunityContext,
@@ -102,7 +115,18 @@ export async function handleShareInfoMessage(
       await store.finishRecord({ ...scope, key }, "sent");
       return true;
     }
-    const result = await summarize(context.env.AI, text);
+    let result: ShareInfoResult;
+    try {
+      result = await summarize(context.env.AI, text);
+    } catch (error) {
+      result = fallbackResult(text);
+      console.warn(
+        JSON.stringify({
+          event: "community.share_info.ai_fallback",
+          type: error instanceof Error ? error.name : "Unknown",
+        }),
+      );
+    }
     await post(
       { ...context, scope, source, thread, key },
       { text: `한 줄 요약: ${result.summary}\n생각거리: ${result.thought}` },
