@@ -191,6 +191,7 @@ try {
   assert.equal(current.messageTs, "2.000001");
   const firstCanvas = calls.find((call) => call.method === "canvases.edit");
   assert.equal(firstCanvas.body.canvas_id, "FINTRO01");
+  assert.doesNotMatch(firstCanvas.body.changes[0].document_content.markdown, /^#/);
   assert.match(firstCanvas.body.changes[0].document_content.markdown, /!\[\]\(@UNEW\).*홍길동/s);
   const reactions = calls.filter((call) => call.method === "reactions.add");
   assert.equal(reactions.length, 3, "a published introduction receives three custom reactions");

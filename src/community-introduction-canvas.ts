@@ -25,7 +25,7 @@ export function introductionCanvasMarkdown(entries: readonly MemberIntroduction[
     ];
     return `${heading}\n\n${escapeCanvasText(entry.intro)}${links.length ? `\n\n${links.join(" · ")}` : ""}`;
   });
-  return `# ONE THING 1 LINE · 자기소개 모음\n\n현재 ${entries.length}명의 공개 자기소개입니다. 각 소개는 본인이 Slack에서 직접 수정할 수 있습니다.${sections.length ? `\n\n---\n\n${sections.join("\n\n---\n\n")}` : "\n\n아직 등록된 자기소개가 없습니다."}`;
+  return `현재 ${entries.length}명의 공개 자기소개입니다. 각 소개는 본인이 Slack에서 직접 수정할 수 있습니다.${sections.length ? `\n\n---\n\n${sections.join("\n\n---\n\n")}` : "\n\n아직 등록된 자기소개가 없습니다."}`;
 }
 
 export async function syncIntroductionCanvas(

@@ -66,7 +66,7 @@ function canvasMarkdown(version: string, renderedBody: string): string {
   const body = renderedBody
     .replace(/^@channel\nOT1L v[^\n]+\n\n/, "")
     .replace(/<#([CG][A-Z0-9]+)>/g, "![](#$1)");
-  return `# ONE THING 1 LINE 사용설명서\n\n마지막 업데이트: ${version}\n\n${body}`;
+  return `마지막 업데이트: ${version}\n\n${body}`;
 }
 
 export async function syncWelcomeGuideSurface(
