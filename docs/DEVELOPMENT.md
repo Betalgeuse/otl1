@@ -14,7 +14,7 @@ bun run check
 ## 설정과 배포
 
 1. `.dev.vars.example`을 `.dev.vars`로 복사하고 로컬 값을 채웁니다. 완성된 파일은 Git에 넣지 않습니다.
-2. `wrangler.jsonc`에 본인 계정의 Worker·관리자·공개 채널·feedback·townhall·welcome·자기소개 채널을 지정합니다. `COMMUNITY_FEEDBACK_CHANNEL_ID`는 버그 제보 전용 채널이며 공개 export에서는 반드시 placeholder로 치환합니다. 관리자 채널은 비공개로 유지합니다.
+2. `wrangler.jsonc`에 본인 계정의 Worker·관리자·공개 채널·feedback·townhall·welcome·자기소개 채널을 지정합니다. 자기소개 채널 Canvas를 만든 뒤 `COMMUNITY_INTRO_CANVAS_ID`와 `COMMUNITY_INTRO_CANVAS_URL`도 설정합니다. `COMMUNITY_FEEDBACK_CHANNEL_ID`는 버그 제보 전용 채널이며 공개 export에서는 반드시 placeholder로 치환합니다. 관리자 채널은 비공개로 유지합니다.
 3. welcome 안내는 `src/community-guide-release.ts`의 버전·본문을 검토해 변경합니다. `COMMUNITY_GUIDE_CANVAS_ID`, `COMMUNITY_GUIDE_CANVAS_URL`, `COMMUNITY_GUIDE_ANCHOR_TS`는 같은 welcome 채널의 Canvas와 핀 메시지를 가리켜야 하며 공개 export에서는 예시 값으로 치환합니다. 사람의 Slack 원문 시각이나 해시는 발행 입력으로 쓰지 않습니다. migration 039 적용 뒤 `bun scripts/publish-welcome-guide.mjs`로 dry-run하고, `--apply`로 DB 발행본·Canvas·핀 메시지를 함께 갱신합니다.
 
 4. 서명 키, 봇 토큰, DB URL, 보드 서명 키를 Wrangler secret으로 등록합니다. 값은 명령문·문서·공개 이력에 남기지 않습니다.

@@ -1,4 +1,4 @@
-import { isWeekend } from "./calendar";
+import { isOptionalDay } from "./calendar";
 export type Palette = {
   readonly empty: string;
   readonly written: string;
@@ -61,7 +61,7 @@ export function buildBoard(snapshot: Snapshot, today: string, anchor = today): B
   const elapsed: number[] = [];
   for (let stamp = origin; stamp <= current; stamp += 1) {
     const date = isoDate(stamp);
-    if (!isWeekend(date) || records.has(date)) elapsed.push(stamp);
+    if (!isOptionalDay(date) || records.has(date)) elapsed.push(stamp);
   }
   const eligibleDay = elapsed.length;
   const count =
@@ -77,7 +77,7 @@ export function buildBoard(snapshot: Snapshot, today: string, anchor = today): B
   const visible = [...elapsed];
   for (let stamp = current + 1; visible.length < count; stamp += 1) {
     const date = isoDate(stamp);
-    if (!isWeekend(date) || records.has(date)) visible.push(stamp);
+    if (!isOptionalDay(date) || records.has(date)) visible.push(stamp);
   }
   const cells = visible.map((stamp): Cell => {
     const cellDate = isoDate(stamp);
@@ -87,7 +87,7 @@ export function buildBoard(snapshot: Snapshot, today: string, anchor = today): B
       date: cellDate,
       status: goal === undefined ? "empty" : goal.completed ? "complete" : "written",
       future: stamp > current,
-      optional: false,
+      optional: isOptionalDay(cellDate),
       today: stamp === current,
     };
   });

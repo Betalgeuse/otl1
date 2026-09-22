@@ -15,6 +15,15 @@ assert.equal(new Set(scopes).size, scopes.length);
 assert.ok(scopes.includes("users:read"));
 assert.ok(scopes.includes("users:read.email"));
 assert.ok(scopes.includes("im:write"));
+for (const scope of [
+  "canvases:read",
+  "canvases:write",
+  "pins:read",
+  "pins:write",
+  "bookmarks:read",
+  "bookmarks:write",
+])
+  assert.ok(scopes.includes(scope));
 assert.equal(scopes.includes("message.im"), false);
 assert.ok(manifest.settings.event_subscriptions.bot_events.includes("team_join"));
 

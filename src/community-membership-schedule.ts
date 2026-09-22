@@ -1,3 +1,4 @@
+import { isOptionalDay } from "./calendar";
 import { runInterestDue } from "./community-interest-due";
 import { reconcileInterestIntake } from "./community-interest-reconcile";
 import { deliverInviteAdminReview } from "./community-invite-admin";
@@ -61,6 +62,7 @@ export async function runMembershipDue(
       if (env.LIFECYCLE_MODE === "enforce" && !env.LIFECYCLE_ACTION_SECRET)
         throw new InputError("Lifecycle action secret missing");
       const day = serviceDate(now);
+      if (isOptionalDay(day)) return;
       const complete = await db.queryJson(
         `SELECT to_jsonb(EXISTS(SELECT 1 FROM otl.community_records r
         JOIN otl.workspace_channels c ON c.team_id=r.team_id AND c.channel_id=r.channel_id

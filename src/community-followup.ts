@@ -1,4 +1,4 @@
-import { isWeekend } from "./calendar";
+import { isOptionalDay } from "./calendar";
 import type { CommunityContext } from "./community-runtime";
 import type { CommunityStore } from "./community-store";
 import type { CommunityDay, CommunityScope } from "./community-types";
@@ -12,7 +12,7 @@ export function unresolvedDays(
     .filter(
       (day) =>
         day.date < before &&
-        !isWeekend(day.date) &&
+        !isOptionalDay(day.date) &&
         day.goal.trim() &&
         !day.resting &&
         (day.outcome === "pending" || !day.reflection.trim()),

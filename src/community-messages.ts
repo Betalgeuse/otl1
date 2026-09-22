@@ -96,7 +96,7 @@ export function communityStatusMessage(input: StatusCard): Json {
       elements: [
         {
           type: "plain_text",
-          text: "주말은 선택 참여예요. 목표를 등록하지 않은 주말은 잔디에 표시하지 않아요.",
+          text: "주말과 대한민국 공휴일은 선택 참여예요. 목표를 등록하지 않은 선택 참여일은 잔디에 표시하지 않아요.",
         },
       ],
     });

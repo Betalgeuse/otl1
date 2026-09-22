@@ -1,3 +1,4 @@
+import { slackCanvasId, slackCanvasUrl } from "./community-canvas";
 import type { WelcomeGuideContent } from "./community-guide-content";
 import { inviteButton } from "./community-member-actions";
 import type { CommunityEnv } from "./community-runtime";
@@ -21,15 +22,16 @@ function guideSurface(env: GuideSurfaceEnv) {
   if (
     !channel ||
     !/^[CG][A-Z0-9]{8,}$/.test(channel) ||
-    !canvasId ||
-    !/^F[A-Z0-9]+$/.test(canvasId) ||
-    !canvasUrl ||
-    !/^https:\/\/[a-z0-9-]+\.slack\.com\/docs\/[A-Z0-9]+\/[A-Z0-9]+$/.test(canvasUrl) ||
     !anchorTs ||
     !/^\d{10,}\.\d{6}$/.test(anchorTs)
   )
     throw new InputError("고정 사용설명서 설정을 확인해 주세요.");
-  return { channel, canvasId, canvasUrl, anchorTs };
+  return {
+    channel,
+    canvasId: slackCanvasId(canvasId),
+    canvasUrl: slackCanvasUrl(canvasUrl),
+    anchorTs,
+  };
 }
 
 function linkSection(text: string, canvasUrl: string) {

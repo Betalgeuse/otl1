@@ -1,4 +1,4 @@
-import { isWeekend } from "./calendar";
+import { isOptionalDay, isWeekend } from "./calendar";
 import { enqueueCommonDelivery, sendCommonDeliveries } from "./community-common-delivery";
 import { customBotEmoji } from "./community-emoji";
 import { collectCurrentChannelMembers } from "./community-membership";
@@ -15,6 +15,8 @@ export type CommunityScheduleEnv = {
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
   readonly COMMUNITY_BOT_USER_ID?: string;
   readonly REVIEW_THREAD_V2?: string;
+  readonly COMMUNITY_GUIDE_CANVAS_URL?: string;
+  readonly COMMUNITY_INTRO_CANVAS_URL?: string;
 };
 export type ScheduleClock = { readonly now: () => Date };
 type ScheduleStore = Pick<
@@ -60,8 +62,10 @@ function parseSchedule(value: unknown): Schedule {
   return { enabled: body.enabled, goalTime, reviewTime };
 }
 function promptText(date: string, kind: Kind): string {
-  if (isWeekend(date))
-    return `${date} 주말 *ONE THING*은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 골라보세요.${goalWritingGuide}\n\n이 글의 스레드나 채널에 한 문장으로 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
+  if (isOptionalDay(date)) {
+    const label = isWeekend(date) ? "주말" : "공휴일";
+    return `${date} ${label} *ONE THING*은 선택이에요!!! :seedling: 함께하고 싶다면 가장 먼저 해보고 싶은 중요한 일 한 가지를 골라보세요.${goalWritingGuide}\n\n이 글의 스레드나 채널에 한 문장으로 편하게 남겨주세요. 멘션 없이 적어도 돼요. 푹 쉬어도 좋아요!!! :penguin:`;
+  }
   return kind === "goal"
     ? `${date} 오늘의 *ONE THING*!!! :seedling:\n오늘 최우선순위로 가장 먼저 해결할 중요한 일 한 가지는 무엇인가요?${goalWritingGuide}\n\n이 글의 스레드에 한 문장으로 남겨주세요. 멘션은 필요 없어요. 가장 중요한 일부터 같이 해봅시다 :muscle:`
     : `${date} 오늘 *ONE THING*은 어떠셨나요? :memo: 해낸 만큼, 느낀 점 한 줄을 이 글의 스레드에 남겨주세요. 다 못 했어도 괜찮아요!!! :penguin:`;
@@ -91,27 +95,28 @@ export async function runCommunitySchedule(
   const local = new Date(nowDate.getTime() + 9 * 60 * 60 * 1000).toISOString();
   const date = local.slice(0, 10);
   const minute = local.slice(11, 16);
+  const optionalDay = isOptionalDay(date);
   const settings = await store.getRecord({ ...scope, key: "group-schedule" });
   const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
   const schedule = settings ? parseSchedule(settings.body) : null;
   const scheduledKinds = (["goal", "review"] as const).filter((kind) => {
     if (!schedule?.enabled) return false;
-    if (isWeekend(date) && kind === "review") return false;
-    const due = isWeekend(date)
-      ? "10:00"
-      : kind === "goal"
-        ? schedule.goalTime
-        : schedule.reviewTime;
+    if (optionalDay && kind === "review") return false;
+    const due = optionalDay ? "10:00" : kind === "goal" ? schedule.goalTime : schedule.reviewTime;
     const late = minutes(minute) - minutes(due);
     return late >= 0 && late <= 5;
   });
   let snapshot: ChannelMembershipSnapshot | null = null;
   const publicChannel = env.COMMUNITY_PUBLIC_CHANNEL_ID === scope.channelId;
+  const navigation = {
+    ...(env.COMMUNITY_GUIDE_CANVAS_URL ? { guideUrl: env.COMMUNITY_GUIDE_CANVAS_URL } : {}),
+    ...(env.COMMUNITY_INTRO_CANVAS_URL ? { introductionUrl: env.COMMUNITY_INTRO_CANVAS_URL } : {}),
+  };
   const targetedDue =
-    !isWeekend(date) && publicChannel
+    !optionalDay && publicChannel
       ? await store.reminderTriggerDue(scope.teamId, scope.channelId, now)
       : false;
-  if (!isWeekend(date) && publicChannel && (scheduledKinds.length > 0 || targetedDue)) {
+  if (!optionalDay && publicChannel && (scheduledKinds.length > 0 || targetedDue)) {
     snapshot = await collectCurrentChannelMembers(
       env.SLACK_BOT_TOKEN,
       scope.channelId,
@@ -139,8 +144,9 @@ export async function runCommunitySchedule(
     store,
     reviewThreadV2: env.REVIEW_THREAD_V2 === "true",
     memberActions: publicChannel,
+    navigation,
   });
-  if (isWeekend(date) || (publicChannel && !targetedDue)) return { common, personal: 0 };
+  if (optionalDay || (publicChannel && !targetedDue)) return { common, personal: 0 };
   const personal = await sendReminderBatches({
     token: env.SLACK_BOT_TOKEN,
     teamId: scope.teamId,
@@ -149,6 +155,7 @@ export async function runCommunitySchedule(
     store,
     reviewThreadV2: env.REVIEW_THREAD_V2 === "true",
     memberActions: publicChannel,
+    navigation,
   });
   return { common, personal };
 }

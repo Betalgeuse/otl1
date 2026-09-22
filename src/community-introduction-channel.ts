@@ -1,4 +1,5 @@
-import { introductionActionBlock, introductionLine } from "./community-introduction";
+import { introductionActionBlock } from "./community-introduction";
+import { introductionCanvasUrl, syncIntroductionCanvas } from "./community-introduction-canvas";
 import { type CommunityContext, type CommunityEnv, ephemeral } from "./community-runtime";
 import { callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
@@ -53,7 +54,7 @@ export async function welcomeIntroductionMember(
     await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: channelId,
       text,
-      blocks: [{ type: "section", text: { type: "mrkdwn", text } }, introductionActionBlock()],
+      blocks: [{ type: "section", text: { type: "mrkdwn", text } }, introductionActionBlock(env)],
       unfurl_links: false,
     });
     await store.finishRecord(scope, "sent");
@@ -80,32 +81,29 @@ function chunks(lines: readonly string[]): readonly string[] {
 
 export async function showIntroductionDirectory(context: CommunityContext): Promise<void> {
   const introductions = await context.store.introductions(context.scope.teamId);
-  if (!introductions.length) {
-    await ephemeral(context, {
-      text: "아직 등록된 자기소개가 없어요.",
-      blocks: [
-        { type: "section", text: { type: "mrkdwn", text: "아직 등록된 자기소개가 없어요." } },
-        introductionActionBlock(),
-      ],
-    });
-    return;
-  }
-  const pages = chunks(introductions.map(introductionLine));
-  for (const [index, page] of pages.entries())
-    await ephemeral(context, {
-      text: `*우리의 자기소개${pages.length > 1 ? ` ${index + 1}/${pages.length}` : ""}*\n${page}`,
-      blocks: [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*우리의 자기소개${pages.length > 1 ? ` ${index + 1}/${pages.length}` : ""}*\n${page}`,
-          },
+  await syncIntroductionCanvas(introductions, context.env);
+  const url = introductionCanvasUrl(context.env);
+  const text = `*자기소개 모음*\n현재 ${introductions.length}명의 공개 자기소개를 Canvas에서 볼 수 있어요.\n${url}`;
+  await ephemeral(context, {
+    text,
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*자기소개 모음*\n현재 ${introductions.length}명의 공개 자기소개를 한 화면에서 확인하세요.`,
         },
-        introductionActionBlock(),
-      ],
-      unfurl_links: false,
-    });
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "모두 보기" },
+          url,
+          action_id: "community_introduction_directory",
+        },
+      },
+      introductionActionBlock(context.env),
+    ],
+    unfurl_links: false,
+  });
 }
 
 async function channelMemberIds(env: CommunityEnv): Promise<readonly string[]> {
@@ -140,7 +138,7 @@ export async function remindMissingIntroductions(context: CommunityContext): Pro
       text: "모두 자기소개를 남겼어요! 🙌",
       blocks: [
         { type: "section", text: { type: "mrkdwn", text: "모두 자기소개를 남겼어요! 🙌" } },
-        introductionActionBlock(),
+        introductionActionBlock(context.env),
       ],
     });
     return;
@@ -157,7 +155,7 @@ export async function remindMissingIntroductions(context: CommunityContext): Pro
             text: `${page}\n아직 자기소개가 없어요. 180자 안에서 서로를 알려주세요!`,
           },
         },
-        introductionActionBlock(),
+        introductionActionBlock(context.env),
       ],
     });
 }
