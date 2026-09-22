@@ -27,10 +27,25 @@ const disabled = await handleRequest(
 );
 assert.equal(disabled.status, 503);
 
+// Member-specific invite pages remain readable while the final attributed
+// application path is temporarily replaced by the shared Slack redirect.
+env.REFERRALS_ENABLED = "true";
+const resolveWithoutApplications = await handleRequest(
+  new Request("https://core.invalid/internal/referrals/resolve", { method: "POST", body: "{}" }),
+  runtime,
+  context,
+);
+assert.equal(resolveWithoutApplications.status, 401);
+const directJoinDisabled = await handleRequest(
+  new Request("https://core.invalid/internal/referrals/direct-join", { method: "POST", body: "{}" }),
+  runtime,
+  context,
+);
+assert.equal(directJoinDisabled.status, 503);
+
 // Given enabled public intake, when the signature is absent, then it is rejected
 // by the site-service boundary without consuming a Slack request.
 env.PUBLIC_APPLICATIONS_ENABLED = "true";
-env.REFERRALS_ENABLED = "true";
 const unsigned = await handleRequest(
   new Request("https://core.invalid/internal/referrals/resolve", { method: "POST", body: "{}" }),
   runtime,

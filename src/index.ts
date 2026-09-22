@@ -73,10 +73,13 @@ export async function handleRequest(
     if (url.pathname.startsWith("/internal/referrals/")) {
       if (env.DATABASE_MAINTENANCE === "true")
         return new Response("Maintenance", { status: 503, headers: { "Retry-After": "30" } });
+      const applicationOptional = [
+        "/internal/referrals/resolve",
+        "/internal/referrals/withdraw",
+      ].includes(url.pathname);
       if (
         env.REFERRALS_ENABLED !== "true" ||
-        (url.pathname !== "/internal/referrals/withdraw" &&
-          env.PUBLIC_APPLICATIONS_ENABLED !== "true")
+        (!applicationOptional && env.PUBLIC_APPLICATIONS_ENABLED !== "true")
       )
         return new Response("Unavailable", { status: 503 });
       const response = await handleReferralIntakeRequest(
