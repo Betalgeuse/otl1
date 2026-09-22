@@ -171,6 +171,8 @@ assert.match(referral, /data-daily-garden-cell/);
 assert.doesNotMatch(referral, /referral-excerpt|\(invite-consent-v1\)/);
 assert.match(referral, /name="consent" type="checkbox" value="invite-consent-v1" required/);
 assert.match(referral, /Slack에서 함께하기/);
+assert.match(worker, /url\.pathname === "\/join"/);
+assert.match(worker, /slack-join-button.*href="\/join"/s);
 assert.match(referral, /class="slack-mark"[^>]*aria-hidden="true"/);
 assert.ok(
   referral.indexOf("slack-join-button") < referral.indexOf('id="share-copy"'),

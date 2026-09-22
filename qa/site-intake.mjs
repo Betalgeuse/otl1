@@ -119,6 +119,9 @@ try {
   assert.match(pageText, /매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야/);
   assert.match(pageText, /홍길동 님이 같이 성장하자고 소개했어요\./);
   assert.doesNotMatch(pageText, /__INVITER_BYLINE__/);
+  const publicJoin = await call("/join");
+  assert.equal(publicJoin.status, 303);
+  assert.equal(publicJoin.headers.get("location"), env.SLACK_SHARED_INVITE_URL);
 
   resolveName = null;
   assert.match(await (await call(`/r/${referralToken}`)).text(), /지인의 소개로 이곳에 도착했어요\./);

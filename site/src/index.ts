@@ -159,7 +159,19 @@ async function referralPage(request: Request, env: SiteEnv, token: string): Prom
   const inviterByline = resolved.inviterName
     ? `${escapeHtml(resolved.inviterName)} 님이 같이 성장하자고 소개했어요.`
     : "지인의 소개로 이곳에 도착했어요.";
-  return new Response(html.replaceAll("__REFERRAL_TOKEN__", token).replaceAll("__TURNSTILE_SITE_KEY__", env.TURNSTILE_SITE_KEY).replaceAll("__SHARE_TEXT__", SHARE_COPY(token)).replaceAll("__SUBMISSION_KEY__", crypto.randomUUID()).replaceAll("__INVITER_BYLINE__", inviterByline), { headers: { "content-type": "text/html;charset=UTF-8" } });
+  const directJoinPage = html
+    .replaceAll("__REFERRAL_TOKEN__", token)
+    .replaceAll("__TURNSTILE_SITE_KEY__", env.TURNSTILE_SITE_KEY)
+    .replaceAll("__SHARE_TEXT__", SHARE_COPY(token))
+    .replaceAll("__SUBMISSION_KEY__", crypto.randomUUID())
+    .replaceAll("__INVITER_BYLINE__", inviterByline)
+    .replace(
+      'class="button slack-join-button" href="#application-form"',
+      'class="button slack-join-button" href="/join"',
+    )
+    .replace('action="/r/' + token + '/apply" method="post"', 'action="/join" method="get"')
+    .replaceAll(" required", "");
+  return new Response(directJoinPage, { headers: { "content-type": "text/html;charset=UTF-8" } });
 }
 
 function escapeHtml(value: string): string {
@@ -323,6 +335,12 @@ const siteWorker = {
     else if (url.pathname === "/interest.html" || url.pathname === "/receipt.html") response = message(GENERIC_ERROR, 404);
     else if (request.method === "GET" && url.pathname === "/interest") response = await interestPage(request, env);
     else if (request.method === "POST" && url.pathname === "/interest") response = await submitInterest(request, env);
+    else if (request.method === "GET" && url.pathname === "/join") {
+      const slackInvite = sharedInviteUrl(env.SLACK_SHARED_INVITE_URL);
+      response = slackInvite
+        ? new Response(null, { status: 303, headers: { location: slackInvite } })
+        : message(GENERIC_ERROR, 503);
+    }
     else if (request.method === "GET" && referral) response = await referralPage(request, env, referral[1]);
     else if (request.method === "GET" && applyRoute) response = Response.redirect(new URL(`/r/${applyRoute[1]}`, request.url), 303);
     else if (request.method === "POST" && applyRoute) response = await directJoin(request, env, applyRoute[1]);
