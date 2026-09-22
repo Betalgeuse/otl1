@@ -12,10 +12,11 @@ type ShareInfoResult = {
   readonly thought: string;
 };
 
-function validMessage(event: Record<string, unknown>, channelId: string): boolean {
+function validMessage(event: Record<string, unknown>, channelIds: ReadonlySet<string>): boolean {
   return (
     event.type === "message" &&
-    event.channel === channelId &&
+    typeof event.channel === "string" &&
+    channelIds.has(event.channel) &&
     event.bot_id === undefined &&
     event.subtype === undefined &&
     event.edit_ts === undefined &&
@@ -73,8 +74,16 @@ export async function handleShareInfoMessage(
   event: Record<string, unknown>,
   context: CommunityContext,
 ): Promise<boolean> {
-  const channelId = context.env.COMMUNITY_SHAREINFO_CHANNEL_ID;
-  if (!channelId || !validMessage(event, channelId)) return false;
+  const channelIds = new Set(
+    [
+      context.env.COMMUNITY_SHAREINFO_CHANNEL_ID,
+      ...(context.env.COMMUNITY_CHAPTER_CHANNEL_IDS?.split(",") ?? []),
+    ]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value)),
+  );
+  if (!validMessage(event, channelIds)) return false;
+  const channelId = string(event.channel);
   const text = string(event.text).trim();
   if (!text || text.length > MAX_TEXT) return true;
   const source = string(event.ts);

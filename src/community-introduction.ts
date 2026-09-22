@@ -169,6 +169,13 @@ function publicText(userId: string, parsed: IntroductionInput): string {
   return `<@${userId}> · ${escapeSlackText(parsed.confirmedName)}\n${escapeSlackText(parsed.intro)}${parsed.linkedin ? `\nLinkedIn: <${parsed.linkedin}|프로필 보기>` : ""}${parsed.details ? `\n더 보기: ${escapeSlackText(parsed.details)}` : ""}`;
 }
 
+export function introductionActionBlock(): Json {
+  return {
+    type: "actions",
+    elements: [introductionButton(undefined, "자기소개 쓰기"), introductionDirectoryButton()],
+  };
+}
+
 export async function submitIntroduction(
   context: CommunityContext,
   viewId: string,
@@ -200,6 +207,10 @@ export async function submitIntroduction(
     const payload = {
       channel: channelId,
       text: publicText(userId, parsed),
+      blocks: [
+        { type: "section", text: { type: "mrkdwn", text: publicText(userId, parsed) } },
+        introductionActionBlock(),
+      ],
       unfurl_links: false,
       unfurl_media: false,
     };

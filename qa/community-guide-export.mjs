@@ -93,6 +93,7 @@ try {
   assert.equal(config.account_id, undefined);
   assert.equal(config.vars.COMMUNITY_GUIDE_FILE_IDS, "FREPLACELOGO,FREPLACEDAILY");
   assert.equal(config.vars.COMMUNITY_GUIDE_CHAPTER_CHANNEL_IDS, "C_REPLACE_DEVELOPERS,C_REPLACE_ENGLISH,C_REPLACE_INVESTMENT");
+  assert.equal(config.vars.COMMUNITY_CHAPTER_CHANNEL_IDS, "C_REPLACE_DEVELOPERS,C_REPLACE_ENGLISH,C_REPLACE_INVESTMENT,C_REPLACE_SCIENTIST");
   assert.equal(existsSync(join(destination, "migrations", "028_welcome_guide_roles.sql")), true);
   assert.equal(existsSync(join(destination, "migrations", "039_bot_owned_welcome_guide.sql")), true);
   assert.equal(existsSync(join(destination, "src", "community-guide-release.ts")), true);

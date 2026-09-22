@@ -110,6 +110,10 @@ try {
   assert.match(directory.body.text, /<@UHAS>/);
   assert.match(directory.body.text, /LinkedIn/);
   assert.match(directory.body.text, /https:\/\/example\.com/);
+  assert.deepEqual(
+    directory.body.blocks[1].elements.map((element) => element.text.text),
+    ["자기소개 쓰기", "모두 보기"],
+  );
 
   await remindMissingIntroductions(context);
   const reminder = calls.find(

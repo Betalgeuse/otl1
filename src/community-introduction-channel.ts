@@ -1,8 +1,4 @@
-import {
-  introductionButton,
-  introductionDirectoryButton,
-  introductionLine,
-} from "./community-introduction";
+import { introductionActionBlock, introductionLine } from "./community-introduction";
 import { type CommunityContext, type CommunityEnv, ephemeral } from "./community-runtime";
 import { callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
@@ -57,16 +53,7 @@ export async function welcomeIntroductionMember(
     await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: channelId,
       text,
-      blocks: [
-        { type: "section", text: { type: "mrkdwn", text } },
-        {
-          type: "actions",
-          elements: [
-            introductionButton(undefined, existing ? "자기소개 수정" : "자기소개 쓰기"),
-            introductionDirectoryButton(),
-          ],
-        },
-      ],
+      blocks: [{ type: "section", text: { type: "mrkdwn", text } }, introductionActionBlock()],
       unfurl_links: false,
     });
     await store.finishRecord(scope, "sent");
@@ -94,13 +81,29 @@ function chunks(lines: readonly string[]): readonly string[] {
 export async function showIntroductionDirectory(context: CommunityContext): Promise<void> {
   const introductions = await context.store.introductions(context.scope.teamId);
   if (!introductions.length) {
-    await ephemeral(context, { text: "아직 등록된 자기소개가 없어요." });
+    await ephemeral(context, {
+      text: "아직 등록된 자기소개가 없어요.",
+      blocks: [
+        { type: "section", text: { type: "mrkdwn", text: "아직 등록된 자기소개가 없어요." } },
+        introductionActionBlock(),
+      ],
+    });
     return;
   }
   const pages = chunks(introductions.map(introductionLine));
   for (const [index, page] of pages.entries())
     await ephemeral(context, {
       text: `*우리의 자기소개${pages.length > 1 ? ` ${index + 1}/${pages.length}` : ""}*\n${page}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*우리의 자기소개${pages.length > 1 ? ` ${index + 1}/${pages.length}` : ""}*\n${page}`,
+          },
+        },
+        introductionActionBlock(),
+      ],
       unfurl_links: false,
     });
 }
@@ -135,6 +138,10 @@ export async function remindMissingIntroductions(context: CommunityContext): Pro
     await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: context.scope.channelId,
       text: "모두 자기소개를 남겼어요! 🙌",
+      blocks: [
+        { type: "section", text: { type: "mrkdwn", text: "모두 자기소개를 남겼어요! 🙌" } },
+        introductionActionBlock(),
+      ],
     });
     return;
   }
@@ -150,10 +157,7 @@ export async function remindMissingIntroductions(context: CommunityContext): Pro
             text: `${page}\n아직 자기소개가 없어요. 180자 안에서 서로를 알려주세요!`,
           },
         },
-        {
-          type: "actions",
-          elements: [introductionButton(), introductionDirectoryButton()],
-        },
+        introductionActionBlock(),
       ],
     });
 }

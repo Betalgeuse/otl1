@@ -174,6 +174,11 @@ try {
 
   await submitIntroduction(context, "VIEW1", parseIntroduction(values), 0);
   assert.equal(calls.filter((call) => call.method === "chat.postMessage").length, 1);
+  const introductionPost = calls.find((call) => call.method === "chat.postMessage");
+  assert.deepEqual(
+    introductionPost.body.blocks[1].elements.map((element) => element.text.text),
+    ["자기소개 쓰기", "모두 보기"],
+  );
   assert.equal(current.revision, 1);
   assert.equal(current.messageTs, "2.000001");
   const reactions = calls.filter((call) => call.method === "reactions.add");
@@ -198,6 +203,10 @@ try {
   await submitIntroduction(context, "VIEW2", parseIntroduction(edited), 1);
   const update = calls.find((call) => call.method === "chat.update");
   assert.equal(update.body.ts, "2.000001");
+  assert.deepEqual(
+    update.body.blocks[1].elements.map((element) => element.action_id),
+    ["community_introduction", "community_introduction_directory"],
+  );
   assert.equal(current.revision, 2);
   assert.equal(current.intro, "데이터 제품과 사람을 연결하는 일을 하고 있어요.");
   assert.equal(current.details, "https://portfolio.example");
