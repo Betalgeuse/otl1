@@ -158,6 +158,7 @@ export const PUBLIC_QA_NAMES = [
   "community-scheduler.mjs",
   "community-social.mjs",
   "community-share-info.mjs",
+  "community-share-info-reconcile.mjs",
   "community-storage.mjs",
   "community-townhall.mjs",
   "community-welcome.mjs",

@@ -3,6 +3,7 @@ import { runDueGardenDeliveries } from "./community-garden-delivery";
 import { runMembershipDue } from "./community-membership-schedule";
 import type { CommunityEnv } from "./community-runtime";
 import { runCommunitySchedule } from "./community-scheduler";
+import { reconcileShareInfoChannels } from "./community-share-info-reconcile";
 import { CommunityStore } from "./community-store";
 import { NeonStore } from "./store";
 
@@ -21,6 +22,19 @@ export async function communityCron(env: CommunityEnv, scheduledTime: number): P
   }
   if (env.COMMUNITY_ENABLED !== "true" || env.DATABASE_MAINTENANCE === "true") return;
   if (!env.COMMUNITY_ADMIN_ID) return;
+  if (Math.floor(scheduledTime / 60_000) % 15 === 0)
+    try {
+      const processed = await reconcileShareInfoChannels(env, scheduledTime);
+      console.log(JSON.stringify({ event: "community.share_info.reconcile", processed }));
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          event: "community.cron.queue.failed",
+          queue: "share_info",
+          errorType: error instanceof Error ? error.name : "Unknown",
+        }),
+      );
+    }
   const channels = [env.COMMUNITY_CHANNEL_ID, env.COMMUNITY_PUBLIC_CHANNEL_ID].filter(
     (v): v is string => Boolean(v),
   );
