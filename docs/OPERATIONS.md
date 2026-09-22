@@ -10,11 +10,11 @@
 | --- | --- |
 | daily-scrum | ONE THING과 후기의 공개 기록 |
 | townhall | 환영, 첫 등록·첫 완료·첫 후기의 봇 축하, 관리자가 게시한 업데이트 |
-| welcome-start-here | 신규 회원 멘션, 최신 발행 안내와 초대용 이미지 두 장 |
+| welcome-start-here | 상단 Canvas 사용설명서, 핀으로 고정한 설명서 진입점, 신규 회원용 짧은 안내 |
 | all-self-introduction | 신규 회원 멘션, 180자 자기소개·선택적 LinkedIn·기타 공개 정보 게시와 수정, 비공개 전체 보기, 운영자 미작성자 안내 |
 | feedback | 회원 버그 제보와 봇의 한 번에 하나씩 묻는 확인 질문. 일반 대화에는 반응하지 않음 |
 | 비공개 admin | 관리자 조회·설정·게시 미리보기 및 QA |
-| shareinfo·Chapter | 정보와 관심사별 대화. 봇의 자동 사람 연결은 아직 계획 |
+| shareinfo·Chapter | 정보와 관심사별 대화. 최상위 정보 글에는 봇 리액션·감사·한 줄 요약·생각거리를 자동 게시 |
 
 ## 안내와 재촉
 
@@ -42,13 +42,19 @@
 - townhall 입장 환영에는 회원 멘션과 `@channel`을 포함합니다. 같은 회원의 중복 입장 이벤트는 재발송하지 않습니다.
 - 첫 등록·첫 완료·첫 후기는 별개로 기록하고, 봇이 townhall의 새 최상위 글로 직접 축하합니다. 회원 간 샤라웃과 구분합니다.
 - 원래 변경을 되돌리면 연결된 축하도 정정합니다. 새 ‘첫 기록’ 권한을 반복해서 발급하지 않습니다.
-- welcome 채널에 입장하면 해당 회원을 태그한 새 글로 최신 발행 안내 전문과 이미지 두 장을 전달합니다. 이미지 순서는 OT1L 로고, daily scrum 화면입니다. townhall 입장 순서와 무관하게 동작합니다.
+- welcome 채널에 입장하면 해당 회원을 태그한 짧은 글과 `사용설명서 보기` 버튼을 한 번 전달합니다. 안내 전문은 반복 게시하지 않습니다. 상단 Canvas가 설명서의 단일 읽기 화면이며 같은 진입 메시지를 핀으로 유지합니다. townhall 입장 순서와 무관하게 동작합니다.
 
-관리자는 `src/community-guide-release.ts`에서 새 버전의 안내 본문을 검토하고 비공개 `COMMUNITY_GUIDE_FILE_IDS`에서 이미지 두 장의 순서를 지정합니다. `bun scripts/publish-welcome-guide.mjs` dry-run에서 버전과 canonical hash를 확인하고, migration 039 적용 뒤 별도 `GUIDE_ADMIN_DATABASE_URL` 자격증명으로 `--apply`를 실행합니다. DB는 등록된 관리자, repo 출처, 해시, 버전 증가와 동일 버전 불변성을 다시 확인합니다. 사람의 Slack 원문이나 편집 시각은 더 이상 발행 입력이 아닙니다. 과거 원문과 전달 DB 행은 지우지 않습니다. 신규 회원은 DB의 최신 발행본을 봇의 새 글로 한 번 받으며, 본문·로고·daily scrum 이미지·친구 초대하기 버튼을 함께 볼 수 있습니다. 기존 회원용 초대 바로가기 카드는 한 번만 별도로 게시하고, 이전의 사람이 쓴 안내글은 새 봇 글 확인 후 채널 관리자가 직접 정리합니다.
+관리자는 `src/community-guide-release.ts`에서 새 버전의 안내 본문을 검토합니다. `bun scripts/publish-welcome-guide.mjs` dry-run에서 버전과 canonical hash를 확인하고, migration 039 적용 뒤 별도 `GUIDE_ADMIN_DATABASE_URL` 자격증명으로 `--apply`를 실행합니다. DB는 등록된 관리자, repo 출처, 해시, 버전 증가와 동일 버전 불변성을 다시 확인합니다. 적용 시 같은 채널 Canvas 본문과 같은 핀 메시지를 갱신합니다. Canvas 안의 채널 표기는 메시지용 `<#ID>`가 아니라 Canvas 전용 `![](#ID)`로 변환해야 합니다. 신규 회원에게는 Canvas 링크와 친구 초대 버튼만 보내며 과거 발행 원문과 전달 DB 행은 지우지 않습니다.
 
 현재 초대 문구는 `매일 제일 중요한 일 하나 정해서 같이 끝내는 모임이야. 같이 할래?`입니다. 신규 회원별 복사본에서는 `@channel`을 일반 텍스트로 바꿔 전체 알림을 다시 발생시키지 않습니다. Slack이 게시 요청을 수락했지만 응답을 잃은 경우 자동 재게시하지 않고 운영 대조 대상으로 남깁니다.
 
-특정 회원에게 수정본을 다시 전달할 때는 `publish-welcome-guide.mjs --replace-user U...`로 먼저 dry run을 확인한 뒤 `--apply`를 붙입니다. 가입 안내와 수정본은 모두 `SLACK_BOT_TOKEN`으로 `chat.postMessage`를 호출하고, Slack 응답의 작성자가 설정된 OT1L 봇인지 확인한 뒤 그 메시지 시각을 저장합니다. 관리자나 회원 프로필로 대신 게시하지 않습니다. 새 봇 안내를 먼저 게시하고 Slack Web에서 봇 프로필·본문·멘션·이미지 순서를 확인한 다음에만 기존 메시지를 수동으로 정리합니다. 스크립트는 기존 Slack 메시지를 자동 삭제하지 않으며, 이전 전달 행도 감사 이력으로 보존합니다.
+특정 회원에게 안내 링크를 다시 전달할 때는 `publish-welcome-guide.mjs --replace-user U...`로 먼저 dry run을 확인한 뒤 `--apply`를 붙입니다. 가입 안내와 수정본은 모두 `SLACK_BOT_TOKEN`으로 `chat.postMessage`를 호출하고, Slack 응답의 작성자가 설정된 OT1L 봇인지 확인한 뒤 그 메시지 시각을 저장합니다. 관리자나 회원 프로필로 대신 게시하지 않습니다. 스크립트는 기존 Slack 메시지를 자동 삭제하지 않으며, 이전 전달 행도 감사 이력으로 보존합니다.
+
+## Share Info·Chapter 자동 반응과 복구
+
+Slack Events API가 전달한 최상위 사람 메시지는 먼저 `share-info:<message_ts>` 영수증을 DB에 만들고 claim한 뒤 리액션, 감사 답글, Qwen 한 줄 요약과 생각거리를 같은 스레드에 게시합니다. Qwen이 실패하면 원문 기반 대체 문구로 끝까지 게시합니다. 같은 영수증은 중복 효과를 만들지 않습니다.
+
+이벤트 누락에 대비해 Cron이 15분마다 최근 20분의 Share Info·Chapter 최상위 글을 다시 읽어 같은 처리기를 호출합니다. `conversations.history` 응답의 메시지에는 `channel`이 없으므로 재수집기가 현재 순회 중인 채널 ID를 이벤트에 명시적으로 붙인 뒤 처리해야 합니다. 합성 QA도 실제 Slack 응답처럼 메시지의 `channel` 필드를 생략합니다. 운영 확인 순서는 `community.share_info.reconcile`의 처리 수, `community_records`의 `share-info:<message_ts>` 상태, 원글 리액션, 감사 답글, 요약·생각거리 답글입니다.
 
 2026-09-18 기준 v0.0.55 수정본의 **지정 회원 대상 복구**는 Slack Web에서 봇 작성자·본문·이미지 순서까지 확인했습니다. 배포 뒤 실제 신규 회원의 자연스러운 채널 입장 이벤트부터 최종 게시까지는 아직 관찰하지 않았으므로, 다음 입장에서 정확히 한 건의 봇 게시를 별도 확인해야 합니다.
 

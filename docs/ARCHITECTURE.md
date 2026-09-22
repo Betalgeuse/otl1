@@ -87,7 +87,9 @@ erDiagram
 
 일반 커뮤니티 예약은 채널별 Durable Object alarm과 DB의 발송 조건·claim을 함께 사용합니다. 공개 수집 시점마다 `conversations.members` 전 페이지와 최대 동시 5개의 `users.info` 조회를 끝낸 완전한 스냅샷만 반영합니다. 채널의 마지막 관찰 시각보다 오래된 out-of-order 스냅샷은 무시하고, 재입장은 현재 소속만 되살리며 기록·개인 시각·opt-out을 보존합니다. 일부 페이지·프로필 조회가 실패하면 소속을 바꾸거나 누구도 멘션하지 않습니다. 공통 10시·18시 수집은 현재 사람 회원을 공개 글 하나로 묶고, 개인 기본 11시·20시 대상도 저장 시각과 당일 상태로 due인 회원을 공개 채널 일괄 글로 보냅니다. DM이나 한 사람별 fanout은 없습니다. 한 글은 100명과 Slack 본문 한도로 제한해 결정적 순서로 나누고, 각 delivery는 lease와 최대 세 번 시도를 사용합니다. 재시도 전에는 정확한 본문을 최대 10페이지 history에서 찾아 이미 수락된 글이면 기존 시각을 영수증으로 채택하며, 아직 due인 회원만 남깁니다. 비공개 관리 채널의 관리자 전용 수집 테스트도 저장된 공개 채널 시각과 같은 경로를 호출하고, 발급 메시지·당일·소유자에 묶인 일회성 record를 먼저 claim합니다. 버그 delivery와 24시간 만료는 팀별 전역 Durable Object alarm이 자기 팀으로 범위를 고정해 정확한 due·activity 시각을 잡습니다. reconciliation·만료·claim 중 한 단계라도 10건 batch를 채우면 backlog가 남을 수 있으므로 5분 alarm을 유지하고, 모두 batch 미만으로 내려간 뒤에만 한 시간 안전 검사로 돌아갑니다. Cron은 이 alarm을 다시 거는 backup/nudge이며 delivery SQL을 실행하지 않습니다. 최초 축하도 DB 판정과 목적 채널별 발송 기록을 구분합니다. 부가적인 AI 응원 실패가 먼저 실행된 축하를 막지 않게 합니다.
 
-welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_runtime` 역할은 최신 발행본 조회·가입 전달 claim/finish만, 발행 CLI의 `otl_guide_admin` 역할은 발행·명시적 대상 복구만 실행합니다. 두 역할은 테이블 직접 권한이 없고, DB 소유자 연결은 migration과 역할 부트스트랩에만 사용합니다. 외부 Slack API와 DB 사이의 완전한 분산 원자성은 보장하지 않습니다. 실패·응답 불확실 상태에는 운영 대조가 필요합니다. 대규모 부하와 자동 백업·복구 SLO는 후속 과제입니다.
+Share Info·Chapter 반응은 Events API와 15분 bounded history reconciliation이 같은 결정적 처리기를 사용합니다. Events API에는 `event.channel`이 있지만 `conversations.history`의 각 message에는 채널이 없으므로, reconciliation 경계가 순회 중인 채널 ID를 붙여 canonical event로 만든 뒤 검증합니다. 처리기는 효과보다 먼저 `share-info:<message_ts>` DB 영수증을 claim하며, 이벤트와 재수집이 겹쳐도 같은 글을 한 번만 처리합니다. 이 경계를 검증하는 fixture는 Slack history 원형과 같게 message의 channel을 제공하지 않습니다.
+
+welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_runtime` 역할은 최신 발행본 조회·가입 전달 claim/finish만, 발행 CLI의 `otl_guide_admin` 역할은 발행·명시적 대상 복구만 실행합니다. 발행본은 채널 Canvas와 핀 메시지에 반영하고, 신규 회원별 delivery는 전문 복사 대신 Canvas 링크만 보냅니다. 두 역할은 테이블 직접 권한이 없고, DB 소유자 연결은 migration과 역할 부트스트랩에만 사용합니다. 외부 Slack API와 DB 사이의 완전한 분산 원자성은 보장하지 않습니다. 실패·응답 불확실 상태에는 운영 대조가 필요합니다. 대규모 부하와 자동 백업·복구 SLO는 후속 과제입니다.
 
 ## 버그 제보 경계 v0.0.54 구현 상태
 
