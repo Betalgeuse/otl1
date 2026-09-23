@@ -185,7 +185,7 @@ try {
   const introductionPost = calls.find((call) => call.method === "chat.postMessage");
   assert.deepEqual(
     introductionPost.body.blocks[1].elements.map((element) => element.text.text),
-    ["자기소개 쓰기", "자기소개 모두 보기"],
+    ["자기소개 쓰기", "자기소개 모두 보기", "피드백 남기기"],
   );
   assert.equal(current.revision, 1);
   assert.equal(current.messageTs, "2.000001");
@@ -217,7 +217,7 @@ try {
   assert.equal(update.body.ts, "2.000001");
   assert.deepEqual(
     update.body.blocks[1].elements.map((element) => element.action_id),
-    ["community_introduction", "community_introduction_directory"],
+    ["community_introduction", "community_introduction_directory", "community_bug_open"],
   );
   assert.equal(update.body.blocks[1].elements[1].url, env.COMMUNITY_INTRO_CANVAS_URL);
   assert.equal(current.revision, 2);

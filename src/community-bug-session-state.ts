@@ -4,6 +4,7 @@ import type { BugDialogueInput } from "./community-bug-schema";
 import { isBugField } from "./community-bug-schema";
 import { CommunityBugStore } from "./community-bug-store";
 import type { BugDraftRead } from "./community-bug-types";
+import { postFeedbackAdminReview } from "./community-feedback";
 import type { CommunityContext } from "./community-runtime";
 import { NeonStore } from "./store";
 
@@ -45,4 +46,5 @@ export async function exhaustBugReport(
     reporterId: draft.reporterId,
     packetRevision,
   });
+  await postFeedbackAdminReview(context, { feedbackId: draft.bugId, packetRevision });
 }

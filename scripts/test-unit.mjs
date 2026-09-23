@@ -8,6 +8,7 @@ const suites = [
   "community-followup",
   "past-review-modal",
   "community-quick-entry",
+  "community-feedback-surface",
   "community-questions",
   "private-controls",
   "garden-publication",

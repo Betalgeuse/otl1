@@ -1,4 +1,5 @@
 import { slackCanvasUrl } from "./community-canvas";
+import { feedbackActionBlock } from "./community-feedback-button";
 import { introductionButton, introductionDirectoryButton } from "./community-introduction";
 import type { Json } from "./input";
 
@@ -69,5 +70,6 @@ export function memberActionBlocks(
         inviteButton(),
       ],
     },
+    feedbackActionBlock(),
   ];
 }

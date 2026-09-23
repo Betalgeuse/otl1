@@ -21,6 +21,7 @@ import { confirmBugReport, continueBugReport } from "./community-bug-session";
 import { openBugReportModal, parseBugReportModal } from "./community-bug-slack";
 import { CommunityBugStore } from "./community-bug-store";
 import type { BugDraft } from "./community-bug-types";
+import { publishFeedbackAnalysis } from "./community-feedback";
 import { type CommunityContext, textReply } from "./community-runtime";
 import { InputError } from "./input";
 import { NeonStore, StoreError } from "./store";
@@ -167,7 +168,9 @@ export async function submitBugReportModal(
 ): Promise<Readonly<Record<string, string>> | null> {
   const parsed = parseBugReportModal(values);
   if ("errors" in parsed) return parsed.errors;
-  await startBugReport(context, parsed);
+  const draft = await startBugReport(context, parsed);
+  const actual = parsed.messages.find((message) => message.id === "form:actual")?.text ?? "";
+  await publishFeedbackAnalysis(context, { feedbackId: draft.bugId, text: actual });
   return null;
 }
 

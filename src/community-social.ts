@@ -38,6 +38,53 @@ export class CommunitySlackError extends SlackError {
   }
 }
 
+export function withFeedbackAction(method: string, payload: Json): Record<string, unknown> {
+  const value = object(payload);
+  if (!["chat.postMessage", "chat.update"].includes(method)) return value;
+  const channel = value.channel;
+  if (typeof channel !== "string" || !/^[CG][A-Z0-9]+$/.test(channel)) return value;
+  const existing = Array.isArray(value.blocks) ? value.blocks : [];
+  if (
+    existing.some(
+      (block) =>
+        typeof block === "object" &&
+        block !== null &&
+        !Array.isArray(block) &&
+        Array.isArray(block.elements) &&
+        block.elements.some(
+          (element: unknown) =>
+            typeof element === "object" &&
+            element !== null &&
+            !Array.isArray(element) &&
+            object(element).action_id === "community_bug_open",
+        ),
+    )
+  )
+    return value;
+  if (
+    typeof value.text === "string" &&
+    /버그|제보|접수|피드백|명세 확인|추가 확인|어떤 문제/.test(value.text)
+  )
+    return value;
+  const blocks = [...existing];
+  if (!blocks.length && typeof value.text === "string")
+    blocks.push({ type: "section", text: { type: "mrkdwn", text: value.text.slice(0, 2900) } });
+  if (blocks.length >= 49) return value;
+  blocks.push({
+    type: "actions",
+    elements: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: "피드백 남기기" },
+        action_id: "community_bug_open",
+        value: JSON.stringify({ ownerId: "actor", key: "new" }),
+        accessibility_label: "불편한 점이나 개선 의견 남기기",
+      },
+    ],
+  });
+  return { ...value, blocks };
+}
+
 function retryAfterSeconds(response: Response): number | null {
   const value = response.headers.get("Retry-After");
   if (!value || !/^\d{1,5}$/.test(value)) return null;

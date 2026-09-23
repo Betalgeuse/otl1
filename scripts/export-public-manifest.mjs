@@ -108,6 +108,7 @@ export const PUBLIC_QA_NAMES = [
   "community-followup.mjs",
   "past-review-modal.mjs",
   "community-quick-entry.mjs",
+  "community-feedback-surface.mjs",
   "community-questions.mjs",
   "private-controls.mjs",
   "garden-publication.mjs",
@@ -246,9 +247,19 @@ export const PUBLIC_DOC_NAMES = [
 
 export function assertPublicExportPaths(paths) {
   const listed = new Set(paths);
-  for (const required of ["site/dist/index.html", "site/dist/app.js", "site/dist/styles.css", "src/index.ts"])
+  for (const required of [
+    "site/dist/index.html",
+    "site/dist/app.js",
+    "site/dist/styles.css",
+    "src/index.ts",
+  ])
     if (!listed.has(required)) throw Error(`Public export is missing ${required}.`);
   for (const path of listed)
-    if (path === ".omo" || path.startsWith(".omo/") || path === ".github" || path.startsWith(".github/workflows/"))
+    if (
+      path === ".omo" ||
+      path.startsWith(".omo/") ||
+      path === ".github" ||
+      path.startsWith(".github/workflows/")
+    )
       throw Error(`Public export forbids ${path}.`);
 }

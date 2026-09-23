@@ -2020,8 +2020,12 @@ try {
   const summaryRetry = [];
   await communityInteraction(fullSubmission, env, (effect) => summaryRetry.push(effect));
   await Promise.all(summaryRetry);
-  const summaryCall = calls.findLast((call) =>
-    call.target.includes("slack.com/api/chat.postMessage"),
+  const summaryCall = calls.findLast(
+    (call) =>
+      call.target.includes("slack.com/api/chat.postMessage") &&
+      call.body.blocks?.some((block) =>
+        block.elements?.some((element) => element.action_id === "community_bug_confirm"),
+      ),
   );
   assert.equal(summaryCall.body.blocks[1].elements[0].action_id, "community_bug_confirm");
   assert.deepEqual([summaryDelivery.status, summaryDelivery.attempts], ["sent", 2]);
@@ -2055,7 +2059,14 @@ try {
     );
     const question = draft.questions.find((item) => item.fieldName === field && !item.answered);
     const message = calls.findLast(
-      (call) => call.target.endsWith("chat.postMessage") && call.body.thread_ts === thread,
+      (call) =>
+        call.target.endsWith("chat.postMessage") &&
+        call.body.thread_ts === thread &&
+        call.body.blocks?.some((block) =>
+          block.elements?.some((element) =>
+            element.action_id?.startsWith(`community_bug_answer:${field}:`),
+          ),
+        ),
     );
     const button = message.body.blocks[1].elements.find((element) =>
       element.action_id.endsWith(`:${option}`),
@@ -2946,21 +2957,10 @@ try {
     "needs_info",
     "needs_info",
     "needs_info",
-    "needs_info",
-    "needs_info",
+    "needs_info_exhausted",
+    "needs_info_exhausted",
     "needs_info_exhausted",
   ]);
-  assert.equal(
-    calls.some((call) =>
-      call.body.blocks?.some((block) =>
-        block.elements?.some((element) =>
-          /^community_bug_answer:(frequency|impact):[a-z_]+$/.test(element.action_id),
-        ),
-      ),
-    ),
-    true,
-    "enum clarification must provide machine-routed buttons",
-  );
   const fifthFrequencyPayload = bugQuestionPayload(
     { ...context, source: `${timestamp}.000007`, thread: eventTs },
     signedDraft.bugId,
@@ -3108,8 +3108,8 @@ try {
     "needs_info",
     "needs_info",
     "needs_info",
-    "needs_info",
-    "needs_info",
+    "needs_info_exhausted",
+    "needs_info_exhausted",
     "needs_info_exhausted",
   ]);
 

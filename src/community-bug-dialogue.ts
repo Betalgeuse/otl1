@@ -238,7 +238,7 @@ export async function advanceBugDialogue(input: BugDialogueInput): Promise<BugDi
   const questionCount = input.questionCount ?? recent.length;
   const startedAt = input.needsInfoStartedAt ? Date.parse(input.needsInfoStartedAt) : Number.NaN;
   const expired = Number.isFinite(startedAt) && startedAt <= Date.parse(input.now) - 86_400_000;
-  if (questionCount >= 5 || recent.length >= 5 || expired)
+  if (questionCount >= 3 || recent.length >= 3 || expired)
     return { ...context, status: "exhausted", handoff: true };
   const question = nextBugQuestion(
     packet,

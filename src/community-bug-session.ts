@@ -20,6 +20,7 @@ import { resumeBugDialogue } from "./community-bug-resume";
 import { canonicalJson, isBugField } from "./community-bug-schema";
 import { bugDialogueInput, exhaustBugReport } from "./community-bug-session-state";
 import { CommunityBugStore } from "./community-bug-store";
+import { postFeedbackAdminReview } from "./community-feedback";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import { InputError } from "./input";
 import { NeonStore } from "./store";
@@ -228,6 +229,10 @@ export async function confirmBugReport(
   await deliverBugReceipt(context, {
     bugId,
     reporterId: draft.reporterId,
+    packetRevision: draft.packetRevision + 1,
+  });
+  await postFeedbackAdminReview(context, {
+    feedbackId: bugId,
     packetRevision: draft.packetRevision + 1,
   });
 }

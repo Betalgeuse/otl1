@@ -106,7 +106,7 @@ npm run reconcile:garden -- --team T_REPLACE --channel C_REPLACE --through 2026-
 
 이벤트 수신 직후 만드는 `community_records`의 incoming body에는 버그 원문을 넣지 않습니다. 고정된 `bug_intake` 표식, SHA-256 digest, 날짜·스레드·편집 시각만 저장하고, 정확한 제보 문장은 AES-GCM 비공개 객체에 먼저 보관합니다. 소유자 범위 read API가 반환하는 wrapped key와 revision metadata로만 다음 역질문을 이어갑니다.
 
-누락되거나 모순된 내용은 한 번에 하나씩만 묻고, 관찰하지 않은 내용은 추가하지 않습니다. 24시간 안에 다섯 질문을 넘기거나 시간이 지나면 확정하지 않고 비공개 운영자 인계 대상으로 전환합니다.
+누락되거나 모순된 내용은 한 번에 하나씩만 묻고, 관찰하지 않은 내용은 추가하지 않습니다. 24시간 안에 세 질문을 넘기거나 시간이 지나면 확정하지 않고 관리자 검토 대상으로 전환합니다.
 
 제보자는 초안을 확인해 `맞아요`를 눌러야 합니다. 이 확인 전에는 관리자나 자동화가 확정 패킷을 만들 수 없습니다. 보안·개인정보 징후는 공개 답글을 계속 받지 않고 `private_incident`로 분리합니다. 새 초안·답변의 비공개 전환, 관계형 원문 제거, receipt·관리자 handoff 생성은 한 DB 트랜잭션으로 커밋하며 기존 중간 상태는 팀 범위 reconciliation이 한 번만 보정합니다. 운영자는 실제 식별자, 원문, 비밀, 첨부물 또는 private object 경로를 공개 채널·공개 export·Check Run 본문에 넣지 않습니다.
 
@@ -124,7 +124,7 @@ Cron 등록이 실제로 stale이라는 Cloudflare 설정·호출 증거가 있�
 
 Slack delivery 실패 로그의 `providerSubcode`는 `invalid_blocks`, `invalid_arguments`, `invalid_form_data`, `msg_too_long`, `http_429`, `provider_5xx`, `other` 중 하나만 남깁니다. 원문 응답, 메타데이터 메시지, 사용자 입력은 로그나 delivery ledger에 저장하지 않습니다.
 
-`codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app` 이름을 담은 dry-run도 무변경 계획 영수증만 만듭니다. GitHub Actions는 사용하지 않습니다. 실제 운영 체크는 격리된 GenQuant 서비스에서 실행하고 GitHub Check Run으로 게시하도록 별도 승인·연결·실제 검증을 거쳐야 합니다.
+Slack workspace admin 또는 owner가 명세를 승인하면 같은 스레드에서 Codex 앱을 호출합니다. Codex는 문서 원본을 읽고 별도 `feedback/...` 브랜치와 draft PR까지만 만들며 자동 머지는 하지 않습니다. GitHub Actions는 사용하지 않습니다.
 
 pre-release QA 배포는 기존 Worker의 승인된 검증 시나리오에만 쓰며 exact clean SHA와 rollback 대상을 기록합니다. Git push·merge·release·provider 권한은 포함하지 않습니다. 정식 배포는 private `ops/main`과 활성 ruleset readback이 준비된 뒤 별도 실행합니다.
 

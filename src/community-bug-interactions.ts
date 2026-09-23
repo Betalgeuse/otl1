@@ -6,6 +6,7 @@ import {
   parseBugReportModal,
   submitBugReportModal,
 } from "./community-bugs";
+import { startCodexFeedback } from "./community-feedback";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import { InputError, object, string } from "./input";
 
@@ -44,6 +45,15 @@ export async function handleBugAction(
   triggerId: unknown,
   waitUntil: WaitUntil,
 ): Promise<Response | null> {
+  if (id === "community_feedback_admin_start") {
+    await startCodexFeedback(context, {
+      feedbackId: string(value.feedbackId),
+      publicAlias: string(value.publicAlias),
+      sourceChannel: string(value.sourceChannel),
+      sourceThread: string(value.sourceThread),
+    });
+    return new Response(null, { status: 200 });
+  }
   if (id === "community_bug_open") {
     await openBugReportModal(context, string(triggerId));
     return new Response(null, { status: 200 });
