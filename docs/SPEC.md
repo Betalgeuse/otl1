@@ -100,7 +100,7 @@
 
 - 매일 18:00~18:05 한국 시간에 feedback 채널 안내를 날짜별 한 번만 게시합니다.
 - 공개 채널의 모든 봇 메시지는 **피드백 남기기** 진입을 제공합니다. DM과 비공개 ephemeral 응답에는 자동 추가하지 않습니다.
-- 모달은 불편하거나 바라는 점 한 칸과 선택적인 기대 결과만 받습니다. 제출하면 feedback 채널의 새 스레드로 옮겨 원문 위치를 보존합니다.
+- 모달은 불편하거나 바라는 점 한 칸과 선택적인 기대 결과만 받습니다. 제출하면 feedback 채널에 제보자를 멘션한 새 글을 만들고 원문 위치를 보존합니다. 분류, 최대 세 번의 역질문, 관리자 승인과 Codex 인계는 모두 그 글의 스레드에서 이어집니다.
 - 사용자가 버그 여부를 결정하지 않습니다. 현재 OT1L 문서와 실제 관찰을 기준으로 오류·개선·질문·문서·불명확 후보를 구분합니다.
 - 명세가 부족하면 한 번에 한 질문만 하며 최대 3회입니다. 이후에는 모르는 값을 추정하지 않고 관리자 검토 카드로 넘깁니다.
 - **명세 승인·Codex 시작**은 Slack workspace admin 또는 owner만 실행할 수 있습니다. 승인 시 Codex 앱에는 문서 원본, 피드백 스레드, `feedback/<id>` 브랜치, 검증, draft PR, 자동 머지 금지를 함께 전달합니다.
@@ -115,7 +115,7 @@
 | member goal/review garden route | `migrations/043_member_review_garden_route.sql`, `migrations/044_member_goal_garden_route.sql` |
 | garden delivery | `src/community-garden-delivery.ts`, `src/community-garden.ts`, `src/community-garden-store.ts` |
 | 예약·재촉 | `src/community-scheduler.ts`, `src/community-reminder-batch.ts` |
-| 피드백·Codex 인계 | `src/community-feedback.ts`, `src/community-bugs.ts`, `src/community-bug-dialogue.ts` |
+| 피드백·Codex 인계 | `src/community-feedback-route.ts`, `src/community-feedback.ts`, `src/community-bug-start.ts`, `src/community-bug-dialogue.ts` |
 | regression QA | `qa/community-target-date.mjs`, `qa/garden-publication.mjs`, `scripts/test-unit.mjs` |
 
 새 변경은 먼저 이 표의 어느 경계를 바꾸는지 적고, 해당 규칙·migration·회귀 테스트·운영 readback을 한 묶음으로 갱신합니다.

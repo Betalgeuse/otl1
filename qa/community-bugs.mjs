@@ -1983,6 +1983,50 @@ try {
   assert.equal(calls[0].body.user, "UMEMBER");
 
   calls.length = 0;
+  const routedPending = [];
+  const routedSubmission = {
+    ...submission,
+    view: {
+      ...submission.view,
+      id: "V-ROUTED",
+      private_metadata: JSON.stringify({
+        channelId: "CPUBLIC",
+        userId: "UMEMBER",
+        source: "29.000002",
+        thread: "29.000001",
+        date: "2026-09-16",
+      }),
+      state: {
+        values: {
+          actual: { value: { value: "자기소개 모음과 프로필 정보가 달라요" } },
+          expected: { value: { value: "한 곳에서 같은 정보가 보여야 해요" } },
+        },
+      },
+    },
+  };
+  const routedAck = await communityInteraction(routedSubmission, env, (effect) =>
+    routedPending.push(effect),
+  );
+  assert.equal(await routedAck?.text(), "");
+  await Promise.all(routedPending);
+  const routedPosts = calls.filter((call) => call.target.endsWith("/chat.postMessage"));
+  const feedbackRoot = routedPosts.find(
+    (call) => call.body.channel === "CFEEDBACK" && call.body.thread_ts === undefined,
+  );
+  assert.match(feedbackRoot.body.text, /<@UMEMBER>/);
+  assert.match(feedbackRoot.body.text, /자기소개 모음과 프로필 정보가 달라요/);
+  const feedbackThread = "20.000001";
+  const routedReplies = routedPosts.filter(
+    (call) => call.body.channel === "CFEEDBACK" && call.body.thread_ts === feedbackThread,
+  );
+  assert.equal(routedReplies.length, 2, "question and analysis stay in the feedback thread");
+  assert.match(routedReplies[0].body.text, /<@UMEMBER>/, "the next question mentions its reporter");
+  const routedDraft = [...bugRows.values()].find(
+    (row) => row.source.channelId === "CFEEDBACK" && row.source.thread === feedbackThread,
+  );
+  assert.notEqual(routedDraft, undefined, "the canonical feedback thread is the dialogue source");
+
+  calls.length = 0;
   const fullSubmission = {
     ...submission,
     view: {
@@ -2976,7 +3020,7 @@ try {
     5,
     bugQuestionForField("frequency"),
   );
-  assert.equal(fifthFrequencyPayload.text, "이 문제는 얼마나 자주 생기나요?");
+  assert.equal(fifthFrequencyPayload.text, "<@UMEMBER> 이 문제는 얼마나 자주 생기나요?");
   assert.deepEqual(
     fifthFrequencyPayload.blocks[1].elements.map((element) => element.action_id),
     [

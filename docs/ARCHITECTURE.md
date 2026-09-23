@@ -95,7 +95,7 @@ welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_r
 
 ## 버그 제보 경계 v0.0.54 구현 상태
 
-피드백은 하나의 짧은 모달에서 시작하고 feedback 채널의 새 스레드에 정규화합니다. 기존 암호화 ledger와 durable 질문 delivery를 재사용하되 사용자에게 버그 분류를 요구하지 않습니다. 문서 계약·관찰 결과·원하는 변화·트리거·검증 가능한 수용 조건을 기준으로 한 번에 하나만 물으며 세 번 뒤에는 불완전성을 표시한 관리자 검토 카드로 전환합니다.
+피드백은 하나의 짧은 모달에서 시작하고 feedback 채널의 제보자 멘션 글과 그 스레드에 정규화합니다. 최초 입력 위치는 링크로만 보존하고, 질문·분류·관리자 승인은 canonical feedback thread에서 진행합니다. 동일한 제출 재시도는 결정적인 버그 키와 최근 Slack history를 대조해 기존 스레드를 재사용합니다. 기존 암호화 ledger와 durable 질문 delivery를 재사용하되 사용자에게 버그 분류를 요구하지 않습니다. 문서 계약·관찰 결과·원하는 변화·트리거·검증 가능한 수용 조건을 기준으로 한 번에 하나만 물으며 세 번 뒤에는 불완전성을 표시한 관리자 검토 카드로 전환합니다.
 
 원문과 답변은 revision·schema·키 버전을 추가 인증 데이터로 묶은 AES-GCM 비공개 객체에 둡니다. 최초 incoming record는 `bug_intake` 표식과 SHA-256 digest만 저장하며 raw·normalized text를 저장하지 않습니다. 정규화 PostgreSQL에는 opaque reference, 암호문 digest, wrapped data key, nonce와 제한된 비민감 필드만 두고, migration 022의 소유자 범위 read가 후속 역질문에 필요한 암호화 객체 복원 정보만 반환합니다. `privacy` 또는 보안·개인정보 영향은 `private_incident`로 전이하면서 관계형 필드의 원문을 지우고 공개 export를 막아 비공개 운영자 채널로만 인계합니다. 제보자 소유권, revision, idempotency, 확인 시각, canonical packet·evidence digest가 모두 맞을 때만 `bug_packet.v1` 확정 패킷을 저장합니다. 암호화 객체 저장소와 키 설정이 없으면 제보를 부분 저장하지 않고 실패합니다. 새 비공개 초안·답변은 상태 전환, 관계형 원문 제거, receipt·관리자 handoff를 같은 트랜잭션에 묶고, 과거 중간 상태는 팀 범위의 idempotent reconciliation으로 한 번만 복구합니다. migration 021의 순차 upgrade backfill은 암호화 객체의 opaque reference·digest와 append-only event를 보존하면서 기존 관계형 원문을 scrub하고 누락된 private receipt·관리자 handoff만 보정하며, 신규 설치에서는 0건이어야 합니다.
 

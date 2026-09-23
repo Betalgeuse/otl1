@@ -42,13 +42,28 @@ export function bugQuestionPayload(
   };
   if (question.kind === "free_text")
     return {
-      text: escapeSlackText(question.text),
-      blocks: [{ type: "section", text: { type: "plain_text", text: question.text } }, identity],
+      text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
+          },
+        },
+        identity,
+      ],
     };
   return {
-    text: escapeSlackText(question.text),
+    text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
     blocks: [
-      { type: "section", text: { type: "plain_text", text: question.text } },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
+        },
+      },
       {
         type: "actions",
         elements: question.options.map((option) => ({

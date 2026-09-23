@@ -70,15 +70,23 @@ export async function publishFeedbackAnalysis(
         parseFeedbackAnalysis({ kind: "unknown" }),
       )
     : parseFeedbackAnalysis({ kind: "unknown" });
+  const key = `feedback-analysis:${input.feedbackId}`;
   await context.store.putRecord({
     ...context.scope,
-    key: `feedback-analysis:${input.feedbackId}`,
+    key,
     kind: "feedback_analysis",
     body: analysis,
   });
-  await post(context, {
-    text: `분류 후보: ${analysis.kind}\n요약: ${analysis.summary}\n추가로 확인할 항목: ${analysis.missing.join(", ") || "없음"}\n기준 문서: ${analysis.docRefs.join(", ") || "관리자 검토 필요"}`,
-  });
+  if (!(await context.store.claimRecord({ ...context.scope, key }))) return;
+  try {
+    await post(context, {
+      text: `분류 후보: ${analysis.kind}\n요약: ${analysis.summary}\n추가로 확인할 항목: ${analysis.missing.join(", ") || "없음"}\n기준 문서: ${analysis.docRefs.join(", ") || "관리자 검토 필요"}`,
+    });
+    await context.store.finishRecord({ ...context.scope, key }, "sent");
+  } catch (error) {
+    await context.store.finishRecord({ ...context.scope, key }, "failed");
+    throw error;
+  }
 }
 
 export function feedbackPromptDue(minute: string): boolean {
