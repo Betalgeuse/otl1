@@ -1,7 +1,7 @@
 import { buildBoard } from "./board";
 import { boardLink } from "./board-link";
 import { customBotEmoji, randomCustomEmoji } from "./community-emoji";
-import { earlierDayNotice } from "./community-followup";
+import { earlierDayNotice, earlierReviewChoices } from "./community-followup";
 import { generateEncouragement } from "./community-language";
 import { communityConfirmationMessage, communityStatusMessage } from "./community-messages";
 import { emitMilestones } from "./community-milestones";
@@ -61,6 +61,7 @@ export async function statusMessage(
     : undefined;
   return communityStatusMessage({
     earlierNotice: await earlierDayNotice(context, currentSeasonHistory, boardDate),
+    earlierReviewChoices: earlierReviewChoices(currentSeasonHistory, boardDate, context.scope),
     boardDate,
     userId: day.userId,
     date: day.date,

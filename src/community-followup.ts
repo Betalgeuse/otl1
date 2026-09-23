@@ -20,6 +20,25 @@ export function unresolvedDays(
     .toSorted((a, b) => b.date.localeCompare(a.date));
 }
 
+export function earlierReviewChoices(
+  history: readonly CommunityDay[],
+  before: string,
+  scope: CommunityScope,
+) {
+  return unresolvedDays(history, before)
+    .slice(0, 3)
+    .map((day) => ({
+      label: `${Number(day.date.slice(5, 7))}/${Number(day.date.slice(8, 10))} 후기 남기기`,
+      actionId: "community_past_review",
+      value: JSON.stringify({
+        ownerId: scope.userId,
+        key: `past-review:${day.date}`,
+        date: day.date,
+        revision: day.revision,
+      }),
+    }));
+}
+
 export async function earlierDayNotice(
   context: CommunityContext,
   history: readonly CommunityDay[],

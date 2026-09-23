@@ -34,6 +34,13 @@ export function memberActionBlock(navigation: MemberNavigation = {}): Json {
         : []),
       introductionButton(undefined, "자기소개 쓰기"),
       introductionDirectoryButton(navigation.introductionUrl),
+      {
+        type: "button",
+        text: { type: "plain_text", text: "지난 후기 정리" },
+        action_id: "community_past_review_list",
+        value: JSON.stringify({ ownerId: "actor", key: "past-review-list" }),
+        accessibility_label: "완료 상태나 후기가 빠진 이전 ONE THING 정리",
+      },
       inviteButton(),
     ],
   };
