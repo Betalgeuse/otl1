@@ -3,6 +3,7 @@ import { isKoreanPublicHoliday, isOptionalDay, isWeekend } from "../src/calendar
 import { buildBoard } from "../src/board.ts";
 import { unresolvedDays } from "../src/community-followup.ts";
 import { runCommunitySchedule } from "../src/community-scheduler.ts";
+import { koreaDate } from "../src/input.ts";
 
 assert.equal(isWeekend("2026-09-11"), false);
 assert.equal(isWeekend("2026-09-12"), true);
@@ -13,6 +14,8 @@ assert.equal(isKoreanPublicHoliday("2026-07-17"), true);
 assert.equal(isKoreanPublicHoliday("2027-02-09"), true);
 assert.equal(isKoreanPublicHoliday("2026-09-23"), false);
 assert.equal(isOptionalDay("2026-09-24"), true);
+assert.equal(koreaDate(Date.parse("2026-09-24T01:59:59+09:00") / 1000), "2026-09-23");
+assert.equal(koreaDate(Date.parse("2026-09-24T02:00:00+09:00") / 1000), "2026-09-24");
 const day = { teamId: "TQA", channelId: "CQA", userId: "UQA", goal: "optional goal", reflection: "", outcome: "pending", resting: false, revision: 1 };
 assert.equal(unresolvedDays([{ ...day, date: "2026-09-12" }, { ...day, date: "2026-09-13" }], "2026-09-14").length, 0);
 assert.equal(unresolvedDays([{ ...day, date: "2026-09-24" }], "2026-09-28").length, 0);
@@ -84,7 +87,7 @@ try {
   assert.match(sent[1].text, /선택|멘션 없이/);
   assert.match(sent[0].text, /오늘 안에 끝낼 만큼 작고, 완료 여부가 분명한/);
   assert.match(sent[1].text, /발표 자료 준비하기.*발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기/s);
-  assert.deepEqual(sent[0].blocks.at(-1).elements.map((element) => element.text.text), ["사용설명서 보기", "자기소개 쓰기", "자기소개 모두 보기", "친구 초대하기"]);
+  assert.deepEqual(sent[0].blocks.at(-1).elements.map((element) => element.text.text), ["사용설명서 보기", "자기소개 쓰기", "자기소개 모두 보기", "지난 후기 정리", "친구 초대하기"]);
   assert.equal(dueCalls, 0);
   await runCommunitySchedule(env, store, new Date("2026-09-14T01:00:00Z"));
   assert.equal(sent.length, 3);

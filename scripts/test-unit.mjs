@@ -6,6 +6,7 @@ const suites = [
   "community-clock",
   "community-emoji",
   "community-followup",
+  "past-review-modal",
   "community-questions",
   "private-controls",
   "garden-publication",

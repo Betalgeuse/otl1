@@ -2,6 +2,7 @@ import { InputError, type Json } from "./input";
 
 export type StatusCard = {
   readonly earlierNotice?: string | null;
+  readonly earlierReviewChoices?: readonly CommunityChoice[];
   readonly userId: string;
   readonly date: string;
   readonly goal: string | null;
@@ -102,6 +103,11 @@ export function communityStatusMessage(input: StatusCard): Json {
     });
   if (input.earlierNotice)
     blocks.push({ type: "section", text: { type: "mrkdwn", text: input.earlierNotice } });
+  if (input.earlierReviewChoices?.length)
+    blocks.push({
+      type: "actions",
+      elements: input.earlierReviewChoices.map(button),
+    });
   if (actions.length) blocks.push({ type: "actions", elements: actions });
   return { text: input.earlierNotice ? `${text}\n\n${input.earlierNotice}` : text, blocks };
 }

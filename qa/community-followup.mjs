@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {unresolvedDays,earlierDayNotice,messageDate} from '../src/community-followup.ts';
+import {unresolvedDays,earlierDayNotice,earlierReviewChoices,messageDate} from '../src/community-followup.ts';
 const scope={teamId:'TQA',channelId:'CQA',userId:'UOWNER'};
 const day={...scope,date:'2026-09-08',goal:'goal',outcome:'pending',reflection:'',resting:false,revision:0};
 const history=[day,{...day,date:'2026-09-09',outcome:'partial',reflection:'절반 진행'}, {...day,date:'2026-09-10',resting:true}, {...day,date:'2026-09-11'},{...day,date:'2026-09-07',outcome:'complete'}];
@@ -7,6 +7,7 @@ assert.deepEqual(unresolvedDays(history,'2026-09-11').map(d=>d.date),['2026-09-0
 assert.equal(unresolvedDays([{...day,goal:''}],'2026-09-11').length,0);
 let writes=0;const store={async listRecords(){return [{body:{date:'2026-09-08',sourceUrls:['https://test.slack.com/archives/CQA/p1788831150368149']}}];},async getRecord(){return null;}};
 const notice=await earlierDayNotice({scope,store},history,'2026-09-11');assert.match(notice,/2026-09-08 ONE THING 글/);assert.doesNotMatch(notice,/2026-09-09|2026-09-10/);assert.equal(writes,0);
+const choices=earlierReviewChoices(history,'2026-09-11',scope);assert.deepEqual(choices.map(choice=>choice.label),['9/8 후기 남기기','9/7 후기 남기기']);assert.deepEqual(choices.map(choice=>{const value=JSON.parse(choice.value);return{date:value.date,revision:value.revision,ownerId:value.ownerId};}),[{date:'2026-09-08',revision:0,ownerId:'UOWNER'},{date:'2026-09-07',revision:0,ownerId:'UOWNER'}]);
 const source=String(Date.parse('2026-09-11T03:00:00Z')/1000),thread=String(Date.parse('2026-09-08T01:00:00Z')/1000);
 assert.equal(await messageDate(store,scope,'UADMIN',source,thread),'2026-09-08');
 assert.equal(await messageDate(store,scope,'UADMIN',source,source),'2026-09-11');
