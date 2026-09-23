@@ -51,8 +51,8 @@ export async function openPastReviewModal(
     view: {
       type: "modal",
       callback_id: "community_past_review_submit",
-      title: { type: "plain_text", text: "지난 ONE THING 후기" },
-      submit: { type: "plain_text", text: "후기 저장" },
+      title: { type: "plain_text", text: "밀린 후기 기록하기" },
+      submit: { type: "plain_text", text: "기록하기" },
       close: { type: "plain_text", text: "닫기" },
       private_metadata: JSON.stringify({
         userId: context.scope.userId,
@@ -117,8 +117,8 @@ export async function openPastReviewPickerModal(
     view: {
       type: "modal",
       callback_id: "community_past_review_submit",
-      title: { type: "plain_text", text: "지난 ONE THING 후기" },
-      submit: { type: "plain_text", text: "후기 저장" },
+      title: { type: "plain_text", text: "밀린 후기 기록하기" },
+      submit: { type: "plain_text", text: "기록하기" },
       close: { type: "plain_text", text: "닫기" },
       private_metadata: JSON.stringify({
         userId: context.scope.userId,

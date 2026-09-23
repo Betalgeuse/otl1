@@ -102,7 +102,7 @@ try {
     earlierNotice: "이전 ONE THING도 돌아봐요.",
     earlierReviewChoices: [
       {
-        label: "9/21 후기 남기기",
+        label: "9/21 후기 기록하기",
         actionId: "community_past_review",
         value: JSON.stringify({
           ownerId: "UQA",
@@ -116,7 +116,7 @@ try {
   const reviewActions = card.blocks.find(
     (block) => block.type === "actions" && block.elements[0]?.action_id === "community_past_review",
   );
-  assert.equal(reviewActions.elements[0].text.text, "9/21 후기 남기기");
+  assert.equal(reviewActions.elements[0].text.text, "9/21 후기 기록하기");
   await assert.rejects(
     openPastReviewModal(
       {

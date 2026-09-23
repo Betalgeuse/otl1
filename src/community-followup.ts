@@ -28,7 +28,7 @@ export function earlierReviewChoices(
   return unresolvedDays(history, before)
     .slice(0, 3)
     .map((day) => ({
-      label: `${Number(day.date.slice(5, 7))}/${Number(day.date.slice(8, 10))} 후기 남기기`,
+      label: `${Number(day.date.slice(5, 7))}/${Number(day.date.slice(8, 10))} 후기 기록하기`,
       actionId: "community_past_review",
       value: JSON.stringify({
         ownerId: scope.userId,
