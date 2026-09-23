@@ -192,7 +192,12 @@ try {
   const firstCanvas = calls.find((call) => call.method === "canvases.edit");
   assert.equal(firstCanvas.body.canvas_id, "FINTRO01");
   assert.doesNotMatch(firstCanvas.body.changes[0].document_content.markdown, /^#/);
-  assert.match(firstCanvas.body.changes[0].document_content.markdown, /!\[\]\(@UNEW\).*홍길동/s);
+  assert.match(firstCanvas.body.changes[0].document_content.markdown, /## 홍길동/);
+  assert.doesNotMatch(
+    firstCanvas.body.changes[0].document_content.markdown,
+    /@UNEW/,
+    "the directory renders the confirmed name once without a Slack mention",
+  );
   const reactions = calls.filter((call) => call.method === "reactions.add");
   assert.equal(reactions.length, 3, "a published introduction receives three custom reactions");
   assert.equal(new Set(reactions.map((call) => call.body.name)).size, 3);

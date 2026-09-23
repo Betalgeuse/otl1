@@ -1,5 +1,5 @@
 import { introductionActionBlock } from "./community-introduction";
-import { introductionCanvasUrl, syncIntroductionCanvas } from "./community-introduction-canvas";
+import { introductionCanvasUrl } from "./community-introduction-canvas";
 import { type CommunityContext, type CommunityEnv, ephemeral } from "./community-runtime";
 import { callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
@@ -81,7 +81,6 @@ function chunks(lines: readonly string[]): readonly string[] {
 
 export async function showIntroductionDirectory(context: CommunityContext): Promise<void> {
   const introductions = await context.store.introductions(context.scope.teamId);
-  await syncIntroductionCanvas(introductions, context.env);
   const url = introductionCanvasUrl(context.env);
   const text = `*자기소개 모음*\n현재 ${introductions.length}명의 공개 자기소개를 Canvas에서 볼 수 있어요.\n${url}`;
   await ephemeral(context, {
