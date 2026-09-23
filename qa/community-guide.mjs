@@ -127,6 +127,8 @@ assert.equal(
   true,
 );
 assert.equal(canvasEdits[0].changes[0].document_content.markdown.includes("<#CPUBLIC001>"), false);
+assert.match(canvasEdits[0].changes[0].document_content.markdown, /^## \*\*ONE THING\*\*/m);
+assert.doesNotMatch(canvasEdits[0].changes[0].document_content.markdown, /^[\s]*(?:•|◦|▪︎)/m);
 await publishWelcomeGuide(env);
 assert.equal(latest.origin, "repo");
 assert.equal(latest.sourceTs, undefined);

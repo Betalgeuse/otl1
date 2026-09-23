@@ -65,6 +65,9 @@ export function welcomeGuideLink(userId: string, env: GuideSurfaceEnv) {
 function canvasMarkdown(version: string, renderedBody: string): string {
   const body = renderedBody
     .replace(/^@channel\nOT1L v[^\n]+\n\n/, "")
+    .replace(/^•\s+(.+)$/gm, "## $1")
+    .replace(/^\s*(?:◦|▪︎)\s+(.+)$/gm, "- $1")
+    .replace(/\*([^*\n]+)\*/g, "**$1**")
     .replace(/<#([CG][A-Z0-9]+)>/g, "![](#$1)");
   return `마지막 업데이트: ${version}\n\n${body}`;
 }
