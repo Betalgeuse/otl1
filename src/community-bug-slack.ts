@@ -132,6 +132,7 @@ export function bugEntryPayload(context: CommunityContext) {
 }
 
 function modalText(values: Record<string, unknown>, field: keyof typeof FIELD_LABELS): string {
+  if (values[field] === undefined) return "";
   return string(object(object(values[field]).value).value ?? "").trim();
 }
 
@@ -168,6 +169,7 @@ export function parseBugReportModal(input: unknown): ModalResult {
     candidates.push({ ...bugCandidate("steps", id, value), value: [value] });
   }
   for (const field of ["frequency", "impact"] as const) {
+    if (values[field] === undefined) continue;
     const selection = object(object(values[field]).value).selected_option;
     const selected = selection ? string(object(selection).value) : "";
     const quote = OPTION_LABELS[selected as keyof typeof OPTION_LABELS];

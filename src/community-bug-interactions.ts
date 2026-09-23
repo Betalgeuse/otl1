@@ -33,7 +33,7 @@ export async function handleBugView(
       });
     }),
   );
-  return Response.json({ response_action: "clear" });
+  return new Response(null, { status: 200 });
 }
 
 export async function handleBugAction(

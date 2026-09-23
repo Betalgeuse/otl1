@@ -808,6 +808,12 @@ try {
     date: "2026-09-16",
   });
 
+  const compactModal = parseBugReportModal({
+    actual: { value: { value: "보내기를 누르면 연결 오류가 보여요" } },
+    expected: { value: { value: "오류 없이 접수되어야 해요" } },
+  });
+  assert.equal("errors" in compactModal, false, "the two-field feedback modal is accepted");
+
   const parsed = parseBugReportModal({
     actual: { value: { value: "등록 버튼을 누르면 오류가 보여요" } },
     expected: { value: { value: "등록되어야 해요" } },
@@ -1965,7 +1971,8 @@ try {
     { ...env, BUG_PRIVATE_OBJECTS: undefined },
     (effect) => pending.push(effect),
   );
-  assert.deepEqual(await accepted?.json(), { response_action: "clear" });
+  assert.equal(accepted?.status, 200);
+  assert.equal(await accepted?.text(), "", "valid feedback submission closes with an empty ACK");
   await Promise.all(pending);
   assert.equal(
     calls.length,
@@ -2006,7 +2013,8 @@ try {
   const fullAccepted = await communityInteraction(fullSubmission, env, (effect) =>
     fullPending.push(effect),
   );
-  assert.deepEqual(await fullAccepted?.json(), { response_action: "clear" });
+  assert.equal(fullAccepted?.status, 200);
+  assert.equal(await fullAccepted?.text(), "");
   await Promise.all(fullPending);
   const completeDraft = [...bugRows.values()].find(
     (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:30.000001",
