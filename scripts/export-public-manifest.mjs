@@ -106,6 +106,7 @@ export const PUBLIC_QA_NAMES = [
   "community-clock.mjs",
   "community-emoji.mjs",
   "community-followup.mjs",
+  "past-review-modal.mjs",
   "community-questions.mjs",
   "private-controls.mjs",
   "garden-publication.mjs",
