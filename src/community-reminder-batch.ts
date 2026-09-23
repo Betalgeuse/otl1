@@ -1,4 +1,4 @@
-import { type MemberNavigation, memberActionBlock } from "./community-member-actions";
+import { type MemberNavigation, memberActionBlocks } from "./community-member-actions";
 import { deliverReviewReminder, exactThreadReplyTimestamp } from "./community-review-reminder";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { ReminderBatch, ReminderBatchFinish, ReminderJob } from "./community-types";
@@ -216,7 +216,8 @@ export async function sendReminderBatch(input: {
       .split("\n\n")
       .filter((value) => value.includes("<@"))
       .map((value) => ({ type: "section", text: { type: "mrkdwn", text: value } }));
-    if (input.memberActions) blocks.push(memberActionBlock(input.navigation));
+    if (input.memberActions)
+      blocks.push(...memberActionBlocks(input.navigation, batch.jobs[0]?.date));
     await callSlack(input.token, "chat.postMessage", {
       channel: input.channelId,
       text: deliverableText,
