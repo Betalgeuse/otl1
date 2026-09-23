@@ -76,8 +76,6 @@ export function bugQuestionPayload(
             questionId,
             packetRevision,
             answer: optionLabel(option),
-            thread: context.thread,
-            source: context.source,
           }),
         })),
       },

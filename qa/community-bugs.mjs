@@ -3065,8 +3065,6 @@ try {
       questionId: `${signedDraft.bugId}:q5:frequency`,
       packetRevision: 5,
       answer,
-      thread: eventTs,
-      source: `${timestamp}.000007`,
     })),
   );
   const impactPayload = bugQuestionPayload(
