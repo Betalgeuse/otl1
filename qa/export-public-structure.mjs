@@ -55,6 +55,7 @@ assert.equal(PUBLIC_QA_NAMES.includes("interest-retention-runtime-grants-pg.mjs"
 assert.equal(PUBLIC_QA_NAMES.includes("community-membership-store-error-code.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("welcome-invite-button.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("community-guide-export.mjs"), true);
+assert.equal(PUBLIC_QA_NAMES.includes("community-quick-entry.mjs"), true);
 assert.equal(PUBLIC_QA_NAMES.includes("real-name-storage.sql"), true);
 assert.throws(
   () =>
