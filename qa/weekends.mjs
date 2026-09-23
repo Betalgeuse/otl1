@@ -3,7 +3,7 @@ import { isKoreanPublicHoliday, isOptionalDay, isWeekend } from "../src/calendar
 import { buildBoard } from "../src/board.ts";
 import { unresolvedDays } from "../src/community-followup.ts";
 import { runCommunitySchedule } from "../src/community-scheduler.ts";
-import { koreaDate } from "../src/input.ts";
+import { koreaCalendarDate, koreaDate } from "../src/input.ts";
 
 assert.equal(isWeekend("2026-09-11"), false);
 assert.equal(isWeekend("2026-09-12"), true);
@@ -16,6 +16,7 @@ assert.equal(isKoreanPublicHoliday("2026-09-23"), false);
 assert.equal(isOptionalDay("2026-09-24"), true);
 assert.equal(koreaDate(Date.parse("2026-09-24T01:59:59+09:00") / 1000), "2026-09-23");
 assert.equal(koreaDate(Date.parse("2026-09-24T02:00:00+09:00") / 1000), "2026-09-24");
+assert.equal(koreaCalendarDate(Date.parse("2026-09-24T01:59:59+09:00") / 1000), "2026-09-24");
 const day = { teamId: "TQA", channelId: "CQA", userId: "UQA", goal: "optional goal", reflection: "", outcome: "pending", resting: false, revision: 1 };
 assert.equal(unresolvedDays([{ ...day, date: "2026-09-12" }, { ...day, date: "2026-09-13" }], "2026-09-14").length, 0);
 assert.equal(unresolvedDays([{ ...day, date: "2026-09-24" }], "2026-09-28").length, 0);

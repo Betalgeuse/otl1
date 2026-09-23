@@ -74,6 +74,10 @@ export function koreaDate(timestamp: number): string {
   return new Date(timestamp * 1000 + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+export function koreaCalendarDate(timestamp: number): string {
+  return new Date(timestamp * 1000 + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export const DEFAULT_PALETTE: Palette = {
   empty: "#EBEDF0",
   written: "#9BE9A8",
