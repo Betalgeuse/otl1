@@ -10,7 +10,7 @@ const release = await inspectWelcomeGuideSource({
   COMMUNITY_GUIDE_FILE_IDS: "FLOGO1,FDAILY2",
   GUIDE_ADMIN_DATABASE_URL: "unused",
 });
-assert.equal(release.version, "v0.0.60");
+assert.equal(release.version, "v0.0.61");
 assert.equal(release.origin, "repo");
 assert.equal(fetches, 0);
 assert.deepEqual(release.orderedFileIds, ["FLOGO1", "FDAILY2"]);

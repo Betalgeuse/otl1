@@ -20,6 +20,7 @@ const day = {
 const changes = [];
 const records = [];
 const garden = [];
+let currentDay = { ...day, goal: "", revision: 0 };
 const context = {
   env: {
     SLACK_TEAM_ID: "TQA",
@@ -42,12 +43,12 @@ const context = {
   scope: { teamId: "TQA", channelId: "CPUBLIC", userId: "UQA" },
   store: {
     async day() {
-      return day;
+      return currentDay;
     },
     async change(input) {
       changes.push(input);
       return {
-        day: { ...day, outcome: "complete", reflection: input.text, revision: 2 },
+        day: { ...currentDay, goal: input.text, revision: currentDay.revision + 1 },
         changed: true,
         conflict: false,
         firstGoal: false,
@@ -92,6 +93,58 @@ try {
   );
   assert.equal(JSON.parse(core.elements[0].value).date, "2026-09-23");
   assert.equal(navigation.elements.length, 4);
+
+  await openQuickEntryModal(context, "GOAL-TRIGGER", "goal");
+  const goalModal = calls.find((call) => call.method === "views.open").body.view;
+  assert.equal(goalModal.callback_id, "community_quick_goal_submit");
+  assert.equal(goalModal.blocks[1].block_id, "reason");
+  assert.equal(goalModal.blocks[1].label.text, "왜 중요한가요?");
+  const goalInput = parseQuickEntrySubmission({
+    private_metadata: goalModal.private_metadata,
+    state: {
+      values: {
+        text: { value: { value: "RAG 개념 층위를 나눠 정리하기" } },
+        reason: { value: { value: "인수인계 뒤 연구과제를 혼동 없이 이어가기 위해서" } },
+      },
+    },
+  });
+  assert.deepEqual(goalInput, {
+    kind: "goal",
+    date: "2026-09-23",
+    revision: 0,
+    text: "RAG 개념 층위를 나눠 정리하기",
+    reason: "인수인계 뒤 연구과제를 혼동 없이 이어가기 위해서",
+  });
+  assert.deepEqual(
+    parseQuickEntrySubmission({
+      private_metadata: goalModal.private_metadata,
+      state: {
+        values: {
+          text: { value: { value: "RAG 개념 층위를 나눠 정리하기" } },
+          reason: { value: { value: "" } },
+        },
+      },
+    }),
+    { errors: { reason: "중요한 이유를 1~500자로 적어 주세요." } },
+  );
+  calls.length = 0;
+  await submitQuickEntry(context, "GOAL-VIEW", goalInput);
+  const goalPost = calls.find((call) => call.method === "chat.postMessage");
+  assert.match(goalPost.body.text, /ONE THING.*RAG 개념 층위를 나눠 정리하기/s);
+  assert.match(goalPost.body.text, /사유: 인수인계 뒤 연구과제를 혼동 없이 이어가기 위해서/);
+  assert.deepEqual(records.find((record) => record.kind === "goal_reason").body, {
+    date: "2026-09-23",
+    goal: "RAG 개념 층위를 나눠 정리하기",
+    reason: "인수인계 뒤 연구과제를 혼동 없이 이어가기 위해서",
+    source: "1790090001.000002",
+    thread: context.thread,
+  });
+
+  calls.length = 0;
+  changes.length = 0;
+  records.length = 0;
+  garden.length = 0;
+  currentDay = day;
 
   await openQuickEntryModal(context, "TRIGGER", "review");
   const modal = calls.find((call) => call.method === "views.open").body.view;

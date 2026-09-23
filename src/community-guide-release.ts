@@ -1,8 +1,8 @@
 /** Reviewed, repo-owned welcome copy. Bump the version for every content change. */
 export const WELCOME_GUIDE_RELEASE = {
-  version: "v0.0.60",
+  version: "v0.0.61",
   body: `@channel
-OT1L v0.0.60 · welcome 가이드 업데이트
+OT1L v0.0.61 · welcome 가이드 업데이트
 
 OT1L (*ONE THING* 1 Line)에 오신 것을 환영합니다! Slack 채널 구조는 Toss를 차용했습니다.
 
@@ -15,7 +15,7 @@ OT1L (*ONE THING* 1 Line)에 오신 것을 환영합니다! Slack 채널 구조�
   ◦ 오늘 안에 끝낼 만큼 작고, 완료 여부가 분명한 문장으로 적으면 실행하기 쉬워집니다.
   ◦ 예: \`발표 자료 준비하기\`보다 \`발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기\`
   ◦ SET: 한 가지를 정하고, DO: 다른 일보다 먼저 실행하고, REVIEW: 완료 상태와 후기를 남깁니다.
-  ◦ 안내 아래의 *ONE THING 기록하기*와 *후기 남기기* 버튼을 눌러도 됩니다. 입력한 내용은 봇이 본인을 표시해 같은 대화에 올리고, 리액션과 잔디까지 이어서 보여줍니다.
+  ◦ 안내 아래의 *ONE THING 기록하기*와 *후기 남기기* 버튼을 눌러도 됩니다. 목표는 실행 문장과 중요한 이유를 나누어 적습니다. 입력한 내용은 봇이 본인을 표시해 같은 대화에 올리고, 리액션과 잔디까지 이어서 보여줍니다.
   ◦ 이전 날짜에 후기나 완료 상태가 빠졌다면 잔디 아래의 날짜별 *후기 기록하기* 버튼이나 빠른 메뉴의 *밀린 후기 기록하기*를 눌러 상태와 후기를 한 번에 정리할 수 있습니다.
 
 • Main (Just 1 thing!)

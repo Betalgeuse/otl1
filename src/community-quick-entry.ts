@@ -14,7 +14,7 @@ type QuickEntryBinding = {
 };
 
 type QuickEntryInput =
-  | (QuickEntryBinding & { readonly kind: "goal" })
+  | (QuickEntryBinding & { readonly kind: "goal"; readonly reason: string })
   | (QuickEntryBinding & {
       readonly kind: "review";
       readonly outcome: Exclude<Outcome, "pending">;
@@ -65,6 +65,28 @@ function textInput(kind: QuickEntryKind, initialValue: string): Json {
           kind === "goal"
             ? "예: 발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기"
             : "예: 개념 층위를 나눠 정리하니 다음 작업이 분명해졌다.",
+      },
+    },
+  };
+}
+
+function reasonInput(): Json {
+  return {
+    type: "input",
+    block_id: "reason",
+    label: { type: "plain_text", text: "왜 중요한가요?" },
+    hint: {
+      type: "plain_text",
+      text: "이걸 해내면 무엇이 더 쉬워지거나 필요 없어지는지 적어 주세요.",
+    },
+    element: {
+      type: "plain_text_input",
+      action_id: "value",
+      multiline: true,
+      max_length: 500,
+      placeholder: {
+        type: "plain_text",
+        text: "예: 다음 의사결정에 필요한 근거를 오늘 확보해야 해서",
       },
     },
   };
@@ -126,6 +148,7 @@ export async function openQuickEntryModal(
             ]
           : []),
         textInput(kind, kind === "goal" ? day.goal : day.reflection),
+        ...(kind === "goal" ? [reasonInput()] : []),
       ],
     },
   });
@@ -145,16 +168,25 @@ export function parseQuickEntrySubmission(
       binding.kind === "goal"
         ? "ONE THING은 1~200자로 적어 주세요."
         : "후기는 1~2000자로 적어 주세요.";
-  if (binding.kind === "goal")
+  if (binding.kind === "goal") {
+    const reason = string(object(object(values.reason).value).value).trim();
+    if (!reason || [...reason].length > 500) errors.reason = "중요한 이유를 1~500자로 적어 주세요.";
     return Object.keys(errors).length
       ? { errors }
-      : { kind: "goal", date: binding.date, revision: binding.revision, text };
+      : { kind: "goal", date: binding.date, revision: binding.revision, text, reason };
+  }
   const selected = string(object(object(object(values.outcome).value).selected_option).value);
   if (!["complete", "partial", "not_done"].includes(selected))
     errors.outcome = "완료 상태를 골라 주세요.";
   if (Object.keys(errors).length) return { errors };
   const outcome = selected === "complete" || selected === "partial" ? selected : "not_done";
-  return { ...binding, text, outcome };
+  return {
+    kind: "review",
+    date: binding.date,
+    revision: binding.revision,
+    text,
+    outcome,
+  };
 }
 
 export async function submitQuickEntry(
@@ -180,7 +212,7 @@ export async function submitQuickEntry(
     {
       text:
         input.kind === "goal"
-          ? `<@${context.scope.userId}> · 오늘의 *ONE THING*\n${escapeSlackText(input.text)}`
+          ? `<@${context.scope.userId}> · 오늘의 *ONE THING*\n*ONE THING*: ${escapeSlackText(input.text)}\n사유: ${escapeSlackText(input.reason)}`
           : `<@${context.scope.userId}> · ${input.date} *ONE THING* 후기 · ${label}\n${escapeSlackText(input.text)}`,
     },
   );
@@ -212,4 +244,17 @@ export async function submitQuickEntry(
           outcome: input.outcome,
         },
   );
+  if (input.kind === "goal")
+    await context.store.putRecord({
+      ...context.scope,
+      key: `goal-reason:${viewId}`,
+      kind: "goal_reason",
+      body: {
+        date: input.date,
+        goal: input.text,
+        reason: input.reason,
+        source: messageTs,
+        thread: context.thread,
+      },
+    });
 }
