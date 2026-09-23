@@ -130,7 +130,8 @@ export const BUG_FIELD_ORDER = [
 export const BUG_FREE_QUESTIONS = {
   actual: "실제로 어떤 일이 일어났나요? 화면에 보인 문구도 그대로 알려주세요.",
   expected: "원래는 어떤 결과가 나와야 했나요?",
-  steps: "문제가 생기기 직전까지 한 동작을 두 단계 이상 순서대로 알려주세요.",
+  steps:
+    "문제가 보이기 직전에 한 동작이나 자동 실행이 있었나요? 사용자 동작이 없었다면 그렇게 알려주세요.",
   location: "어느 화면이나 기능에서 문제가 생겼나요?",
   occurredAt: "문제가 생긴 시각을 알려주세요.",
 } as const;

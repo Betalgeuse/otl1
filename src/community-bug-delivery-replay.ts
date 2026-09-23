@@ -1,3 +1,4 @@
+import { findActiveBugDraftForContext } from "./community-bug-context";
 import { deliverBugQuestion, questionDeliveryFromRead } from "./community-bug-delivery";
 import { CommunityBugDueDeliveryStore } from "./community-bug-delivery-due-store";
 import {
@@ -13,11 +14,7 @@ import { NeonStore } from "./store";
 
 export async function replayBugDelivery(context: CommunityContext): Promise<boolean> {
   const store = new CommunityBugStore(new NeonStore(context.env.DATABASE_URL));
-  const draft = await store.findActiveDraft({
-    teamId: context.scope.teamId,
-    reporterId: context.scope.userId,
-    sourceOpaqueRef: `slack:${context.scope.teamId}:${context.scope.channelId}:${context.thread}`,
-  });
+  const draft = await findActiveBugDraftForContext(store, context);
   if (!draft) return false;
   if (
     draft.state === "private_incident" ||

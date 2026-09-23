@@ -1,5 +1,6 @@
 import { restoreUnseenBugQuestion } from "./community-bug-answer-guard";
 import { armBugDeliveryClock } from "./community-bug-clock-client";
+import { findActiveBugDraftForContext } from "./community-bug-context";
 import { bugQuestionTemplate, deliverBugQuestion } from "./community-bug-delivery";
 import {
   deliverBugReceipt,
@@ -32,11 +33,7 @@ export async function continueBugReport(
 ): Promise<boolean> {
   if (context.thread === context.source && expectedQuestionId === undefined) return false;
   const store = new CommunityBugStore(new NeonStore(context.env.DATABASE_URL));
-  const active = await store.findActiveDraft({
-    teamId: context.scope.teamId,
-    reporterId: context.scope.userId,
-    sourceOpaqueRef: `slack:${context.scope.teamId}:${context.scope.channelId}:${context.thread}`,
-  });
+  const active = await findActiveBugDraftForContext(store, context);
   if (!active) return false;
   if (
     active.needsInfoStartedAt &&

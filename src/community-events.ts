@@ -25,7 +25,7 @@ import { callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
 import { welcomeTownhallMember } from "./community-welcome";
 import { InputError, koreaDate, object, string } from "./input";
-import { messageEvent } from "./slack-message-event";
+import { communityEditRelevant, messageEvent } from "./slack-message-event";
 import { NeonStore } from "./store";
 
 export async function handleCommunityEvent(
@@ -260,7 +260,7 @@ export async function handleCommunityEvent(
     return true;
   }
   try {
-    if (event.edit_ts && !/후기|회고|수정|정정|변경/.test(text)) {
+    if (!communityEditRelevant(event.edit_ts, isFeedbackChannel && thread !== source, text)) {
       await store.finishRecord({ ...scope, key }, "sent");
       return true;
     }

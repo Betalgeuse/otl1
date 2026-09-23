@@ -357,6 +357,18 @@ async function runCases() {
   const first = await advanceBugDialogue(
     base([message("m", "저장이 안 돼요")], [span("actual", "m", "저장이 안 돼요")]),
   );
+  const mismatchMessages = [
+    message("ma", "자기소개 Canvas와 프로필 이름이 서로 안 맞아요"),
+    message("me", "자기소개를 갱신해도 같은 이름이 보여야 해요"),
+  ];
+  const mismatch = await advanceBugDialogue(
+    base(mismatchMessages, [
+      span("actual", "ma", mismatchMessages[0].text),
+      span("expected", "me", mismatchMessages[1].text),
+    ]),
+  );
+  assert.equal(mismatch.status, "needs_info");
+  assert.equal(mismatch.question.field, "frequency");
   const resumed = await advanceBugDialogue(
     JSON.parse(
       JSON.stringify(

@@ -423,7 +423,10 @@ globalThis.fetch = async (url, options) => {
         (item) =>
           item.teamId === input.teamId &&
           item.reporterId === input.reporterId &&
-          item.source.opaqueRef === input.sourceOpaqueRef &&
+          ((input.sourceOpaqueRef && item.source.opaqueRef === input.sourceOpaqueRef) ||
+            (!input.sourceOpaqueRef &&
+              item.source.channelId === input.sourceChannelId &&
+              item.source.thread === input.sourceThread)) &&
           ["new", "needs_info", "needs_info_exhausted"].includes(item.state),
       );
       return Response.json({ rows: [[JSON.stringify(row ?? null)]] });
@@ -2021,10 +2024,35 @@ try {
   );
   assert.equal(routedReplies.length, 2, "question and analysis stay in the feedback thread");
   assert.match(routedReplies[0].body.text, /<@UMEMBER>/, "the next question mentions its reporter");
-  const routedDraft = [...bugRows.values()].find(
-    (row) => row.source.channelId === "CFEEDBACK" && row.source.thread === feedbackThread,
-  );
+  const routedBugId = /버그 키: (BUG-[A-Z0-9]+)/.exec(feedbackRoot.body.text)?.[1];
+  const routedDraft = routedBugId ? bugRows.get(routedBugId) : undefined;
   assert.notEqual(routedDraft, undefined, "the canonical feedback thread is the dialogue source");
+  assert.deepEqual(
+    [routedDraft.source.channelId, routedDraft.source.thread],
+    ["CFEEDBACK", feedbackThread],
+  );
+  const routedQuestion = routedDraft.questions.find((question) => !question.answered);
+  assert.equal(
+    routedQuestion.fieldName,
+    "frequency",
+    "a transient data mismatch asks about recurrence before generic reproduction steps",
+  );
+  assert.equal(
+    await continueBugReport(
+      {
+        ...context,
+        scope: { ...context.scope, channelId: "CFEEDBACK" },
+        source: "29.000003",
+        thread: feedbackThread,
+        key: "incoming:29.000003",
+      },
+      "한 번",
+      routedQuestion.questionId,
+    ),
+    true,
+    "a reply in the canonical feedback thread resumes its routed draft",
+  );
+  assert.equal(routedQuestion.answered, true);
 
   calls.length = 0;
   const fullSubmission = {

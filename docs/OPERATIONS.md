@@ -126,6 +126,8 @@ Slack delivery 실패 로그의 `providerSubcode`는 `invalid_blocks`, `invalid_
 
 Slack workspace admin 또는 owner가 명세를 승인하면 같은 스레드에서 Codex 앱을 호출합니다. Codex는 문서 원본을 읽고 별도 `feedback/...` 브랜치와 draft PR까지만 만들며 자동 머지는 하지 않습니다. GitHub Actions는 사용하지 않습니다.
 
+피드백 채널로 정규화된 초안은 opaque intake key와 함께 실제 `source_channel_id`·`source_thread`로도 다시 찾습니다. 따라서 새 피드백 스레드의 일반 댓글도 답변으로 이어집니다. 확인 질문은 고정 필드 순서만 따르지 않습니다. 데이터 불일치·중복·Canvas·프로필 문제는 재현 단계보다 발생 빈도와 시각을 먼저 확인하고, 사용자 동작이 없는 자동 실행 문제에는 두 단계 입력을 강요하지 않습니다.
+
 pre-release QA 배포는 기존 Worker의 승인된 검증 시나리오에만 쓰며 exact clean SHA와 rollback 대상을 기록합니다. Git push·merge·release·provider 권한은 포함하지 않습니다. 정식 배포는 private `ops/main`과 활성 ruleset readback이 준비된 뒤 별도 실행합니다.
 
 ## 장애와 알려진 경계
