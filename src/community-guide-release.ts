@@ -1,8 +1,8 @@
 /** Reviewed, repo-owned welcome copy. Bump the version for every content change. */
 export const WELCOME_GUIDE_RELEASE = {
-  version: "v0.0.58",
+  version: "v0.0.59",
   body: `@channel
-OT1L v0.0.58 · welcome 가이드 업데이트
+OT1L v0.0.59 · welcome 가이드 업데이트
 
 OT1L (*ONE THING* 1 Line)에 오신 것을 환영합니다! Slack 채널 구조는 Toss를 차용했습니다.
 
