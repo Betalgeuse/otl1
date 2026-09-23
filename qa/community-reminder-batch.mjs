@@ -38,7 +38,7 @@ try {
   };
   assert.equal(await sendReminderBatch({ token: "token", teamId: "TQA", channelId: "CPUBLIC", now: "2026-09-17T09:00:00Z", reviewThreadV2: true, memberActions: true, navigation: { guideUrl: "https://example.slack.com/docs/TQA/FGUIDE01", introductionUrl: "https://example.slack.com/docs/TQA/FINTRO01" }, store: threadedGoalStore }), 1);
   assert.equal(goalReply.thread_ts, "123.000");
-  assert.deepEqual(goalReply.blocks.at(-1).elements.map((element) => element.text.text), ["사용설명서 보기", "자기소개 쓰기", "자기소개 모두 보기", "지난 후기 정리", "친구 초대하기"]);
+  assert.deepEqual(goalReply.blocks.at(-1).elements.map((element) => element.text.text), ["사용설명서 보기", "자기소개 쓰기", "자기소개 모두 보기", "밀린 후기 기록하기", "친구 초대하기"]);
 
   let acceptedText = "";
   let posts = 0;

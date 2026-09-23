@@ -87,7 +87,7 @@ try {
   assert.match(sent[1].text, /선택|멘션 없이/);
   assert.match(sent[0].text, /오늘 안에 끝낼 만큼 작고, 완료 여부가 분명한/);
   assert.match(sent[1].text, /발표 자료 준비하기.*발표 자료 1~5쪽 초안을 완성해 동료에게 공유하기/s);
-  assert.deepEqual(sent[0].blocks.at(-1).elements.map((element) => element.text.text), ["사용설명서 보기", "자기소개 쓰기", "자기소개 모두 보기", "지난 후기 정리", "친구 초대하기"]);
+  assert.deepEqual(sent[0].blocks.at(-1).elements.map((element) => element.text.text), ["사용설명서 보기", "자기소개 쓰기", "자기소개 모두 보기", "밀린 후기 기록하기", "친구 초대하기"]);
   assert.equal(dueCalls, 0);
   await runCommunitySchedule(env, store, new Date("2026-09-14T01:00:00Z"));
   assert.equal(sent.length, 3);
