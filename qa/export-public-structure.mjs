@@ -35,6 +35,11 @@ assert.deepEqual(PUBLIC_RUNTIME_MIGRATION_PATHS, [
   "migrations/040_real_name_introductions.sql",
   "migrations/041_interest_retention_runtime_grants.sql",
   "migrations/042_instant_shared_invite_join.sql",
+  "migrations/043_member_review_garden_route.sql",
+  "migrations/044_member_goal_garden_route.sql",
+  "migrations/046_first_goal_season.sql",
+  "migrations/047_join_member_season_identity.sql",
+  "migrations/048_bug_three_question_limit.sql",
 ]);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-lifecycle-admin-db-role.mjs"), true);
 assert.equal(PUBLIC_COPY_PATHS.includes("scripts/bootstrap-referral-admin-db-role.mjs"), true);
