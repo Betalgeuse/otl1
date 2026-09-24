@@ -160,13 +160,20 @@ export async function startCodexFeedback(
   const codexId = context.env.COMMUNITY_CODEX_USER_ID;
   if (!codexId || !/^[UW][A-Z0-9]+$/.test(codexId))
     throw new InputError("Codex 연결을 확인해 주세요.");
+  const operatorId = context.env.COMMUNITY_OPERATOR_USER_ID;
+  const operatorToken = context.env.SLACK_OPERATOR_USER_TOKEN;
+  if (!operatorId || !/^[UW][A-Z0-9]+$/.test(operatorId) || !operatorToken)
+    throw new InputError("Codex 운영 계정 연결을 확인해 주세요.");
+  const operatorAuth = object(await callSlack(operatorToken, "auth.test", {}));
+  if (operatorAuth.team_id !== context.scope.teamId || operatorAuth.user_id !== operatorId)
+    throw new InputError("Codex 운영 계정 토큰이 일치하지 않아요.");
   const alias = input.publicAlias
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   const branch = `feedback/${alias || input.feedbackId.toLowerCase()}`;
   const source = `https://app.slack.com/client/${context.scope.teamId}/${input.sourceChannel}/thread/${input.sourceChannel}-${input.sourceThread}`;
-  await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
+  await callSlack(operatorToken, "chat.postMessage", {
     channel: context.scope.channelId,
     thread_ts: context.thread,
     text: `<@${codexId}> 관리자 승인 완료. ${input.feedbackId} 작업을 시작해 주세요.\n- ${FEEDBACK_DOC_CONTRACT.sources.join(", ")}를 먼저 읽고 현재 명세와 피드백을 대조하세요.\n- 원문 스레드: ${source}\n- 별도 브랜치: \`${branch}\`\n- 테스트·타입·린트·빌드를 실행하고 draft PR을 만드세요.\n- 자동 머지는 금지합니다. PR 링크와 남은 위험을 이 스레드에 답해주세요.`,

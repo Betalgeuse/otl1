@@ -43,6 +43,8 @@ export type CommunityEnv = {
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
   readonly COMMUNITY_FEEDBACK_CHANNEL_ID?: string;
   readonly COMMUNITY_CODEX_USER_ID?: string;
+  readonly COMMUNITY_OPERATOR_USER_ID?: string;
+  readonly SLACK_OPERATOR_USER_TOKEN?: string;
   readonly COMMUNITY_SHAREINFO_CHANNEL_ID?: string;
   readonly COMMUNITY_CHAPTER_CHANNEL_IDS?: string;
   readonly COMMUNITY_RELEASE_CHANNEL_ID?: string;

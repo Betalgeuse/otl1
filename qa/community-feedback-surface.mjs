@@ -39,13 +39,17 @@ assert.deepEqual(
 );
 
 const calls = [];
+let operatorAuthUserId = "UOPERATOR";
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url, options = {}) => {
   const method = new URL(url).pathname.split("/").at(-1);
   const body = options.body ? JSON.parse(options.body) : null;
-  calls.push({ method, body });
+  const authorization = options.headers?.Authorization ?? options.headers?.authorization ?? "";
+  calls.push({ method, body, authorization });
   if (method === "users.info")
     return Response.json({ ok: true, user: { id: "UADMIN", is_admin: true, is_owner: false } });
+  if (method === "auth.test")
+    return Response.json({ ok: true, team_id: "TQA", user_id: operatorAuthUserId });
   if (method === "chat.postMessage") return Response.json({ ok: true, ts: "123.456" });
   throw new Error(`unexpected ${method}`);
 };
@@ -80,7 +84,9 @@ try {
     {
       env: {
         SLACK_BOT_TOKEN: "fake",
+        SLACK_OPERATOR_USER_TOKEN: "xoxp-operator",
         COMMUNITY_CODEX_USER_ID: "UCODEX",
+        COMMUNITY_OPERATOR_USER_ID: "UOPERATOR",
         COMMUNITY_FEEDBACK_CHANNEL_ID: "CFEEDBACK",
       },
       scope: { teamId: "TQA", channelId: "CFEEDBACK", userId: "UADMIN" },
@@ -104,6 +110,36 @@ try {
   assert.match(post.body.text, /<@UCODEX>/);
   assert.match(post.body.text, /feedback\/b-1234/);
   assert.match(post.body.text, /draft PR/);
+  assert.equal(post.authorization, "Bearer xoxp-operator");
+  assert.equal(calls.find((call) => call.method === "users.info")?.authorization, "Bearer fake");
+  operatorAuthUserId = "UOTHER";
+  const postsBeforeMismatch = calls.filter((call) => call.method === "chat.postMessage").length;
+  await assert.rejects(
+    () =>
+      startCodexFeedback(
+        {
+          env: {
+            SLACK_BOT_TOKEN: "fake",
+            SLACK_OPERATOR_USER_TOKEN: "xoxp-operator",
+            COMMUNITY_CODEX_USER_ID: "UCODEX",
+            COMMUNITY_OPERATOR_USER_ID: "UOPERATOR",
+          },
+          scope: { teamId: "TQA", channelId: "CFEEDBACK", userId: "UADMIN" },
+          thread: "123.100",
+        },
+        {
+          feedbackId: "BUG-MISMATCH",
+          publicAlias: "mismatch",
+          sourceChannel: "CORIGIN",
+          sourceThread: "111.222",
+        },
+      ),
+    /토큰이 일치하지 않아요/,
+  );
+  assert.equal(
+    calls.filter((call) => call.method === "chat.postMessage").length,
+    postsBeforeMismatch,
+  );
   console.log(
     "PASS feedback surface: every channel bot post gets intake, 18:00 is due, admin starts scoped Codex handoff",
   );

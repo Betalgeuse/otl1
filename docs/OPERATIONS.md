@@ -124,7 +124,7 @@ Cron 등록이 실제로 stale이라는 Cloudflare 설정·호출 증거가 있�
 
 Slack delivery 실패 로그의 `providerSubcode`는 `invalid_blocks`, `invalid_arguments`, `invalid_form_data`, `msg_too_long`, `http_429`, `provider_5xx`, `other` 중 하나만 남깁니다. 원문 응답, 메타데이터 메시지, 사용자 입력은 로그나 delivery ledger에 저장하지 않습니다.
 
-Slack workspace admin 또는 owner가 명세를 승인하면 같은 스레드에서 Codex 앱을 호출합니다. Codex는 문서 원본을 읽고 별도 `feedback/...` 브랜치와 draft PR까지만 만들며 자동 머지는 하지 않습니다. GitHub Actions는 사용하지 않습니다.
+Slack workspace admin 또는 owner가 명세를 승인하면 `auth.test`로 확인한 전용 운영 사용자 토큰이 같은 스레드에서 Codex 앱을 호출합니다. Codex는 문서 원본을 읽고 별도 `feedback/...` 브랜치와 draft PR까지만 만들며 자동 머지는 하지 않습니다. GitHub Actions는 사용하지 않습니다.
 
 피드백 채널로 정규화된 초안은 opaque intake key와 함께 실제 `source_channel_id`·`source_thread`로도 다시 찾습니다. 따라서 새 피드백 스레드의 일반 댓글도 답변으로 이어집니다. 확인 질문은 고정 필드 순서만 따르지 않습니다. 데이터 불일치·중복·Canvas·프로필 문제는 재현 단계보다 발생 빈도와 시각을 먼저 확인하고, 사용자 동작이 없는 자동 실행 문제에는 두 단계 입력을 강요하지 않습니다.
 
