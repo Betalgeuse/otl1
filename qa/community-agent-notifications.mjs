@@ -56,6 +56,8 @@ try {
   assert.equal(post.body.thread_ts, "1790252981.933479");
   assert.match(post.body.text, /<@UADMIN> <@UREPORTER>/);
   assert.match(post.body.text, /입력 경계를 수정하고 회귀 검사를 통과했습니다/);
+  assert.doesNotMatch(post.body.text, /github[.]com/);
+  assert.doesNotMatch(post.body.text, /chatgpt[.]com/);
   const reactionMethods = calls
     .filter((call) => call.url.includes("reactions."))
     .map((call) => new URL(call.url).pathname.split("/").at(-1));
