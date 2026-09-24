@@ -46,11 +46,20 @@ export async function handleBugAction(
   waitUntil: WaitUntil,
 ): Promise<Response | null> {
   if (id === "community_feedback_admin_start") {
+    const packetRevision = value.packetRevision;
+    if (
+      typeof packetRevision !== "number" ||
+      !Number.isSafeInteger(packetRevision) ||
+      packetRevision < 1
+    )
+      throw new InputError("버그 제보 버전을 확인할 수 없어요.");
     await startCodexFeedback(context, {
       feedbackId: string(value.feedbackId),
       publicAlias: string(value.publicAlias),
       sourceChannel: string(value.sourceChannel),
       sourceThread: string(value.sourceThread),
+      reporterId: string(value.reporterId),
+      packetRevision,
     });
     return new Response(null, { status: 200 });
   }

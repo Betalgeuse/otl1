@@ -1,8 +1,10 @@
+import { sha256Hex } from "./community-referral-service-auth";
 import { type CommunityContext, type CommunityEnv, post } from "./community-runtime";
 import { callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
-import { InputError, object } from "./input";
+import { InputError, object, string } from "./input";
 import { INTENT_MODEL, type IntentAI } from "./intent";
+import { NeonStore } from "./store";
 
 export const FEEDBACK_DOC_CONTRACT = {
   sources: [
@@ -149,6 +151,8 @@ export async function startCodexFeedback(
     readonly publicAlias: string;
     readonly sourceChannel: string;
     readonly sourceThread: string;
+    readonly reporterId: string;
+    readonly packetRevision: number;
   },
 ): Promise<void> {
   const profile = object(
@@ -157,26 +161,52 @@ export async function startCodexFeedback(
   const user = object(profile.user);
   if (user.is_admin !== true && user.is_owner !== true)
     throw new InputError("Slack 관리자만 Codex 작업을 시작할 수 있어요.");
-  const codexId = context.env.COMMUNITY_CODEX_USER_ID;
-  if (!codexId || !/^[UW][A-Z0-9]+$/.test(codexId))
-    throw new InputError("Codex 연결을 확인해 주세요.");
-  const operatorId = context.env.COMMUNITY_OPERATOR_USER_ID;
-  const operatorToken = context.env.SLACK_OPERATOR_USER_TOKEN;
-  if (!operatorId || !/^[UW][A-Z0-9]+$/.test(operatorId) || !operatorToken)
-    throw new InputError("Codex 운영 계정 연결을 확인해 주세요.");
-  const operatorAuth = object(await callSlack(operatorToken, "auth.test", {}));
-  if (operatorAuth.team_id !== context.scope.teamId || operatorAuth.user_id !== operatorId)
-    throw new InputError("Codex 운영 계정 토큰이 일치하지 않아요.");
-  const alias = input.publicAlias
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  const branch = `feedback/${alias || input.feedbackId.toLowerCase()}`;
-  const source = `https://app.slack.com/client/${context.scope.teamId}/${input.sourceChannel}/thread/${input.sourceChannel}-${input.sourceThread}`;
-  await callSlack(operatorToken, "chat.postMessage", {
+  if (context.env.BUG_RUNNER_ENABLED !== "true")
+    throw new InputError("GenQuant 자동 작업은 아직 준비 중이에요.");
+  const repository = context.env.COMMUNITY_CODEX_REPOSITORY;
+  const branch = context.env.COMMUNITY_CODEX_BRANCH;
+  if (!repository || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || !branch)
+    throw new InputError("GenQuant 작업 저장소 연결을 확인해 주세요.");
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/commits/${encodeURIComponent(branch)}`,
+    {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "otl1-worker" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  if (!response.ok) throw new InputError("작업 기준 브랜치를 확인하지 못했어요.");
+  const baseSha = string(object(await response.json()).sha);
+  if (!/^[a-f0-9]{40,64}$/.test(baseSha))
+    throw new InputError("작업 기준 SHA를 확인하지 못했어요.");
+  const approvalReceipt = await sha256Hex(
+    `${context.scope.teamId}:${context.scope.userId}:${input.feedbackId}:${input.packetRevision}:${baseSha}`,
+  );
+  const queued = object(
+    await new NeonStore(context.env.DATABASE_URL).queryJson(
+      "SELECT otl.bug_admin_queue($1::jsonb)",
+      [
+        JSON.stringify({
+          teamId: context.scope.teamId,
+          bugId: input.feedbackId,
+          reporterId: input.reporterId,
+          adminId: context.scope.userId,
+          packetRevision: input.packetRevision,
+          baseSha,
+          approvalReceipt,
+          idempotencyKey: `admin-queue:${input.feedbackId}:${input.packetRevision}:${baseSha}`,
+        }),
+      ],
+    ),
+  );
+  if (queued.accepted !== true)
+    throw new InputError(
+      "확정된 버그 명세만 자동 작업에 넣을 수 있어요. 스레드에서 명세를 먼저 보완해 주세요.",
+    );
+  await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
     channel: context.scope.channelId,
     thread_ts: context.thread,
-    text: `<@${codexId}> 관리자 승인 완료. ${input.feedbackId} 작업을 시작해 주세요.\n- ${FEEDBACK_DOC_CONTRACT.sources.join(", ")}를 먼저 읽고 현재 명세와 피드백을 대조하세요.\n- 원문 스레드: ${source}\n- 별도 브랜치: \`${branch}\`\n- 테스트·타입·린트·빌드를 실행하고 draft PR을 만드세요.\n- 자동 머지는 금지합니다. PR 링크와 남은 위험을 이 스레드에 답해주세요.`,
+    text: `관리자 승인 완료 · ${input.feedbackId}\nGenQuant 작업 대기열에 등록했어요. 실행 시작과 재현 결과는 이 스레드에 이어서 알려드릴게요. 자동 병합은 하지 않습니다.`,
   });
 }
 
@@ -218,6 +248,8 @@ export async function postFeedbackAdminReview(
                 publicAlias: input.feedbackId,
                 sourceChannel: context.scope.channelId,
                 sourceThread: context.thread,
+                reporterId: context.scope.userId,
+                packetRevision: input.packetRevision,
               }),
             },
           ],

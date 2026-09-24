@@ -39,17 +39,28 @@ assert.deepEqual(
 );
 
 const calls = [];
-let operatorAuthUserId = "UOPERATOR";
+let queueAccepted = true;
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url, options = {}) => {
-  const method = new URL(url).pathname.split("/").at(-1);
+  const parsedUrl = new URL(url);
+  const method = parsedUrl.pathname.split("/").at(-1);
   const body = options.body ? JSON.parse(options.body) : null;
   const authorization = options.headers?.Authorization ?? options.headers?.authorization ?? "";
   calls.push({ method, body, authorization });
   if (method === "users.info")
     return Response.json({ ok: true, user: { id: "UADMIN", is_admin: true, is_owner: false } });
-  if (method === "auth.test")
-    return Response.json({ ok: true, team_id: "TQA", user_id: operatorAuthUserId });
+  if (parsedUrl.hostname === "api.github.com") return Response.json({ sha: "a".repeat(40) });
+  if (method === "sql")
+    return Response.json({
+      rows: [
+        [
+          JSON.stringify({
+            accepted: queueAccepted,
+            state: queueAccepted ? "queued" : "needs_info_exhausted",
+          }),
+        ],
+      ],
+    });
   if (method === "chat.postMessage") return Response.json({ ok: true, ts: "123.456" });
   throw new Error(`unexpected ${method}`);
 };
@@ -87,10 +98,12 @@ try {
   await startCodexFeedback(
     {
       env: {
+        DATABASE_URL:
+          "postgresql://runtime:secret@ep-example-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
         SLACK_BOT_TOKEN: "fake",
-        SLACK_OPERATOR_USER_TOKEN: "xoxp-operator",
-        COMMUNITY_CODEX_USER_ID: "UCODEX",
-        COMMUNITY_OPERATOR_USER_ID: "UOPERATOR",
+        BUG_RUNNER_ENABLED: "true",
+        COMMUNITY_CODEX_REPOSITORY: "Betalgeuse/otl1",
+        COMMUNITY_CODEX_BRANCH: "main",
         COMMUNITY_FEEDBACK_CHANNEL_ID: "CFEEDBACK",
       },
       scope: { teamId: "TQA", channelId: "CFEEDBACK", userId: "UADMIN" },
@@ -105,28 +118,33 @@ try {
       publicAlias: "B-1234",
       sourceChannel: "CORIGIN",
       sourceThread: "111.222",
+      reporterId: "UREPORTER",
+      packetRevision: 2,
     },
   );
   const post = calls.find(
-    (call) => call.method === "chat.postMessage" && call.body.text.includes("<@UCODEX>"),
+    (call) => call.method === "chat.postMessage" && call.body.text.includes("GenQuant 작업 대기열"),
   );
   assert.equal(post.body.thread_ts, "123.100");
-  assert.match(post.body.text, /<@UCODEX>/);
-  assert.match(post.body.text, /feedback\/b-1234/);
-  assert.match(post.body.text, /draft PR/);
-  assert.equal(post.authorization, "Bearer xoxp-operator");
+  assert.match(post.body.text, /자동 병합은 하지 않습니다/);
+  assert.equal(post.authorization, "Bearer fake");
   assert.equal(calls.find((call) => call.method === "users.info")?.authorization, "Bearer fake");
-  operatorAuthUserId = "UOTHER";
+  const queueCall = calls.find((call) => call.method === "sql");
+  assert.match(queueCall.body.params[0], /"reporterId":"UREPORTER"/);
+  assert.match(queueCall.body.params[0], new RegExp(`"baseSha":"${"a".repeat(40)}"`));
+  queueAccepted = false;
   const postsBeforeMismatch = calls.filter((call) => call.method === "chat.postMessage").length;
   await assert.rejects(
     () =>
       startCodexFeedback(
         {
           env: {
+            DATABASE_URL:
+              "postgresql://runtime:secret@ep-example-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
             SLACK_BOT_TOKEN: "fake",
-            SLACK_OPERATOR_USER_TOKEN: "xoxp-operator",
-            COMMUNITY_CODEX_USER_ID: "UCODEX",
-            COMMUNITY_OPERATOR_USER_ID: "UOPERATOR",
+            BUG_RUNNER_ENABLED: "true",
+            COMMUNITY_CODEX_REPOSITORY: "Betalgeuse/otl1",
+            COMMUNITY_CODEX_BRANCH: "main",
           },
           scope: { teamId: "TQA", channelId: "CFEEDBACK", userId: "UADMIN" },
           thread: "123.100",
@@ -136,16 +154,18 @@ try {
           publicAlias: "mismatch",
           sourceChannel: "CORIGIN",
           sourceThread: "111.222",
+          reporterId: "UREPORTER",
+          packetRevision: 2,
         },
       ),
-    /토큰이 일치하지 않아요/,
+    /확정된 버그 명세만 자동 작업에 넣을 수 있어요/,
   );
   assert.equal(
     calls.filter((call) => call.method === "chat.postMessage").length,
     postsBeforeMismatch,
   );
   console.log(
-    "PASS feedback surface: every channel bot post gets intake, 18:00 is due, admin starts scoped Codex handoff",
+    "PASS feedback surface: every channel bot post gets intake, 18:00 is due, admin queues a SHA-bound GenQuant handoff",
   );
 } finally {
   globalThis.fetch = originalFetch;

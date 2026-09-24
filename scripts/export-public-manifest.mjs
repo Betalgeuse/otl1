@@ -8,6 +8,7 @@ export const PUBLIC_COPY_PATHS = [
   "package.json",
   "docs/vendor/im-not-ai",
   "automation",
+  "ops/genquant",
   "migrations/001_initial.sql",
   "migrations/005_community.sql",
   "migrations/007_normalized_legacy.sql",
@@ -49,6 +50,7 @@ export const PUBLIC_COPY_PATHS = [
   "scripts/bootstrap-guide-db-roles.mjs",
   "scripts/bootstrap-lifecycle-admin-db-role.mjs",
   "scripts/bootstrap-referral-admin-db-role.mjs",
+  "scripts/bootstrap-bug-runner-db-role.mjs",
 ];
 
 export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
@@ -66,6 +68,7 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/046_first_goal_season.sql",
   "migrations/047_join_member_season_identity.sql",
   "migrations/048_bug_three_question_limit.sql",
+  "migrations/049_bug_runner_handoff.sql",
 ];
 
 // `src` and `site` are copied as directories, but these paths keep the membership
@@ -110,6 +113,9 @@ export const PUBLIC_QA_NAMES = [
   "past-review-modal.mjs",
   "community-quick-entry.mjs",
   "community-feedback-surface.mjs",
+  "community-agent-notifications.mjs",
+  "genquant-runner-contract.mjs",
+  "bug-runner-bootstrap.mjs",
   "community-questions.mjs",
   "private-controls.mjs",
   "garden-publication.mjs",
@@ -218,6 +224,7 @@ export const PUBLIC_QA_NAMES = [
   "community-bug-expiry-job-guard.mjs",
   "bug-expiry-job-guard-contract.sql",
   "bug-db-integrity-contract.sql",
+  "bug-runner-contract.sql",
   "bug-team-scope-contract.sql",
   "bug-private-atomic-contract.sql",
   "bug-private-backfill-contract.sql",
