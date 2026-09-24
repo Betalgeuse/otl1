@@ -125,8 +125,7 @@ async function validateTaskArtifact(config, lease, taskId, runId) {
   command("git", ["-C", repository, "fetch", "--no-tags", "origin", config.CODEX_BASE_BRANCH], {
     timeout: 180_000,
   });
-  const remoteSha = command("git", ["-C", repository, "rev-parse", "FETCH_HEAD"]);
-  if (remoteSha !== lease.baseSha) throw new Error("runner base SHA changed after approval");
+  command("git", ["-C", repository, "cat-file", "-e", `${lease.baseSha}^{commit}`]);
   const runsRoot = join(config.BUG_RUNNER_ROOT, "runs");
   await mkdir(runsRoot, { recursive: true, mode: 0o700 });
   const worktree = resolve(runsRoot, `${lease.jobId}-${runId}`);
@@ -170,8 +169,7 @@ async function fixTaskArtifact(config, lease, taskId, runId) {
   command("git", ["-C", repository, "fetch", "--no-tags", "origin", config.CODEX_BASE_BRANCH], {
     timeout: 180_000,
   });
-  const remoteSha = command("git", ["-C", repository, "rev-parse", "FETCH_HEAD"]);
-  if (remoteSha !== lease.baseSha) throw new Error("runner base SHA changed after approval");
+  command("git", ["-C", repository, "cat-file", "-e", `${lease.baseSha}^{commit}`]);
   const runsRoot = join(config.BUG_RUNNER_ROOT, "runs");
   await mkdir(runsRoot, { recursive: true, mode: 0o700 });
   const worktree = resolve(runsRoot, `${lease.jobId}-${runId}`);
