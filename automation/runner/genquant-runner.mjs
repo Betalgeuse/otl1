@@ -18,13 +18,19 @@ const sleep = (milliseconds) => new Promise((resolveSleep) => setTimeout(resolve
 const log = (event, fields = {}) => console.log(JSON.stringify({ event, ...fields }));
 
 function command(binary, args, options = {}) {
-  return execFileSync(binary, args, {
-    cwd: options.cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: options.timeout ?? 60_000,
-    maxBuffer: 4 * 1024 * 1024,
-  }).trimEnd();
+  try {
+    return execFileSync(binary, args, {
+      cwd: options.cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: options.timeout ?? 60_000,
+      maxBuffer: 4 * 1024 * 1024,
+    }).trimEnd();
+  } catch (error) {
+    if (options.acceptOutputOnFailure && typeof error?.stdout === "string" && error.stdout.trim())
+      return error.stdout.trimEnd();
+    throw error;
+  }
 }
 
 function sqlClient(connectionString) {
@@ -171,10 +177,12 @@ async function processOne(config) {
   let runId = `run-${randomUUID()}`;
   const startedAt = Date.now();
   let task;
+  let phase = "dispatch";
   try {
     const dispatch = await dispatchTaskOnce(config, lease, prompt, promptDigest, runId);
     task = dispatch.task;
     runId = dispatch.runId;
+    phase = "record_start";
     await db("bug_runner_start", {
       teamId: config.SLACK_TEAM_ID,
       jobId: lease.jobId,
@@ -189,9 +197,12 @@ async function processOne(config) {
     log("bug.runner.task_started", { bugId: lease.bugId, jobId: lease.jobId, runId });
     let lastHeartbeat = Date.now();
     let status = "pending";
+    phase = "status";
     while (Date.now() - startedAt < 15 * 60_000) {
       await sleep(10_000);
-      status = parseTaskStatus(command("codex", ["cloud", "status", task.taskId]));
+      status = parseTaskStatus(
+        command("codex", ["cloud", "status", task.taskId], { acceptOutputOnFailure: true }),
+      );
       if (["ready", "failed", "cancelled"].includes(status)) break;
       if (Date.now() - lastHeartbeat >= 240_000) {
         await db("bug_runner_heartbeat", {
@@ -205,8 +216,10 @@ async function processOne(config) {
       }
     }
     if (status !== "ready") throw new Error(`Codex task did not become ready: ${status}`);
+    phase = "artifact";
     const artifact = await validateTaskArtifact(config, lease, task.taskId, runId);
     const resultDigest = sha256(`${task.taskId}|${artifact.artifactDigest}|ready`);
+    phase = "finish";
     await db("bug_runner_finish", {
       teamId: config.SLACK_TEAM_ID,
       jobId: lease.jobId,
@@ -244,6 +257,7 @@ async function processOne(config) {
     log("bug.runner.task_failed", {
       bugId: lease.bugId,
       jobId: lease.jobId,
+      phase,
       errorType: error instanceof Error ? error.name : "Unknown",
     });
     return true;

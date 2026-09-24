@@ -16,5 +16,6 @@ docs/qa/
 backups/
 qa/*.json
 !qa/llm-cases.json
+!qa/bug-dialogue-cases.json
 
 .public-export
