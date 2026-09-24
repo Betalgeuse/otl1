@@ -95,7 +95,10 @@ export async function analyzeFeedback(
   const content = Array.isArray(response.choices)
     ? object(object(response.choices[0]).message).content
     : response.response;
-  return parseFeedbackAnalysis(JSON.parse(typeof content === "string" ? content : "{}"));
+  const analysis = parseFeedbackAnalysis(JSON.parse(typeof content === "string" ? content : "{}"));
+  if (input.actual.trim() && input.expected.trim())
+    return { ...analysis, missing: [], ready: true, questionField: null, question: null };
+  return analysis;
 }
 
 export function fallbackFeedbackAnalysis(input: {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  analyzeFeedback,
   feedbackPromptDue,
   parseFeedbackAnalysis,
   sendDailyFeedbackPrompt,
@@ -39,6 +40,35 @@ assert.deepEqual(
     questionField: null,
     question: null,
   },
+);
+const repeatedQuestionAnalysis = await analyzeFeedback(
+  {
+    async run() {
+      return {
+        response: JSON.stringify({
+          kind: "improvement",
+          summary: "자기소개 미등록자 알림",
+          missing: ["user_problem", "observed_or_desired"],
+          ready: false,
+          questionField: "expected",
+          question: "매일 DM으로 요청하면 좋을까요?",
+        }),
+      };
+    },
+  },
+  {
+    actual: "자기소개 미등록자에게 안내가 없어요.",
+    expected: "매일 DM과 자기소개 버튼을 보여주세요.",
+  },
+);
+assert.deepEqual(
+  [
+    repeatedQuestionAnalysis.ready,
+    repeatedQuestionAnalysis.missing,
+    repeatedQuestionAnalysis.question,
+  ],
+  [true, [], null],
+  "complete As-Is/To-Be must outrank a model that repeats supplied information",
 );
 assert.deepEqual(
   parseFeedbackAnalysis({
@@ -150,7 +180,10 @@ try {
   );
   assert.equal(post.body.thread_ts, "123.100");
   assert.match(post.body.text, /관리자 승인을 확인했어요/);
-  assert.equal(calls.some((call) => call.method === "reactions.add" && call.body.name === "loading"), true);
+  assert.equal(
+    calls.some((call) => call.method === "reactions.add" && call.body.name === "loading"),
+    true,
+  );
   assert.equal(post.authorization, "Bearer fake");
   assert.equal(calls.find((call) => call.method === "users.info")?.authorization, "Bearer fake");
   const queueCall = calls.find((call) => call.method === "sql");
