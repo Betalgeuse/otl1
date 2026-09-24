@@ -73,5 +73,5 @@ export async function readBugPrivateReportRevision(
 export type PrivateBugRevision = EncryptedObjectRef & {
   readonly bugId: string;
   readonly packetRevision: number;
-  readonly schemaVersion: "bug_intake.v1" | "bug_packet.v1";
+  readonly schemaVersion: "bug_intake.v1" | "bug_packet.v1" | "feedback_packet.v1";
 };

@@ -36,4 +36,25 @@ for (const field of ["frequency", "impact"]) {
   assert.deepEqual(await response.json(), { ok: true });
 }
 
-console.log("PASS Slack blocks.validate: exact frequency and impact renders accepted");
+const contextual = bugQuestionPayload(
+  context,
+  "BUG-CONTEXTUAL01",
+  "BUG-CONTEXTUAL01:q1:expected",
+  1,
+  {
+    field: "expected",
+    kind: "free_text",
+    text: "등록 안내는 어느 순간까지 반복되면 좋을까요?",
+  },
+);
+assert.equal(contextual.blocks[1].elements[0].action_id, "community_bug_answer_open");
+assert.equal(contextual.blocks[1].elements[0].text.text, "답변하기");
+const contextualResponse = await fetch("https://slack.com/api/blocks.validate", {
+  method: "POST",
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams({ blocks: JSON.stringify(contextual.blocks) }),
+  signal: AbortSignal.timeout(10_000),
+});
+assert.deepEqual(await contextualResponse.json(), { ok: true });
+
+console.log("PASS Slack blocks.validate: select and contextual free-text questions render accepted");

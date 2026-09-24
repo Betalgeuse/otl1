@@ -505,14 +505,14 @@ globalThis.fetch = async (url, options) => {
       }
       return Response.json({ rows: [[JSON.stringify({ packet_revision: row.packetRevision })]] });
     }
-    if (query.includes("bug_confirm_packet")) {
+    if (query.includes("bug_confirm_packet") || query.includes("bug_confirm_feedback_packet")) {
       const input = JSON.parse(body.params[0]);
       const row = bugRows.get(input.packet.bugId);
       row.packetRevision += 1;
       row.currentRevision = {
         ...row.currentRevision,
         packetRevision: row.packetRevision,
-        schemaVersion: "bug_packet.v1",
+        schemaVersion: input.packet.schemaVersion,
         status: "confirmed",
         confirmedPacket: input.packet,
         evidenceDigest: input.packet.evidenceDigest,
@@ -2022,8 +2022,12 @@ try {
   const routedReplies = routedPosts.filter(
     (call) => call.body.channel === "CFEEDBACK" && call.body.thread_ts === feedbackThread,
   );
-  assert.equal(routedReplies.length, 2, "question and analysis stay in the feedback thread");
-  assert.match(routedReplies[0].body.text, /<@UMEMBER>/, "the next question mentions its reporter");
+  assert.equal(routedReplies.length, 1, "clear feedback goes straight to one admin review");
+  assert.match(routedReplies[0].body.text, /OT1L 개선안 승인 대기/);
+  assert.equal(
+    routedReplies[0].body.blocks[1].elements[0].action_id,
+    "community_feedback_admin_start",
+  );
   const routedBugId = /버그 키: (BUG-[A-Z0-9]+)/.exec(feedbackRoot.body.text)?.[1];
   const routedDraft = routedBugId ? bugRows.get(routedBugId) : undefined;
   assert.notEqual(routedDraft, undefined, "the canonical feedback thread is the dialogue source");
@@ -2031,28 +2035,8 @@ try {
     [routedDraft.source.channelId, routedDraft.source.thread],
     ["CFEEDBACK", feedbackThread],
   );
-  const routedQuestion = routedDraft.questions.find((question) => !question.answered);
-  assert.equal(
-    routedQuestion.fieldName,
-    "frequency",
-    "a transient data mismatch asks about recurrence before generic reproduction steps",
-  );
-  assert.equal(
-    await continueBugReport(
-      {
-        ...context,
-        scope: { ...context.scope, channelId: "CFEEDBACK" },
-        source: "29.000003",
-        thread: feedbackThread,
-        key: "incoming:29.000003",
-      },
-      "한 번",
-      routedQuestion.questionId,
-    ),
-    true,
-    "a reply in the canonical feedback thread resumes its routed draft",
-  );
-  assert.equal(routedQuestion.answered, true);
+  assert.equal(routedDraft.questions.length, 0, "clear feedback asks no mechanical questions");
+  assert.equal(routedDraft.currentRevision.schemaVersion, "feedback_packet.v1");
 
   calls.length = 0;
   const fullSubmission = {

@@ -93,6 +93,8 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
     "community_bug_submit",
     "community_bug_confirm",
     "community_bug_answer",
+    "community_bug_answer_open",
+    "community_bug_answer_submit",
     "community_feedback_admin_start",
   ].includes(actionId);
   const introductionAction = [

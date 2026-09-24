@@ -1,4 +1,4 @@
-import { type ConfirmedBugPacket, canonicalJson } from "./community-bug-schema";
+import { type ConfirmedIssuePacket, canonicalJson } from "./community-bug-schema";
 import { parseBugDraftRead, parseConfirmedPacket } from "./community-bug-store-read";
 import {
   type AnswerBugRevision,
@@ -135,14 +135,19 @@ export class CommunityBugStore {
     return numberField(row, "packet_revision", "packetRevision");
   }
 
-  async confirmPacket(input: ConfirmPacketInput): Promise<ConfirmedBugPacket> {
+  async confirmPacket(input: ConfirmPacketInput): Promise<ConfirmedIssuePacket> {
     const { packetDigest: ignoredPacketDigest, ...unsignedPacket } = input.packet;
     void ignoredPacketDigest;
     return parseConfirmedPacket(
-      await this.call("bug_confirm_packet", {
-        packet: input.packet,
-        storage: { ...input.storage, canonicalPacket: canonicalJson(unsignedPacket) },
-      }),
+      await this.call(
+        input.packet.schemaVersion === "feedback_packet.v1"
+          ? "bug_confirm_feedback_packet"
+          : "bug_confirm_packet",
+        {
+          packet: input.packet,
+          storage: { ...input.storage, canonicalPacket: canonicalJson(unsignedPacket) },
+        },
+      ),
     );
   }
 

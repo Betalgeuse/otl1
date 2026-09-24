@@ -63,6 +63,8 @@ const memberActions = new Set([
   "community_bug_submit",
   "community_bug_confirm",
   "community_bug_answer",
+  "community_bug_answer_open",
+  "community_bug_answer_submit",
   "community_feedback_admin_start",
 ]);
 

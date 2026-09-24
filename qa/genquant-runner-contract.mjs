@@ -48,6 +48,52 @@ assert.match(prompt, /버튼을 누르면 저장되지 않는다/);
 const fixPrompt = buildFixPrompt({ ...lease, kind: "fix" });
 assert.match(fixPrompt, /smallest root-cause fix/);
 assert.match(fixPrompt, /As-Is: 버튼을 누르면 저장되지 않는다/);
+const feedbackLease = parseLease({
+  job: {
+    job_id: "43",
+    kind: "reproduce",
+    status: "leased",
+    attempt: 1,
+    lease_token: "feedback-lease",
+  },
+  bug: {
+    bugId: "BUG-FEEDBACK1234",
+    publicAlias: "feedback-alias",
+    baseSha: "b".repeat(40),
+    sourceChannelId: "CFEEDBACK",
+    sourceThread: "1790266621.964639",
+    confirmedPacket: {
+      schemaVersion: "feedback_packet.v1",
+      status: "confirmed",
+      fields: {
+        actual: "자기소개 미등록자에게 안내가 없다",
+        expected: "미등록자에게 등록 버튼이 포함된 안내를 보낸다",
+      },
+    },
+  },
+});
+const feedbackPrompt = buildReproductionPrompt(feedbackLease);
+assert.match(feedbackPrompt, /Request type: product feedback/);
+assert.doesNotMatch(feedbackPrompt, /Reproduction steps:/);
+assert.throws(
+  () =>
+    parseLease({
+      job: { job_id: "44", kind: "reproduce", status: "leased", attempt: 1, lease_token: "x" },
+      bug: {
+        bugId: "BUG-FEEDBACKBAD1",
+        publicAlias: "bad",
+        baseSha: "c".repeat(40),
+        sourceChannelId: "CFEEDBACK",
+        sourceThread: "1790266621.964639",
+        confirmedPacket: {
+          schemaVersion: "feedback_packet.v1",
+          status: "confirmed",
+          fields: { actual: "현재", expected: "개선", occurredAt: "invented" },
+        },
+      },
+    }),
+  /feedback fields are invalid/,
+);
 assert.deepEqual(parseTaskUrl("https://chatgpt.com/codex/tasks/task_e_0123456789abcdef0123456789abcdef\n"), {
   taskId: "task_e_0123456789abcdef0123456789abcdef",
   taskUrl: "https://chatgpt.com/codex/tasks/task_e_0123456789abcdef0123456789abcdef",

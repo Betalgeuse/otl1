@@ -38,7 +38,7 @@ async function digest(bytes: ArrayBuffer): Promise<string> {
 export function bugPrivateAdditionalData(
   bugId: string,
   revision: number,
-  schemaVersion: "bug_intake.v1" | "bug_packet.v1",
+  schemaVersion: "bug_intake.v1" | "bug_packet.v1" | "feedback_packet.v1",
   kekVersion: string,
 ): ArrayBuffer {
   const encoded = new TextEncoder().encode(
@@ -66,7 +66,7 @@ export async function writeBugPrivateObject(
   bugId: string,
   revision: number,
   raw: object,
-  schemaVersion: "bug_intake.v1" | "bug_packet.v1" = "bug_intake.v1",
+  schemaVersion: "bug_intake.v1" | "bug_packet.v1" | "feedback_packet.v1" = "bug_intake.v1",
 ): Promise<EncryptedObjectRef> {
   const bucket = context.env.BUG_PRIVATE_OBJECTS;
   const keyVersion = context.env.BUG_PRIVATE_KEK_VERSION;
@@ -110,7 +110,7 @@ export async function readBugPrivateObject(
   input: EncryptedObjectRef & {
     readonly bugId: string;
     readonly revision: number;
-    readonly schemaVersion: "bug_intake.v1" | "bug_packet.v1";
+    readonly schemaVersion: "bug_intake.v1" | "bug_packet.v1" | "feedback_packet.v1";
   },
 ): Promise<unknown> {
   const bucket = context.env.BUG_PRIVATE_OBJECTS;

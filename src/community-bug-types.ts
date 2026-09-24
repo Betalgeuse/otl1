@@ -1,4 +1,4 @@
-import type { ConfirmedBugPacket } from "./community-bug-schema";
+import type { ConfirmedIssuePacket } from "./community-bug-schema";
 import type { Json } from "./input";
 
 export const BUG_STATES = [
@@ -86,7 +86,7 @@ export type AnswerBugRevision = EncryptedObjectRef & {
 };
 
 export type ConfirmPacketInput = {
-  readonly packet: ConfirmedBugPacket;
+  readonly packet: ConfirmedIssuePacket;
   readonly storage: EncryptedObjectRef & {
     readonly canonicalEvidence: string;
     readonly evidenceObjectDigest: string;
@@ -197,7 +197,7 @@ export type FindActiveBugDraft = FindActiveBugDraftOwner &
 
 export type BugRevisionRead = {
   readonly packetRevision: number;
-  readonly schemaVersion: "bug_intake.v1" | "bug_packet.v1";
+  readonly schemaVersion: "bug_intake.v1" | "bug_packet.v1" | "feedback_packet.v1";
   readonly status: "draft" | "answered" | "confirmed";
   readonly latestOpaqueRef: string;
   readonly objectDigest: string;
@@ -206,7 +206,7 @@ export type BugRevisionRead = {
   readonly nonce: string;
   readonly evidenceDigest: string | null;
   readonly packetDigest: string | null;
-  readonly confirmedPacket: ConfirmedBugPacket | null;
+  readonly confirmedPacket: ConfirmedIssuePacket | null;
 };
 
 export type BugQuestionRead = {

@@ -10,7 +10,7 @@ import { bugReportCandidates } from "./community-bug-report";
 import { confirmBugReport, continueBugReport } from "./community-bug-session";
 import { openBugReportModal, parseBugReportModal } from "./community-bug-slack";
 import { startBugReport } from "./community-bug-start";
-import { publishFeedbackAnalysis } from "./community-feedback";
+import { analyzeFeedback, fallbackFeedbackAnalysis } from "./community-feedback";
 import { type CommunityContext, textReply } from "./community-runtime";
 import { object } from "./input";
 
@@ -34,9 +34,16 @@ export async function submitBugReportModal(
   const compactFeedback = !["steps", "location", "occurredAt", "frequency", "impact"].some(
     (field) => submittedFields[field] !== undefined,
   );
-  const started = await startBugReport(context, parsed, compactFeedback);
   const actual = parsed.messages.find((message) => message.id === "form:actual")?.text ?? "";
-  await publishFeedbackAnalysis(started.context, { feedbackId: started.draft.bugId, text: actual });
+  const expected = parsed.messages.find((message) => message.id === "form:expected")?.text ?? "";
+  const analysis = compactFeedback
+    ? context.env.AI
+      ? await analyzeFeedback(context.env.AI, { actual, expected }).catch(() =>
+          fallbackFeedbackAnalysis({ actual, expected }),
+        )
+      : fallbackFeedbackAnalysis({ actual, expected })
+    : undefined;
+  await startBugReport(context, parsed, analysis);
   return null;
 }
 

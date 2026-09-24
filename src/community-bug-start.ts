@@ -11,6 +11,12 @@ import {
 import { randomBugIdentity, writeBugPrivateObject } from "./community-bug-private";
 import { CommunityBugStore } from "./community-bug-store";
 import type { BugDraft } from "./community-bug-types";
+import {
+  confirmCompactFeedback,
+  type FeedbackAnalysis,
+  postFeedbackAdminReview,
+  publishFeedbackAnalysis,
+} from "./community-feedback";
 import { canonicalFeedbackContext, feedbackBugIdentity } from "./community-feedback-route";
 import type { CommunityContext } from "./community-runtime";
 import { InputError } from "./input";
@@ -19,8 +25,9 @@ import { NeonStore, StoreError } from "./store";
 export async function startBugReport(
   context: CommunityContext,
   parsed: ParsedBugReport,
-  routeToFeedback = false,
+  feedbackAnalysis?: FeedbackAnalysis,
 ): Promise<{ readonly context: CommunityContext; readonly draft: BugDraft }> {
+  const routeToFeedback = feedbackAnalysis !== undefined;
   const identity = routeToFeedback
     ? await feedbackBugIdentity(context)
     : {
@@ -106,6 +113,60 @@ export async function startBugReport(
       nextDue: observedAt + 1_000,
     });
     return { context, draft };
+  }
+  if (feedbackAnalysis) {
+    await publishFeedbackAnalysis(deliveryContext, {
+      feedbackId: draft.bugId,
+      analysis: feedbackAnalysis,
+    });
+    if (feedbackAnalysis.ready) {
+      await confirmCompactFeedback(deliveryContext, {
+        draft,
+        parsed,
+        sourceOpaqueRef,
+        reporterId: context.scope.userId,
+        fromState: "new",
+      });
+      await postFeedbackAdminReview(deliveryContext, {
+        feedbackId: draft.bugId,
+        packetRevision: draft.packetRevision + 1,
+      });
+      return { context: deliveryContext, draft };
+    }
+    const field = feedbackAnalysis.questionField ?? "expected";
+    const text =
+      feedbackAnalysis.question ??
+      (field === "actual"
+        ? "지금 어떤 점이 가장 불편한지 한 가지 사례로 알려주실래요?"
+        : "이 의견이 반영되면 사용자가 무엇을 할 수 있게 되면 좋을까요?");
+    const question = { field, kind: "free_text" as const, text };
+    const questionId = `${draft.bugId}:q1:${field}`;
+    const templateId = "question.feedback-context.v1";
+    await store.transition({
+      bugId: draft.bugId,
+      toState: "needs_info",
+      actors: ["deterministic_worker"],
+      guard: { missingRequiredField: true },
+      evidence: {
+        reasonCodes: [`missing:${field}`],
+        questionId,
+        fieldName: field,
+        templateVersion: templateId,
+        questionText: text,
+      },
+      expectedRevision: draft.revision,
+      idempotencyKey: `question:${context.key}`,
+    });
+    await deliverBugQuestion(deliveryContext, {
+      bugId: draft.bugId,
+      reporterId: context.scope.userId,
+      packetRevision: draft.packetRevision,
+      questionId,
+      fieldName: field,
+      templateId,
+      question,
+    });
+    return { context: deliveryContext, draft };
   }
   if (dialogue.status === "awaiting_confirmation") {
     await deliverBugSummary(deliveryContext, {

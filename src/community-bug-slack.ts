@@ -51,6 +51,25 @@ export function bugQuestionPayload(
             text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
           },
         },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: { type: "plain_text", text: "답변하기" },
+              style: "primary",
+              action_id: "community_bug_answer_open",
+              value: JSON.stringify({
+                ownerId: context.scope.userId,
+                key: bugId,
+                questionId,
+                packetRevision,
+                thread: context.thread,
+                source: context.source,
+              }),
+            },
+          ],
+        },
         identity,
       ],
     };
@@ -82,6 +101,54 @@ export function bugQuestionPayload(
       identity,
     ],
   };
+}
+
+export async function openBugAnswerModal(
+  context: CommunityContext,
+  triggerId: string,
+  input: { readonly bugId: string; readonly questionId: string; readonly packetRevision: number },
+): Promise<void> {
+  if (!triggerId) throw new InputError("답변 입력창을 열 수 없어요.");
+  await callSlack(context.env.SLACK_BOT_TOKEN, "views.open", {
+    trigger_id: triggerId,
+    view: {
+      type: "modal",
+      callback_id: "community_bug_answer_submit",
+      private_metadata: JSON.stringify({
+        channelId: context.scope.channelId,
+        userId: context.scope.userId,
+        source: context.source,
+        thread: context.thread,
+        date: context.date,
+        bugId: input.bugId,
+        questionId: input.questionId,
+        packetRevision: input.packetRevision,
+      }),
+      title: { type: "plain_text", text: "피드백 답변" },
+      submit: { type: "plain_text", text: "보내기" },
+      close: { type: "plain_text", text: "취소" },
+      blocks: [
+        {
+          type: "input",
+          block_id: "answer",
+          label: { type: "plain_text", text: "답변" },
+          element: {
+            type: "plain_text_input",
+            action_id: "value",
+            multiline: true,
+            max_length: 1000,
+          },
+        },
+      ],
+    },
+  });
+}
+
+export function parseBugAnswerModal(view: Record<string, unknown>): string {
+  const values = object(object(view.state).values);
+  const answer = string(object(object(values.answer).value).value ?? "").trim();
+  if (!answer || answer.length > 1000) throw new InputError("답변을 1,000자 이내로 적어 주세요.");
+  return answer;
 }
 
 export function bugConfirmationPayload(
