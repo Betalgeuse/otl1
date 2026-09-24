@@ -49,7 +49,6 @@ globalThis.fetch = async (url, options = {}) => {
   calls.push({ method, body, authorization });
   if (method === "users.info")
     return Response.json({ ok: true, user: { id: "UADMIN", is_admin: true, is_owner: false } });
-  if (parsedUrl.hostname === "api.github.com") return Response.json({ sha: "a".repeat(40) });
   if (method === "sql")
     return Response.json({
       rows: [
@@ -133,7 +132,8 @@ try {
   assert.equal(calls.find((call) => call.method === "users.info")?.authorization, "Bearer fake");
   const queueCall = calls.find((call) => call.method === "sql");
   assert.match(queueCall.body.params[0], /"reporterId":"UREPORTER"/);
-  assert.match(queueCall.body.params[0], new RegExp(`"baseSha":"${"a".repeat(40)}"`));
+  assert.match(queueCall.body.params[0], /"repository":"Betalgeuse\/otl1"/);
+  assert.match(queueCall.body.params[0], /"branch":"main"/);
   queueAccepted = false;
   const postsBeforeMismatch = calls.filter((call) => call.method === "chat.postMessage").length;
   await assert.rejects(
