@@ -71,6 +71,7 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/049_bug_runner_handoff.sql",
   "migrations/050_bug_runner_auto_merge.sql",
   "migrations/051_bug_runner_repository_head.sql",
+  "migrations/052_bug_runner_fix_lease_name.sql",
 ];
 
 // `src` and `site` are copied as directories, but these paths keep the membership
