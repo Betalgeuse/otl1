@@ -1,4 +1,5 @@
 import type { BugAnswerAction } from "./community-bug-actions";
+import { openBugAnswerModal, parseBugAnswerModal } from "./community-bug-slack";
 import {
   confirmBugReport,
   continueBugReport,
@@ -18,6 +19,22 @@ export async function handleBugView(
   context: CommunityContext,
   waitUntil: WaitUntil,
 ): Promise<Response | null> {
+  if (id === "community_bug_answer_submit") {
+    const answer = parseBugAnswerModal(view);
+    const metadata = object(JSON.parse(string(view.private_metadata)));
+    const questionId = string(metadata.questionId);
+    waitUntil(
+      continueBugReport(context, answer, questionId).catch(async (error: unknown) => {
+        await ephemeral(context, {
+          text:
+            error instanceof InputError
+              ? error.message
+              : "피드백 답변을 저장하지 못했어요. 같은 스레드에서 다시 알려주세요.",
+        });
+      }),
+    );
+    return Response.json({ response_action: "clear" });
+  }
   if (id !== "community_bug_submit") return null;
   const values = object(view.state).values;
   const parsed = parseBugReportModal(values);
@@ -65,6 +82,17 @@ export async function handleBugAction(
   }
   if (id === "community_bug_open") {
     await openBugReportModal(context, string(triggerId));
+    return new Response(null, { status: 200 });
+  }
+  if (id === "community_bug_answer_open") {
+    const packetRevision = value.packetRevision;
+    if (typeof packetRevision !== "number" || !Number.isSafeInteger(packetRevision))
+      throw new InputError("피드백 질문 버전을 확인할 수 없어요.");
+    await openBugAnswerModal(context, string(triggerId), {
+      bugId: key,
+      questionId: string(value.questionId),
+      packetRevision,
+    });
     return new Response(null, { status: 200 });
   }
   if (id === "community_bug_confirm") {

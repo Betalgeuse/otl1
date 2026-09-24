@@ -21,7 +21,12 @@ import { resumeBugDialogue } from "./community-bug-resume";
 import { canonicalJson, isBugField } from "./community-bug-schema";
 import { bugDialogueInput, exhaustBugReport } from "./community-bug-session-state";
 import { CommunityBugStore } from "./community-bug-store";
-import { postFeedbackAdminReview } from "./community-feedback";
+import {
+  analyzeFeedback,
+  confirmCompactFeedback,
+  fallbackFeedbackAnalysis,
+  postFeedbackAdminReview,
+} from "./community-feedback";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import { InputError } from "./input";
 import { NeonStore } from "./store";
@@ -89,6 +94,73 @@ export async function continueBugReport(
     sanitizedFields: bugFieldsForDatabase(storedBugFields(result.packet), privateIncident),
     completeness: { status: result.status },
   });
+  if (!privateIncident && active.source.opaqueRef.startsWith("slack-feedback:")) {
+    const actual = result.packet.actual.status === "known" ? result.packet.actual.value.trim() : "";
+    const expected =
+      result.packet.expected.status === "known" ? result.packet.expected.value.trim() : "";
+    const analysis = context.env.AI
+      ? await analyzeFeedback(context.env.AI, { actual, expected }).catch(() =>
+          fallbackFeedbackAnalysis({ actual, expected }),
+        )
+      : fallbackFeedbackAnalysis({ actual, expected });
+    if (analysis.ready && actual && expected) {
+      const nextDraft = { ...active, packetRevision };
+      await confirmCompactFeedback(context, {
+        draft: nextDraft,
+        parsed,
+        sourceOpaqueRef: active.source.opaqueRef,
+        reporterId: active.reporterId,
+        fromState: "needs_info",
+      });
+      await postFeedbackAdminReview(context, {
+        feedbackId: active.bugId,
+        packetRevision: packetRevision + 1,
+      });
+      return true;
+    }
+    if (active.questions.length >= 3) {
+      await exhaustBugReport(context, active, encrypted.objectDigest, packetRevision);
+      return true;
+    }
+    const field = analysis.questionField ?? (expected ? "actual" : "expected");
+    const question = {
+      field,
+      kind: "free_text" as const,
+      text:
+        analysis.question ??
+        (field === "actual"
+          ? "지금 어떤 점이 가장 불편한지 한 가지 사례로 알려주실래요?"
+          : "이 의견이 반영되면 사용자가 무엇을 할 수 있게 되면 좋을까요?"),
+    };
+    const questionId = `${active.bugId}:q${active.questions.length + 1}:${field}`;
+    const templateId = "question.feedback-context.v1";
+    await store.transition({
+      bugId: active.bugId,
+      toState: "needs_info",
+      actors: ["reporter", "deterministic_worker"],
+      guard: { stillIncomplete: true },
+      evidence: {
+        answerRevision: packetRevision,
+        completenessResult: "needs_info",
+        questionId,
+        fieldName: field,
+        templateVersion: templateId,
+        questionText: question.text,
+      },
+      expectedRevision: active.revision,
+      idempotencyKey: `question:${context.key}`,
+    });
+    await deliverBugQuestion(context, {
+      bugId: active.bugId,
+      reporterId: active.reporterId,
+      packetRevision,
+      questionId,
+      fieldName: field,
+      templateId,
+      question,
+    });
+    return true;
+  }
   if (privateIncident) {
     await deliverPrivateBugOutbox(context, {
       bugId: active.bugId,

@@ -1,4 +1,5 @@
 export const BUG_PACKET_VERSION = "bug_packet.v1" as const;
+export const FEEDBACK_PACKET_VERSION = "feedback_packet.v1" as const;
 
 export const BUG_FREQUENCIES = ["always", "sometimes", "once"] as const;
 export type BugFrequency = (typeof BUG_FREQUENCIES)[number];
@@ -35,6 +36,26 @@ export type ConfirmedBugPacket = {
   readonly evidenceDigest: string;
   readonly packetDigest: string;
 };
+
+export type ConfirmedFeedbackPacket = {
+  readonly schemaVersion: typeof FEEDBACK_PACKET_VERSION;
+  readonly bugId: string;
+  readonly status: "confirmed";
+  readonly revision: number;
+  readonly fields: {
+    readonly actual: string;
+    readonly expected: string;
+  };
+  readonly confirmation: {
+    readonly reporterConfirmed: true;
+    readonly confirmedAt: string;
+  };
+  readonly source: BugPacketSource;
+  readonly evidenceDigest: string;
+  readonly packetDigest: string;
+};
+
+export type ConfirmedIssuePacket = ConfirmedBugPacket | ConfirmedFeedbackPacket;
 
 export type BugEvidence = {
   readonly field: keyof BugPacketFields;
@@ -234,6 +255,40 @@ export async function confirmedBugPacket(input: {
   const evidenceDigest = await sha256(canonicalJson(evidence));
   const unsigned = {
     schemaVersion: BUG_PACKET_VERSION,
+    bugId: input.bugId,
+    status: "confirmed" as const,
+    revision: input.revision,
+    fields: input.fields,
+    confirmation: { reporterConfirmed: true as const, confirmedAt: input.confirmedAt },
+    source: input.source,
+    evidenceDigest,
+  };
+  return { ...unsigned, packetDigest: await sha256(canonicalJson(unsigned)) };
+}
+
+export async function confirmedFeedbackPacket(input: {
+  readonly bugId: string;
+  readonly revision: number;
+  readonly fields: { readonly actual: string; readonly expected: string };
+  readonly confirmedAt: string;
+  readonly source: BugPacketSource;
+  readonly evidence: readonly BugEvidence[];
+}): Promise<ConfirmedFeedbackPacket> {
+  if (
+    !/^BUG-[A-Z0-9]{8,32}$/.test(input.bugId) ||
+    !Number.isInteger(input.revision) ||
+    input.revision < 1 ||
+    !input.fields.actual.trim() ||
+    !input.fields.expected.trim()
+  ) {
+    throw new TypeError("Confirmed feedback packet identity is invalid");
+  }
+  const evidence = canonicalBugEvidence(
+    input.evidence.filter((item) => item.field === "actual" || item.field === "expected"),
+  );
+  const evidenceDigest = await sha256(canonicalJson(evidence));
+  const unsigned = {
+    schemaVersion: FEEDBACK_PACKET_VERSION,
     bugId: input.bugId,
     status: "confirmed" as const,
     revision: input.revision,

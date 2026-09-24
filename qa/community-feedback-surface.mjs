@@ -35,6 +35,29 @@ assert.deepEqual(
     summary: "버튼이 문서와 다르게 저장되지 않음",
     missing: ["trigger"],
     docRefs: ["docs/SPEC.md"],
+    ready: false,
+    questionField: null,
+    question: null,
+  },
+);
+assert.deepEqual(
+  parseFeedbackAnalysis({
+    kind: "improvement",
+    summary: "자기소개 미등록자에게 등록 안내 제공",
+    missing: [],
+    docRefs: ["docs/SPEC.md"],
+    ready: true,
+    questionField: "expected",
+    question: "언제 발생했나요?",
+  }),
+  {
+    kind: "improvement",
+    summary: "자기소개 미등록자에게 등록 안내 제공",
+    missing: [],
+    docRefs: ["docs/SPEC.md"],
+    ready: true,
+    questionField: null,
+    question: null,
   },
 );
 

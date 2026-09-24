@@ -1,4 +1,4 @@
-import type { BugFrequency, BugImpact, ConfirmedBugPacket } from "./community-bug-schema";
+import type { BugFrequency, BugImpact, ConfirmedIssuePacket } from "./community-bug-schema";
 import { BUG_STATES, type BugDraftRead, BugStoreError } from "./community-bug-types";
 import type { Json } from "./input";
 
@@ -52,18 +52,34 @@ function bugImpact(value: string): BugImpact {
   throw new BugStoreError("response");
 }
 
-export function parseConfirmedPacket(value: Json): ConfirmedBugPacket {
+export function parseConfirmedPacket(value: Json): ConfirmedIssuePacket {
   const row = object(value);
   const fields = object(row.fields ?? null);
   const confirmation = object(row.confirmation ?? null);
   const source = object(row.source ?? null);
-  if (
-    row.schemaVersion !== "bug_packet.v1" ||
-    row.status !== "confirmed" ||
-    confirmation.reporterConfirmed !== true
-  ) {
+  if (row.status !== "confirmed" || confirmation.reporterConfirmed !== true) {
     throw new BugStoreError("response");
   }
+  if (row.schemaVersion === "feedback_packet.v1") {
+    return {
+      schemaVersion: "feedback_packet.v1",
+      bugId: textField(row, "bugId"),
+      status: "confirmed",
+      revision: numberField(row, "revision"),
+      fields: {
+        actual: textField(fields, "actual"),
+        expected: textField(fields, "expected"),
+      },
+      confirmation: {
+        reporterConfirmed: true,
+        confirmedAt: textField(confirmation, "confirmedAt"),
+      },
+      source: { kind: textField(source, "kind"), opaqueRef: textField(source, "opaqueRef") },
+      evidenceDigest: textField(row, "evidenceDigest"),
+      packetDigest: textField(row, "packetDigest"),
+    };
+  }
+  if (row.schemaVersion !== "bug_packet.v1") throw new BugStoreError("response");
   const steps = fields.steps;
   if (!Array.isArray(steps) || steps.length < 2 || steps.some((step) => typeof step !== "string")) {
     throw new BugStoreError("response");
@@ -103,7 +119,8 @@ function revisionStatus(value: string): BugDraftRead["currentRevision"]["status"
 }
 
 function revisionSchema(value: string): BugDraftRead["currentRevision"]["schemaVersion"] {
-  if (value === "bug_intake.v1" || value === "bug_packet.v1") return value;
+  if (value === "bug_intake.v1" || value === "bug_packet.v1" || value === "feedback_packet.v1")
+    return value;
   throw new BugStoreError("response");
 }
 

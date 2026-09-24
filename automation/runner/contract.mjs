@@ -39,18 +39,19 @@ export function parseLease(value) {
     fail("INVALID_JOB", "runner accepts only leased reproduce or fix jobs");
   if (!BUG_ID.test(text(bug.bugId, "bugId", 40))) fail("INVALID_JOB", "bug id is invalid");
   if (!SHA.test(text(bug.baseSha, "baseSha", 64))) fail("INVALID_JOB", "base SHA is invalid");
-  if (packet.schemaVersion !== "bug_packet.v1" || packet.status !== "confirmed")
+  if (!["bug_packet.v1", "feedback_packet.v1"].includes(packet.schemaVersion) || packet.status !== "confirmed")
     fail("INVALID_JOB", "confirmed packet is required");
   const fields = object(packet.fields, "fields");
-  if (!Array.isArray(fields.steps) || fields.steps.length < 2 || fields.steps.length > 50)
-    fail("INVALID_JOB", "reproduction steps are invalid");
-  for (const [name, value] of Object.entries({
-    actual: fields.actual,
-    expected: fields.expected,
-    location: fields.location,
-  }))
+  for (const [name, value] of Object.entries({ actual: fields.actual, expected: fields.expected }))
     text(value, `fields.${name}`);
-  fields.steps.forEach((step, index) => text(step, `fields.steps[${index}]`, 2_000));
+  if (packet.schemaVersion === "bug_packet.v1") {
+    if (!Array.isArray(fields.steps) || fields.steps.length < 2 || fields.steps.length > 50)
+      fail("INVALID_JOB", "reproduction steps are invalid");
+    text(fields.location, "fields.location");
+    fields.steps.forEach((step, index) => text(step, `fields.steps[${index}]`, 2_000));
+  } else if (Object.keys(fields).sort().join(",") !== "actual,expected") {
+    fail("INVALID_JOB", "feedback fields are invalid");
+  }
   return {
     jobId: Number(job.job_id),
     kind: job.kind,
@@ -73,6 +74,14 @@ export function reproductionPath(bugId) {
 export function buildReproductionPrompt(lease) {
   const path = reproductionPath(lease.bugId);
   const fields = lease.packet.fields;
+  const diagnosticContext =
+    lease.packet.schemaVersion === "feedback_packet.v1"
+      ? ["Request type: product feedback", "Verify the current behavior from the repository and do not invent reproduction steps."]
+      : [
+          `Location: ${fields.location}`,
+          "Steps:",
+          ...fields.steps.map((step, index) => `${index + 1}. ${step}`),
+        ];
   return [
     "# OTL1 deterministic reproduction job",
     "",
@@ -87,14 +96,20 @@ export function buildReproductionPrompt(lease) {
     `Bug ID: ${lease.bugId}`,
     `Actual: ${fields.actual}`,
     `Expected: ${fields.expected}`,
-    `Location: ${fields.location}`,
-    "Steps:",
-    ...fields.steps.map((step, index) => `${index + 1}. ${step}`),
+    ...diagnosticContext,
   ].join("\n");
 }
 
 export function buildFixPrompt(lease) {
   const fields = lease.packet.fields;
+  const diagnosticContext =
+    lease.packet.schemaVersion === "feedback_packet.v1"
+      ? ["Request type: product feedback", "Use repository evidence to locate the affected surface."]
+      : [
+          `Location: ${fields.location}`,
+          "Reproduction steps:",
+          ...fields.steps.map((step, index) => `${index + 1}. ${step}`),
+        ];
   return [
     "# OTL1 approved fix job",
     "",
@@ -106,9 +121,7 @@ export function buildFixPrompt(lease) {
     `Bug ID: ${lease.bugId}`,
     `As-Is: ${fields.actual}`,
     `To-Be: ${fields.expected}`,
-    `Location: ${fields.location}`,
-    "Reproduction steps:",
-    ...fields.steps.map((step, index) => `${index + 1}. ${step}`),
+    ...diagnosticContext,
   ].join("\n");
 }
 

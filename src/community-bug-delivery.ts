@@ -202,6 +202,11 @@ export function questionDeliveryFromRead(
   question: BugQuestionRead,
 ): QuestionDelivery | null {
   if (!isBugField(question.fieldName)) return null;
+  const renderedQuestion =
+    question.templateVersion === "question.feedback-context.v1" &&
+    (question.fieldName === "actual" || question.fieldName === "expected")
+      ? { field: question.fieldName, kind: "free_text" as const, text: question.questionText }
+      : bugQuestionForField(question.fieldName);
   return {
     bugId,
     reporterId,
@@ -209,7 +214,7 @@ export function questionDeliveryFromRead(
     questionId: question.questionId,
     fieldName: question.fieldName,
     templateId: question.templateVersion,
-    question: bugQuestionForField(question.fieldName),
+    question: renderedQuestion,
   };
 }
 
