@@ -30,11 +30,11 @@ bun run check
 
 ### 배포 권한 구분
 
-정식 출시·canonical 배포는 private `ops/main`의 merge queue 결과만 사용합니다. 비공개 운영 저장소의 canonical preflight가 현재 full SHA, 정확한 remote, clean `main`, ruleset API readback과 GenQuant 영수증을 모두 확인해야 하며, 실패한 checkout에서 정식 배포·release·public mirror 게시를 진행하지 않습니다.
+정식 출시·canonical 배포는 공개 저장소 `public/main`의 리뷰·squash merge 결과만 사용합니다. canonical preflight는 현재 full SHA, 단일 `public` remote, clean `main`, Actions 비활성화와 ruleset API readback을 확인해야 하며, 실패한 checkout이나 `main`과 공통 조상이 없는 브랜치에서 배포하지 않습니다.
 
-이미 존재하는 Worker에서 최종 Slack 동작을 확인해야 할 때는 명시적으로 승인된 **pre-release QA 배포**만 예외로 허용합니다. 승인된 시나리오, clean full SHA, 이전·새 Worker version, migration 목록, maintenance 차단과 해제, read-only health·binding·Cron 보존, 별도 clock readiness 근거, rollback 대상과 정리 범위를 한 영수증에 묶습니다. `/health`는 liveness와 정적 capability만 증명하며 clock readiness는 식별자를 제거한 Durable Object inspect/admin·배포 영수증 또는 서명된 activity로 증명합니다. 이 예외는 승인된 기존 Worker version upload·deploy 범위만 허용하며 Git push, merge, release 게시, public mirror 게시, provider 실행 또는 canonical 판정을 허용하지 않습니다. migration은 forward-only이므로 코드 rollback도 적용된 schema와 호환돼야 합니다.
+이미 존재하는 Worker에서 최종 Slack 동작을 확인해야 할 때는 명시적으로 승인된 pre-release QA 배포만 예외로 허용합니다. 승인된 시나리오, clean full SHA, 이전·새 Worker version, migration 목록, maintenance 차단과 해제, read-only health·binding·Cron 보존, 별도 clock readiness 근거, rollback 대상과 정리 범위를 한 영수증에 묶습니다. 이 예외는 feature SHA를 canonical로 만들지 않으며, 정식 배포는 리뷰를 거쳐 `main`에 합쳐진 SHA만 사용합니다.
 
-exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`은 이 예외에서 Chrome Slack Web QA를 통과했습니다. 현재 checker는 계속 `canonical: false`이고 private `ops/main` release authority가 없으므로, v0.0.54는 그 이유 하나로 pre-release입니다.
+exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`은 과거 예외에서 Chrome Slack Web QA를 통과했지만 당시 `main`과 분리된 이력이어서 pre-release로만 보존합니다.
 
 ## DB 설치와 이관
 

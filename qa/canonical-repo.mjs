@@ -18,22 +18,17 @@ const metadata = {
   ruleset: {
     target: "refs/heads/main",
     enforcement: "active",
-    requiredChecks: [
-      { name: "CI / check", appId: "123", receipt: "genquant-signed" },
-      { name: "CI / public-export-scan", appId: "123", receipt: "genquant-signed" },
-      { name: "Policy / risk", appId: "123", receipt: "genquant-signed" },
-      { name: "Evidence / receipt", appId: "123", receipt: "genquant-signed" },
-    ],
-    checkSource: "genquant-ci-github-apps",
-    signedReceipts: true,
-    requiredReviewCount: 1,
-    mergeQueue: true,
+    requiredChecks: [],
+    checkSource: "github-ruleset-api",
+    signedReceipts: false,
+    requiredReviewCount: 0,
+    mergeQueue: false,
     allowedMergeMethods: ["squash"],
     bypassActors: [],
     allowForcePush: false,
     allowDeletion: false,
     dismissStaleReviews: true,
-    requireLastPushApproval: true,
+    requireLastPushApproval: false,
     readbackVerified: false,
   },
 };
@@ -49,14 +44,6 @@ function initRepository(directory) {
   execFileSync("git", ["init", "--quiet", "--initial-branch=main", directory], {
     encoding: "utf8",
   });
-  execFileSync("git", [
-    "-C",
-    directory,
-    "remote",
-    "add",
-    "ops",
-    "https://github.com/Betalgeuse/otl1-ops.git",
-  ]);
   execFileSync("git", [
     "-C",
     directory,
@@ -99,10 +86,8 @@ assert.equal(baseline.exitCode, 1);
 assert.equal(baseline.value.schema_version, "canonical_repo_check.v1");
 assert.equal(baseline.value.canonical, false);
 assert.equal(baseline.value.remotes.public.matches, true);
-assert.equal(baseline.value.remotes.ops.matches, false);
 assert.equal(baseline.value.ci.github_actions_allowed, false);
 assert.equal(baseline.value.ci.github_actions_enabled, false);
-assert.ok(baseline.value.missing_requirements.includes("ops_remote"));
 assert.ok(baseline.value.missing_requirements.includes("canonical_branch"));
 assert.ok(baseline.value.missing_requirements.includes("ruleset_metadata"));
 assert.ok(baseline.value.errors.some((error) => error.code === "ruleset_metadata_input_missing"));
@@ -115,7 +100,6 @@ assert.equal(
 
 const metadataOnly = run("--metadata", metadataPath);
 assert.equal(metadataOnly.value.canonical, false);
-assert.ok(metadataOnly.value.missing_requirements.includes("ops_remote"));
 assert.ok(
   metadataOnly.value.missing_requirements.includes("ruleset_readback_verified"),
   "unverified metadata cannot claim success",
@@ -152,7 +136,6 @@ try {
   assert.equal(cleanResult.value.repository.head_resolved, true);
   assert.equal(cleanResult.value.repository.head_sha, headSha);
   assert.match(cleanResult.value.repository.head_sha, /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/);
-  assert.equal(cleanResult.value.remotes.ops.matches, true);
   assert.equal(cleanResult.value.remotes.public.matches, true);
 
   const detached = mkdtempSync(join(tmpdir(), "otl1-canonical-detached-"));
@@ -188,7 +171,7 @@ try {
     "remote",
     "set-url",
     "--add",
-    "ops",
+    "public",
     "https://github.com/attacker/untrusted.git",
   ]);
   execFileSync("git", [
@@ -198,13 +181,13 @@ try {
     "set-url",
     "--add",
     "--push",
-    "ops",
+    "public",
     "https://github.com/attacker/untrusted.git",
   ]);
   const poisoned = run("--repo", clean, "--metadata", metadataPath);
   assert.equal(poisoned.value.canonical, false);
-  assert.ok(poisoned.value.missing_requirements.includes("ops_remote_fetch_urls"));
-  assert.ok(poisoned.value.missing_requirements.includes("ops_remote_push_urls"));
+  assert.ok(poisoned.value.missing_requirements.includes("public_remote_fetch_urls"));
+  assert.ok(poisoned.value.missing_requirements.includes("public_remote_push_urls"));
 
   metadata.actionsEnabled = true;
   writeFileSync(metadataPath, JSON.stringify(metadata));

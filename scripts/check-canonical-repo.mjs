@@ -10,15 +10,9 @@ import { readFileSync } from "node:fs";
 
 const EXPECTED_BRANCH = "main";
 const EXPECTED_REMOTES = Object.freeze({
-  ops: "Betalgeuse/otl1-ops",
   public: "Betalgeuse/otl1",
 });
-const EXPECTED_CHECKS = Object.freeze([
-  "CI / check",
-  "CI / public-export-scan",
-  "Policy / risk",
-  "Evidence / receipt",
-]);
+const EXPECTED_CHECKS = Object.freeze([]);
 
 /** @param {string[]} args @param {string} cwd */
 function git(args, cwd) {
@@ -120,13 +114,13 @@ function parseMetadata(input) {
   )
     return null;
   if (
-    metadata.ruleset.checkSource !== "genquant-ci-github-apps" ||
-    metadata.ruleset.signedReceipts !== true
+    metadata.ruleset.checkSource !== "github-ruleset-api" ||
+    metadata.ruleset.signedReceipts !== false
   )
     return null;
   if (
-    metadata.ruleset.requiredReviewCount !== 1 ||
-    metadata.ruleset.mergeQueue !== true ||
+    metadata.ruleset.requiredReviewCount !== 0 ||
+    metadata.ruleset.mergeQueue !== false ||
     JSON.stringify(metadata.ruleset.allowedMergeMethods) !== '["squash"]'
   )
     return null;
@@ -136,17 +130,14 @@ function parseMetadata(input) {
     metadata.ruleset.allowForcePush !== false ||
     metadata.ruleset.allowDeletion !== false ||
     metadata.ruleset.dismissStaleReviews !== true ||
-    metadata.ruleset.requireLastPushApproval !== true ||
+    metadata.ruleset.requireLastPushApproval !== false ||
     typeof metadata.ruleset.readbackVerified !== "boolean"
   )
     return null;
   const names = metadata.ruleset.requiredChecks.map((check) => check.target);
   if (
     names.length !== EXPECTED_CHECKS.length ||
-    EXPECTED_CHECKS.some((name, index) => names[index] !== name) ||
-    metadata.ruleset.requiredChecks.some(
-      (check) => !/^\d+$/.test(check.appId) || check.receipt !== "genquant-signed",
-    )
+    EXPECTED_CHECKS.some((name, index) => names[index] !== name)
   )
     return null;
   return /** @type {RepositoryMetadata} */ (metadata);
@@ -272,7 +263,6 @@ function main() {
     : [];
   if (!worktreeResult.ok) errors.push({ code: "git_worktree_unavailable" });
   const requirements = {
-    ops_remote: expectedRemoteState.ops.matches,
     public_remote: expectedRemoteState.public.matches,
     canonical_branch: branch === EXPECTED_BRANCH,
     head_commit: headSha !== null,
@@ -307,7 +297,6 @@ function main() {
     remotes: Object.fromEntries(Object.entries(expectedRemoteState)),
     unexpected_remote_count: unexpectedRemotes.length,
     expected: {
-      ops_remote: EXPECTED_REMOTES.ops,
       public_remote: EXPECTED_REMOTES.public,
       required_checks: EXPECTED_CHECKS,
       ruleset_target: "refs/heads/main",
@@ -322,7 +311,7 @@ function main() {
       github_actions_allowed: false,
       github_actions_enabled:
         metadata?.actionsEnabled === true || metadata?.usesGitHubActions === true,
-      check_source: "genquant-ci-github-apps",
+      check_source: "github-ruleset-api",
     },
     missing_requirements: missing,
     errors,

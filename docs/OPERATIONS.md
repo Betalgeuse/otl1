@@ -100,7 +100,7 @@ npm run reconcile:garden -- --team T_REPLACE --channel C_REPLACE --through 2026-
 
 ## 버그 제보 v0.0.54 구현 기준
 
-비정규 pre-release QA 배포 계보는 exact source, maintenance로 보호한 migration, Worker 활성화와 설정 보존을 영수증으로 남겼고, exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web 시나리오까지 통과했습니다. 다만 private `ops/main`·ruleset readback·canonical provenance와 정식 release authority가 없으므로 정식 배포나 출시로 취급하지 않습니다. 이것이 v0.0.54 버그 제보 기반이 pre-release로 남는 이유이며, 운영 기능 기준 v0.0.55 welcome 발행과는 별도 계보입니다.
+과거 pre-release QA 배포는 exact source와 migration·Worker 영수증 및 Chrome Slack Web 시나리오를 남겼지만 `main`과 공통 조상이 없는 이력에서 수행됐습니다. 해당 결과는 운영 증거로 보존하되 정식 release로 소급하지 않습니다.
 
 출시 뒤 feedback 채널의 `버그제보`, `버그 제보`, `버그제보: ...`, `버그 제보: ...`, `버그: ...`, `문제: ...`, `오류: ...` 입력은 제보자 소유 초안을 시작합니다. `COMMUNITY_CHANNEL_ID`로 설정한 비공개 관리·시험 채널에서는 멘션 없이도 `댓글이 안 보여요`, `등록했는데 아무것도 안 떠요`, `봇이 작동하지 않아요`처럼 명시적인 제품·동작 대상과 실패 증상이 함께 있는 자연어를 접수합니다. 접두어 없는 문장에 완료·부분 완료·미완료·휴식·후기·회고·목표 선택·기록 수정 문법이 하나라도 있으면 버그보다 ONE THING 흐름을 우선합니다. 혼합 문장을 버그로 명시할 때는 `버그:`·`문제:`·`오류:`를 사용합니다. 구두점뿐인 입력, 짧은 `안 돼요`, 일반 질문과 감정 표현도 접수하지 않습니다. 공개·업데이트 채널에서는 새 자연어 판정을 끄고 기존 명시 형식만 허용합니다.
 
@@ -128,7 +128,7 @@ Slack workspace admin 또는 owner가 확정 명세를 승인하면 Worker가 �
 
 피드백 채널로 정규화된 초안은 opaque intake key와 함께 실제 `source_channel_id`·`source_thread`로도 다시 찾습니다. 따라서 새 피드백 스레드의 일반 댓글도 답변으로 이어집니다. 확인 질문은 고정 필드 순서만 따르지 않습니다. 데이터 불일치·중복·Canvas·프로필 문제는 재현 단계보다 발생 빈도와 시각을 먼저 확인하고, 사용자 동작이 없는 자동 실행 문제에는 두 단계 입력을 강요하지 않습니다.
 
-pre-release QA 배포는 기존 Worker의 승인된 검증 시나리오에만 쓰며 exact clean SHA와 rollback 대상을 기록합니다. Git push·merge·release·provider 권한은 포함하지 않습니다. 정식 배포는 private `ops/main`과 활성 ruleset readback이 준비된 뒤 별도 실행합니다.
+pre-release QA 배포는 기존 Worker의 승인된 검증 시나리오에만 쓰며 exact clean SHA와 rollback 대상을 기록합니다. 정식 배포는 활성 ruleset을 통과해 `public/main`에 squash merge된 SHA에서만 실행합니다.
 
 ## 장애와 알려진 경계
 

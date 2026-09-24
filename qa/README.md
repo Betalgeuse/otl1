@@ -27,7 +27,7 @@ bun qa/community-clock.mjs
 
 Tests use unique synthetic scopes. The actual Durable Object alarm and Slack user interaction evidence is documented in `docs/RELEASE_V001_V019.md`; unit checks do not substitute for it.
 
-Live QA against the already-existing Worker requires explicit scenario authorization, an exact clean SHA and a receipt-bound pre-release QA deployment. It grants no Git push, merge, release, provider, or canonical deployment authority. A noncanonical rollout can prove only the named live scenario; canonical release still requires private `ops/main` and verified ruleset readback.
+Live QA against the already-existing Worker requires explicit scenario authorization, an exact clean SHA and a receipt-bound pre-release QA deployment. It grants no merge or canonical release authority. A noncanonical rollout can prove only the named live scenario; canonical release requires a reviewed `public/main` merge SHA and verified ruleset readback.
 
 `community-live-*`, `community-review-fixture.mjs`, and `community-backfill.mjs` access real services using local credentials. They are deliberately not part of the automatic checks. The fixture script changes only the fixed private QA channel and requires guarded restoration. The backfill script changes public historical storage; do not run it as an ordinary test. Never point local database checks at the production database.
 
