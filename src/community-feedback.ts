@@ -112,13 +112,13 @@ export async function sendDailyFeedbackPrompt(
   try {
     await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: channelId,
-      text: `${date} 오늘 OT1L을 쓰면서 불편했거나 바랐던 점이 있었나요? 작은 의견도 괜찮아요. 아래 버튼으로 남기면 필요한 내용만 최대 세 번 더 물어볼게요.`,
+      text: `${date} 오늘 OT1L을 쓰면서 불편했거나 바랐던 점이 있었나요? 작은 의견도 괜찮아요. 아래 버튼으로 편하게 남겨주세요. 필요한 내용은 최대 세 번만 더 여쭙고, 확인된 의견은 적극 반영할게요!`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `${date} 오늘 OT1L을 쓰면서 불편했거나 바랐던 점이 있었나요? 작은 의견도 괜찮아요. 아래 버튼으로 남기면 필요한 내용만 최대 세 번 더 물어볼게요.`,
+            text: `${date} 오늘 OT1L을 쓰면서 불편했거나 바랐던 점이 있었나요? 작은 의견도 괜찮아요. 아래 버튼으로 편하게 남겨주세요. 필요한 내용은 최대 세 번만 더 여쭙고, 확인된 의견은 적극 반영할게요!`,
           },
         },
         {

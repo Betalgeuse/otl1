@@ -80,6 +80,10 @@ try {
   };
   assert.equal(await sendDailyFeedbackPrompt(promptEnv, promptStore, "2026-09-23", "18:02"), true);
   assert.equal(await sendDailyFeedbackPrompt(promptEnv, promptStore, "2026-09-23", "18:03"), false);
+  assert.match(
+    calls.find((call) => call.method === "chat.postMessage")?.body.text ?? "",
+    /아래 버튼으로 편하게 남겨주세요\. 필요한 내용은 최대 세 번만 더 여쭙고, 확인된 의견은 적극 반영할게요!$/,
+  );
   await startCodexFeedback(
     {
       env: {
