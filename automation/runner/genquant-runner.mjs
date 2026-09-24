@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, open, readFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, unlink } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import {
   buildReproductionPrompt,
@@ -136,6 +136,15 @@ async function validateTaskArtifact(config, lease, taskId, runId) {
   });
   try {
     command("codex", ["cloud", "apply", taskId], { cwd: worktree, timeout: 180_000 });
+    const providerLog = join(worktree, "error.log");
+    try {
+      const providerLogStat = await lstat(providerLog);
+      if (!providerLogStat.isFile() || providerLogStat.isSymbolicLink() || providerLogStat.size > 1024 * 1024)
+        throw new Error("unsafe provider diagnostic file");
+      await unlink(providerLog);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
     const paths = command("git", ["-C", worktree, "status", "--porcelain=v1", "--untracked-files=all"])
       .split("\n")
       .filter(Boolean)
