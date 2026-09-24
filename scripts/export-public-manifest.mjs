@@ -69,6 +69,7 @@ export const PUBLIC_RUNTIME_MIGRATION_PATHS = [
   "migrations/047_join_member_season_identity.sql",
   "migrations/048_bug_three_question_limit.sql",
   "migrations/049_bug_runner_handoff.sql",
+  "migrations/050_bug_runner_auto_merge.sql",
 ];
 
 // `src` and `site` are copied as directories, but these paths keep the membership
@@ -243,6 +244,7 @@ export const PUBLIC_REQUIRED_EXPORT_SOURCES = [
 
 export const PUBLIC_DOC_NAMES = [
   "README.md",
+  "SPEC.md",
   "USER_GUIDE.md",
   "OPERATIONS.md",
   "ARCHITECTURE.md",

@@ -4,6 +4,7 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, readFile, unlink } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import {
+  buildFixPrompt,
   buildReproductionPrompt,
   parseLease,
   parseReproductionReceipt,
@@ -164,6 +165,92 @@ async function validateTaskArtifact(config, lease, taskId, runId) {
   }
 }
 
+async function fixTaskArtifact(config, lease, taskId, runId) {
+  const repository = await ensureRepository(config.BUG_RUNNER_ROOT, config.CODEX_REPOSITORY_URL);
+  command("git", ["-C", repository, "fetch", "--no-tags", "origin", config.CODEX_BASE_BRANCH], {
+    timeout: 180_000,
+  });
+  const remoteSha = command("git", ["-C", repository, "rev-parse", "FETCH_HEAD"]);
+  if (remoteSha !== lease.baseSha) throw new Error("runner base SHA changed after approval");
+  const runsRoot = join(config.BUG_RUNNER_ROOT, "runs");
+  await mkdir(runsRoot, { recursive: true, mode: 0o700 });
+  const worktree = resolve(runsRoot, `${lease.jobId}-${runId}`);
+  command("git", ["-C", repository, "worktree", "add", "--detach", worktree, lease.baseSha]);
+  try {
+    command("codex", ["cloud", "apply", taskId], { cwd: worktree, timeout: 180_000 });
+    try {
+      const stat = await lstat(join(worktree, "error.log"));
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1024 * 1024)
+        throw new Error("unsafe provider diagnostic file");
+      await unlink(join(worktree, "error.log"));
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    const paths = command("git", ["-C", worktree, "status", "--porcelain=v1", "--untracked-files=all"])
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.slice(3));
+    if (paths.length < 1 || paths.length > 50) throw new Error("fix diff size is outside policy");
+    const forbidden = paths.some(
+      (path) =>
+        /(^|\/)([.]env|[.]dev[.]vars|wrangler[.]production[.]jsonc|error[.]log)$/.test(path) ||
+        path.startsWith(".github/workflows/") ||
+        path.startsWith("backups/") ||
+        path.startsWith("bugs/runner/"),
+    );
+    if (forbidden) throw new Error("fix touched a forbidden path");
+    command("git", ["-C", worktree, "add", "-N", "--", ...paths]);
+    const diff = command("git", ["-C", worktree, "diff", "--binary", "--", ...paths], {
+      timeout: 60_000,
+    });
+    const artifactDigest = sha256(diff);
+    command("bun", ["install", "--frozen-lockfile"], { cwd: worktree, timeout: 180_000 });
+    command("bun", ["run", "check"], { cwd: worktree, timeout: 20 * 60_000 });
+    const slug = lease.publicAlias.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const branch = `feedback/${slug}-${lease.jobId}`;
+    command("git", ["-C", worktree, "switch", "-c", branch]);
+    command("git", ["-C", worktree, "add", "--", ...paths]);
+    command("git", ["-C", worktree, "-c", "user.name=OT1L", "-c", "user.email=otl1@users.noreply.github.com", "commit", "-m", `Fix ${lease.bugId}`]);
+    const headSha = command("git", ["-C", worktree, "rev-parse", "HEAD"]);
+    command("git", ["-C", worktree, "push", "origin", `HEAD:refs/heads/${branch}`], {
+      timeout: 180_000,
+    });
+    const title = `Fix ${lease.bugId}`;
+    const body = `Automated OT1L fix for ${lease.bugId}.\n\nValidation: bun run check`;
+    const prUrl = command("gh", ["pr", "create", "--repo", "Betalgeuse/otl1", "--base", "main", "--head", branch, "--draft", "--title", title, "--body", body], { cwd: worktree, timeout: 120_000 }).trim();
+    const pr = JSON.parse(command("gh", ["pr", "view", prUrl, "--repo", "Betalgeuse/otl1", "--json", "number,url"], { cwd: worktree }));
+    return { artifactDigest, branch, headSha, prNumber: pr.number, prUrl: pr.url, paths };
+  } finally {
+    try {
+      command("git", ["-C", repository, "worktree", "remove", "--force", worktree]);
+    } catch {
+      log("bug.runner.cleanup_failed", { jobId: lease.jobId });
+    }
+  }
+}
+
+async function waitForTask(db, config, lease, workerId, leaseToken, taskId, startedAt) {
+  let lastHeartbeat = Date.now();
+  while (Date.now() - startedAt < 20 * 60_000) {
+    await sleep(10_000);
+    const status = parseTaskStatus(
+      command("codex", ["cloud", "status", taskId], { acceptOutputOnFailure: true }),
+    );
+    if (["ready", "failed", "cancelled"].includes(status)) return status;
+    if (Date.now() - lastHeartbeat >= 240_000) {
+      await db("bug_runner_heartbeat", {
+        teamId: config.SLACK_TEAM_ID,
+        jobId: lease.jobId,
+        workerId,
+        leaseToken,
+        leaseSeconds: 1800,
+      });
+      lastHeartbeat = Date.now();
+    }
+  }
+  return "timeout";
+}
+
 async function processOne(config) {
   const db = sqlClient(config.BUG_RUNNER_DATABASE_URL);
   const workerId = config.BUG_RUNNER_WORKER_ID ?? "genquant-primary";
@@ -171,7 +258,7 @@ async function processOne(config) {
   const runnerImageDigest = sha256(
     `${process.version}|${command("codex", ["--version"])}|${command("git", ["--version"])}`,
   );
-  const leased = await db("bug_runner_lease", {
+  let leased = await db("bug_runner_lease", {
     teamId: config.SLACK_TEAM_ID,
     workerId,
     accountAlias: config.CODEX_ACCOUNT_ALIAS,
@@ -179,9 +266,18 @@ async function processOne(config) {
     leaseSeconds: 900,
     runnerImageDigest,
   });
+  if (leased === null)
+    leased = await db("bug_runner_lease_fix", {
+      teamId: config.SLACK_TEAM_ID,
+      workerId,
+      accountAlias: config.CODEX_ACCOUNT_ALIAS,
+      leaseToken,
+      leaseSeconds: 1800,
+      runnerImageDigest,
+    });
   if (leased === null) return false;
   const lease = parseLease(leased);
-  const prompt = buildReproductionPrompt(lease);
+  const prompt = lease.kind === "reproduce" ? buildReproductionPrompt(lease) : buildFixPrompt(lease);
   const promptDigest = sha256(prompt);
   let runId = `run-${randomUUID()}`;
   const startedAt = Date.now();
@@ -204,27 +300,45 @@ async function processOne(config) {
       providerTaskUrl: task.taskUrl,
     });
     log("bug.runner.task_started", { bugId: lease.bugId, jobId: lease.jobId, runId });
-    let lastHeartbeat = Date.now();
-    let status = "pending";
     phase = "status";
-    while (Date.now() - startedAt < 15 * 60_000) {
-      await sleep(10_000);
-      status = parseTaskStatus(
-        command("codex", ["cloud", "status", task.taskId], { acceptOutputOnFailure: true }),
-      );
-      if (["ready", "failed", "cancelled"].includes(status)) break;
-      if (Date.now() - lastHeartbeat >= 240_000) {
-        await db("bug_runner_heartbeat", {
-          teamId: config.SLACK_TEAM_ID,
-          jobId: lease.jobId,
-          workerId,
-          leaseToken,
-          leaseSeconds: 900,
-        });
-        lastHeartbeat = Date.now();
-      }
-    }
+    const status = await waitForTask(db, config, lease, workerId, leaseToken, task.taskId, startedAt);
     if (status !== "ready") throw new Error(`Codex task did not become ready: ${status}`);
+    if (lease.kind === "fix") {
+      phase = "fix_artifact";
+      const fix = await fixTaskArtifact(config, lease, task.taskId, runId);
+      const resultDigest = sha256(`${task.taskId}|${fix.artifactDigest}|checks_green`);
+      phase = "record_fix";
+      await db("bug_runner_finish_fix", {
+        teamId: config.SLACK_TEAM_ID,
+        jobId: lease.jobId,
+        workerId,
+        leaseToken,
+        runId,
+        elapsedMs: Date.now() - startedAt,
+        artifactDigest: fix.artifactDigest,
+        resultDigest,
+        branch: fix.branch,
+        headSha: fix.headSha,
+        prNumber: fix.prNumber,
+      });
+      phase = "merge";
+      command("gh", ["pr", "ready", fix.prUrl, "--repo", "Betalgeuse/otl1"]);
+      command("gh", ["pr", "merge", fix.prUrl, "--repo", "Betalgeuse/otl1", "--squash", "--delete-branch"], { timeout: 180_000 });
+      const merged = JSON.parse(command("gh", ["pr", "view", fix.prUrl, "--repo", "Betalgeuse/otl1", "--json", "state,mergeCommit"]));
+      const mergeSha = merged.mergeCommit?.oid;
+      if (merged.state !== "MERGED" || typeof mergeSha !== "string") throw new Error("merge receipt missing");
+      const summary = `수정 파일 ${fix.paths.length}개(${fix.paths.slice(0, 5).join(", ")}${fix.paths.length > 5 ? " 외" : ""})를 검증하고 main에 반영했습니다.`;
+      await db("bug_runner_finish_merge", {
+        teamId: config.SLACK_TEAM_ID,
+        runId,
+        headSha: fix.headSha,
+        mergeSha,
+        mergeReceipt: sha256(`${fix.prUrl}|${mergeSha}|merged`),
+        summary,
+      });
+      log("bug.runner.change_merged", { bugId: lease.bugId, jobId: lease.jobId, runId });
+      return true;
+    }
     phase = "artifact";
     const artifact = await validateTaskArtifact(config, lease, task.taskId, runId);
     const resultDigest = sha256(`${task.taskId}|${artifact.artifactDigest}|ready`);

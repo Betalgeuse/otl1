@@ -1,5 +1,5 @@
 import type { CommunityEnv } from "./community-runtime";
-import { callSlack } from "./community-social";
+import { addReactions, callSlack, removeReactions } from "./community-social";
 import { object, string } from "./input";
 import { NeonStore } from "./store";
 
@@ -8,9 +8,12 @@ type Notification = {
   readonly bugId: string;
   readonly channelId: string;
   readonly threadTs: string;
-  readonly kind: "task_started" | "task_ready" | "task_failed";
+  readonly kind: "task_started" | "task_ready" | "task_failed" | "change_merged";
   readonly taskUrl: string;
   readonly attempt: number;
+  readonly reporterId: string | null;
+  readonly adminId: string | null;
+  readonly summary: string | null;
 };
 
 function parseNotification(value: unknown): Notification {
@@ -25,7 +28,7 @@ function parseNotification(value: unknown): Notification {
     notificationId < 1 ||
     !Number.isSafeInteger(attempt) ||
     attempt < 1 ||
-    !["task_started", "task_ready", "task_failed"].includes(kind) ||
+    !["task_started", "task_ready", "task_failed", "change_merged"].includes(kind) ||
     !/^https:\/\/chatgpt[.]com\/codex\/tasks\/task_[a-z]_[a-f0-9]{32}$/.test(taskUrl)
   )
     throw new TypeError("invalid agent notification");
@@ -37,15 +40,20 @@ function parseNotification(value: unknown): Notification {
     kind: kind as Notification["kind"],
     taskUrl,
     attempt,
+    reporterId: typeof payload.reporterId === "string" ? payload.reporterId : null,
+    adminId: typeof payload.adminId === "string" ? payload.adminId : null,
+    summary: typeof payload.summary === "string" ? payload.summary.slice(0, 1200) : null,
   };
 }
 
 function notificationText(input: Notification): string {
-  if (input.kind === "task_started")
-    return `GenQuant가 ${input.bugId} 재현 작업을 시작했어요. <${input.taskUrl}|Codex 작업 보기>`;
-  if (input.kind === "task_ready")
-    return `GenQuant가 ${input.bugId} 재현 증거를 확인했어요. <${input.taskUrl}|Codex 작업 보기>\n다음 수정 작업은 별도 lease로 이어집니다. 자동 병합은 하지 않습니다.`;
-  return `GenQuant가 ${input.bugId} 재현 작업을 완료하지 못했어요. <${input.taskUrl}|Codex 작업 보기>\n실패 영수증을 남겼고 자동 병합은 진행하지 않았습니다.`;
+  if (input.kind === "change_merged") {
+    const mentions = [...new Set([input.adminId, input.reporterId].filter(Boolean))]
+      .map((id) => `<@${id}>`)
+      .join(" ");
+    return `${mentions}\n수정을 완료하고 반영했어요! ✅\n${input.summary ?? "승인한 To-Be 기준으로 수정·검증·병합했습니다."}`;
+  }
+  return `${input.bugId} 자동 개선을 완료하지 못했어요. 운영자가 확인할게요.`;
 }
 
 export async function sendAgentNotifications(
@@ -63,11 +71,35 @@ export async function sendAgentNotifications(
   for (const raw of claimed) {
     const item = parseNotification(raw);
     try {
-      await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
-        channel: item.channelId,
-        thread_ts: item.threadTs,
-        text: notificationText(item),
-      });
+      if (item.kind === "task_failed" || item.kind === "change_merged")
+        await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
+          channel: item.channelId,
+          thread_ts: item.threadTs,
+          text: notificationText(item),
+        });
+      if (item.kind === "change_merged") {
+        await removeReactions(env.SLACK_BOT_TOKEN, {
+          channel: item.channelId,
+          ts: item.threadTs,
+          names: ["loading"],
+        });
+        await addReactions(env.SLACK_BOT_TOKEN, {
+          channel: item.channelId,
+          ts: item.threadTs,
+          names: ["white_check_mark"],
+        });
+      } else if (item.kind === "task_failed") {
+        await removeReactions(env.SLACK_BOT_TOKEN, {
+          channel: item.channelId,
+          ts: item.threadTs,
+          names: ["loading"],
+        });
+        await addReactions(env.SLACK_BOT_TOKEN, {
+          channel: item.channelId,
+          ts: item.threadTs,
+          names: ["warning"],
+        });
+      }
       await db.queryJson("SELECT otl.bug_runner_finish_notification($1::jsonb)", [
         JSON.stringify({
           notificationId: item.notificationId,

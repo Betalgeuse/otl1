@@ -124,7 +124,7 @@ Cron 등록이 실제로 stale이라는 Cloudflare 설정·호출 증거가 있�
 
 Slack delivery 실패 로그의 `providerSubcode`는 `invalid_blocks`, `invalid_arguments`, `invalid_form_data`, `msg_too_long`, `http_429`, `provider_5xx`, `other` 중 하나만 남깁니다. 원문 응답, 메타데이터 메시지, 사용자 입력은 로그나 delivery ledger에 저장하지 않습니다.
 
-Slack workspace admin 또는 owner가 확정 명세를 승인하면 Worker가 원격 branch SHA를 확인하고 GenQuant job을 원자적으로 생성합니다. GenQuant의 Codex Cloud CLI는 재현 receipt만 만들며 다른 파일 변경은 실패로 처리합니다. 실행 상태는 원래 feedback 스레드에 봇으로 돌아옵니다. 코드 수정·Draft PR은 재현 job의 실제 운영 관찰 뒤 다음 단계로 활성화하며 자동 머지는 계속 금지합니다. GitHub Actions는 사용하지 않습니다.
+Slack workspace admin 또는 owner가 OT1L의 As-Is/To-Be를 승인하면 원문에 `loading` 반응을 달고 원격 branch SHA에 묶인 GenQuant job을 생성합니다. 재현 artifact와 수정 diff는 별도 경계로 검사하며, 금지 경로가 없고 전체 검사가 통과한 변경만 Draft PR과 squash merge로 이어집니다. GitHub 앱 메시지와 Codex 작업 링크는 feedback 채널에 게시하지 않습니다. 병합 뒤 OT1L이 관리자와 원제보자를 멘션해 수정 요약을 답글로 남기고 `loading`을 `white_check_mark`로 교체합니다. GitHub Actions는 사용하지 않습니다.
 
 피드백 채널로 정규화된 초안은 opaque intake key와 함께 실제 `source_channel_id`·`source_thread`로도 다시 찾습니다. 따라서 새 피드백 스레드의 일반 댓글도 답변으로 이어집니다. 확인 질문은 고정 필드 순서만 따르지 않습니다. 데이터 불일치·중복·Canvas·프로필 문제는 재현 단계보다 발생 빈도와 시각을 먼저 확인하고, 사용자 동작이 없는 자동 실행 문제에는 두 단계 입력을 강요하지 않습니다.
 
