@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, open, readFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, unlink } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import {
   buildReproductionPrompt,
@@ -18,13 +18,19 @@ const sleep = (milliseconds) => new Promise((resolveSleep) => setTimeout(resolve
 const log = (event, fields = {}) => console.log(JSON.stringify({ event, ...fields }));
 
 function command(binary, args, options = {}) {
-  return execFileSync(binary, args, {
-    cwd: options.cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: options.timeout ?? 60_000,
-    maxBuffer: 4 * 1024 * 1024,
-  }).trimEnd();
+  try {
+    return execFileSync(binary, args, {
+      cwd: options.cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: options.timeout ?? 60_000,
+      maxBuffer: 4 * 1024 * 1024,
+    }).trimEnd();
+  } catch (error) {
+    if (options.acceptOutputOnFailure && typeof error?.stdout === "string" && error.stdout.trim())
+      return error.stdout.trimEnd();
+    throw error;
+  }
 }
 
 function sqlClient(connectionString) {
@@ -130,6 +136,15 @@ async function validateTaskArtifact(config, lease, taskId, runId) {
   });
   try {
     command("codex", ["cloud", "apply", taskId], { cwd: worktree, timeout: 180_000 });
+    const providerLog = join(worktree, "error.log");
+    try {
+      const providerLogStat = await lstat(providerLog);
+      if (!providerLogStat.isFile() || providerLogStat.isSymbolicLink() || providerLogStat.size > 1024 * 1024)
+        throw new Error("unsafe provider diagnostic file");
+      await unlink(providerLog);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
     const paths = command("git", ["-C", worktree, "status", "--porcelain=v1", "--untracked-files=all"])
       .split("\n")
       .filter(Boolean)
@@ -171,10 +186,12 @@ async function processOne(config) {
   let runId = `run-${randomUUID()}`;
   const startedAt = Date.now();
   let task;
+  let phase = "dispatch";
   try {
     const dispatch = await dispatchTaskOnce(config, lease, prompt, promptDigest, runId);
     task = dispatch.task;
     runId = dispatch.runId;
+    phase = "record_start";
     await db("bug_runner_start", {
       teamId: config.SLACK_TEAM_ID,
       jobId: lease.jobId,
@@ -189,9 +206,12 @@ async function processOne(config) {
     log("bug.runner.task_started", { bugId: lease.bugId, jobId: lease.jobId, runId });
     let lastHeartbeat = Date.now();
     let status = "pending";
+    phase = "status";
     while (Date.now() - startedAt < 15 * 60_000) {
       await sleep(10_000);
-      status = parseTaskStatus(command("codex", ["cloud", "status", task.taskId]));
+      status = parseTaskStatus(
+        command("codex", ["cloud", "status", task.taskId], { acceptOutputOnFailure: true }),
+      );
       if (["ready", "failed", "cancelled"].includes(status)) break;
       if (Date.now() - lastHeartbeat >= 240_000) {
         await db("bug_runner_heartbeat", {
@@ -205,8 +225,10 @@ async function processOne(config) {
       }
     }
     if (status !== "ready") throw new Error(`Codex task did not become ready: ${status}`);
+    phase = "artifact";
     const artifact = await validateTaskArtifact(config, lease, task.taskId, runId);
     const resultDigest = sha256(`${task.taskId}|${artifact.artifactDigest}|ready`);
+    phase = "finish";
     await db("bug_runner_finish", {
       teamId: config.SLACK_TEAM_ID,
       jobId: lease.jobId,
@@ -244,6 +266,7 @@ async function processOne(config) {
     log("bug.runner.task_failed", {
       bugId: lease.bugId,
       jobId: lease.jobId,
+      phase,
       errorType: error instanceof Error ? error.name : "Unknown",
     });
     return true;
