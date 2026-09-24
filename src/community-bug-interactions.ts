@@ -7,7 +7,7 @@ import {
   parseBugReportModal,
   submitBugReportModal,
 } from "./community-bugs";
-import { startCodexFeedback } from "./community-feedback";
+import { approveCodexMerge, startCodexFeedback } from "./community-feedback";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import { InputError, object, string } from "./input";
 
@@ -77,6 +77,23 @@ export async function handleBugAction(
       sourceThread: string(value.sourceThread),
       reporterId: string(value.reporterId),
       packetRevision,
+    });
+    return new Response(null, { status: 200 });
+  }
+  if (id === "community_feedback_merge_approve") {
+    const packetRevision = value.packetRevision;
+    const prNumber = value.prNumber;
+    if (
+      typeof packetRevision !== "number" ||
+      !Number.isSafeInteger(packetRevision) ||
+      typeof prNumber !== "number" ||
+      !Number.isSafeInteger(prNumber)
+    )
+      throw new InputError("병합 승인 대상을 확인할 수 없어요.");
+    await approveCodexMerge(context, {
+      feedbackId: string(value.feedbackId),
+      packetRevision,
+      prNumber,
     });
     return new Response(null, { status: 200 });
   }

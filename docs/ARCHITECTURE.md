@@ -101,7 +101,7 @@ welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_r
 
 `bug_jobs`는 제공자와 분리된 재현·수정·검토·배포 작업 outbox입니다. `bug_deliveries`는 Slack에 질문·요약·접수 영수증·비공개 관리자 인계를 보내기 전의 durable record입니다. delivery key, 제보자 소유권, packet revision, template과 renderer가 같은 경우에만 idempotent하게 다시 읽고, worker lease를 가진 발송만 완료할 수 있습니다. 실패는 다음 시도 시각과 오류 분류를 남겨 독립적으로 재시도하며 세 번째 실패 뒤에는 retry 없이 `failed` dead-letter로 남깁니다. 만료와 delivery claim 함수는 team ID를 필수로 받아 다른 워크스페이스의 due 행을 건드리지 않습니다.
 
-관리자 승인 경계에서만 확정된 `bug_packet.v1`을 `bug_jobs`에 넣습니다. Workspace admin/owner 판정은 Slack `users.info` 응답으로 다시 확인하고, 승인 시점의 원격 branch SHA와 packet revision을 job event에 묶습니다. GenQuant 실행기는 공개 포트를 열지 않고 최소 권한 `otl_bug_runner` DB 역할로 job을 lease합니다. 재현 단계는 schema-bound artifact 한 파일만 허용합니다. 수정 단계는 금지 경로를 거절하고 전체 검사를 통과한 diff만 격리 브랜치와 Draft PR로 만든 뒤 보호된 `main`에 squash merge합니다. GitHub 작업 메시지는 Slack에 노출하지 않으며 OT1L이 원래 feedback 스레드에서 As-Is/To-Be 승인, 처리 중 반응, 병합 결과와 완료 반응만 관리합니다. GitHub Actions는 사용하지 않습니다.
+확정된 `bug_packet.v1` 또는 `feedback_packet.v1`은 접수 직후 `bug_jobs`에 들어갑니다. 승인 시점의 원격 branch SHA와 packet revision을 job event에 묶고 GenQuant 실행기는 공개 포트를 열지 않은 채 최소 권한 `otl_bug_runner` DB 역할로 job을 lease합니다. 재현 단계는 schema-bound artifact 한 파일만 허용합니다. 수정 단계는 금지 경로를 거절하고 전체 검사를 통과한 diff만 격리 브랜치와 Draft PR로 만듭니다. 이 시점에서 작업을 멈추고 OT1L이 변경 요약과 병합 승인 버튼을 원래 feedback 스레드에 냅니다. Workspace admin/owner 판정은 버튼 클릭 때 Slack `users.info`로 다시 확인하며, 승인 영수증을 받은 GenQuant만 PR을 ready로 바꾸고 보호된 `main`에 squash merge합니다. GitHub 앱 메시지는 Slack에 노출하지 않습니다. GitHub Actions는 사용하지 않습니다.
 
 ## 확장 규칙
 

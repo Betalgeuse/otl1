@@ -14,8 +14,8 @@ import type { BugDraft } from "./community-bug-types";
 import {
   confirmCompactFeedback,
   type FeedbackAnalysis,
-  postFeedbackAdminReview,
   publishFeedbackAnalysis,
+  startCodexFeedbackAutomatically,
 } from "./community-feedback";
 import { canonicalFeedbackContext, feedbackBugIdentity } from "./community-feedback-route";
 import type { CommunityContext } from "./community-runtime";
@@ -127,8 +127,9 @@ export async function startBugReport(
         reporterId: context.scope.userId,
         fromState: "new",
       });
-      await postFeedbackAdminReview(deliveryContext, {
+      await startCodexFeedbackAutomatically(deliveryContext, {
         feedbackId: draft.bugId,
+        reporterId: context.scope.userId,
         packetRevision: draft.packetRevision + 1,
       });
       return { context: deliveryContext, draft };

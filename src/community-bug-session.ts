@@ -25,7 +25,7 @@ import {
   analyzeFeedback,
   confirmCompactFeedback,
   fallbackFeedbackAnalysis,
-  postFeedbackAdminReview,
+  startCodexFeedbackAutomatically,
 } from "./community-feedback";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import { InputError } from "./input";
@@ -112,8 +112,9 @@ export async function continueBugReport(
         reporterId: active.reporterId,
         fromState: "needs_info",
       });
-      await postFeedbackAdminReview(context, {
+      await startCodexFeedbackAutomatically(context, {
         feedbackId: active.bugId,
+        reporterId: active.reporterId,
         packetRevision: packetRevision + 1,
       });
       return true;
@@ -300,8 +301,9 @@ export async function confirmBugReport(
     reporterId: draft.reporterId,
     packetRevision: draft.packetRevision + 1,
   });
-  await postFeedbackAdminReview(context, {
+  await startCodexFeedbackAutomatically(context, {
     feedbackId: bugId,
+    reporterId: draft.reporterId,
     packetRevision: draft.packetRevision + 1,
   });
 }

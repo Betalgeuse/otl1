@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   analyzeFeedback,
+  approveCodexMerge,
   feedbackPromptDue,
   parseFeedbackAnalysis,
   sendDailyFeedbackPrompt,
@@ -176,10 +177,10 @@ try {
     },
   );
   const post = calls.find(
-    (call) => call.method === "chat.postMessage" && call.body.text.includes("수정과 검증을 시작"),
+    (call) => call.method === "chat.postMessage" && call.body.text.includes("수정안과 검증 결과를 준비"),
   );
   assert.equal(post.body.thread_ts, "123.100");
-  assert.match(post.body.text, /관리자 승인을 확인했어요/);
+  assert.match(post.body.text, /피드백을 접수했어요/);
   assert.equal(
     calls.some((call) => call.method === "reactions.add" && call.body.name === "loading"),
     true,
@@ -190,6 +191,28 @@ try {
   assert.match(queueCall.body.params[0], /"reporterId":"UREPORTER"/);
   assert.match(queueCall.body.params[0], /"repository":"Betalgeuse\/otl1"/);
   assert.match(queueCall.body.params[0], /"branch":"main"/);
+  await approveCodexMerge(
+    {
+      env: {
+        DATABASE_URL:
+          "postgresql://runtime:secret@ep-example-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+        SLACK_BOT_TOKEN: "fake",
+      },
+      scope: { teamId: "TQA", channelId: "CFEEDBACK", userId: "UADMIN" },
+      source: "123.100",
+      thread: "123.100",
+      date: "2026-09-23",
+      key: "interaction:merge",
+      store: {},
+    },
+    { feedbackId: "BUG-ABCDEF123456", packetRevision: 2, prNumber: 9 },
+  );
+  assert.equal(
+    calls.some(
+      (call) => call.method === "chat.postMessage" && call.body.text.includes("병합 승인을 확인"),
+    ),
+    true,
+  );
   queueAccepted = false;
   const postsBeforeMismatch = calls.filter((call) => call.method === "chat.postMessage").length;
   await assert.rejects(

@@ -66,6 +66,7 @@ const memberActions = new Set([
   "community_bug_answer_open",
   "community_bug_answer_submit",
   "community_feedback_admin_start",
+  "community_feedback_merge_approve",
 ]);
 
 export function authorizeCommunityAction(
