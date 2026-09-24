@@ -1,4 +1,4 @@
-import { type MemberNavigation, memberActionBlock } from "./community-member-actions";
+import { type MemberNavigation, memberActionBlocks } from "./community-member-actions";
 import { exactMessageTimestamp, reminderRetryCode } from "./community-reminder-batch";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
@@ -111,7 +111,7 @@ export async function sendCommonDeliveries(input: {
           ? {
               blocks: [
                 { type: "section", text: { type: "mrkdwn", text: delivery.text } },
-                memberActionBlock(input.navigation),
+                ...memberActionBlocks(input.navigation, delivery.date),
               ],
             }
           : {}),

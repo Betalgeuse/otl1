@@ -301,3 +301,15 @@ Silo 해체가 모든 사람 관계의 삭제를 뜻하지는 않는다.
 5. 외부 알림과 소개용 웹사이트
 
 정보 공유 인센티브와 자동 사람 연결은 자기소개 흐름을 실제로 사용해본 뒤 다시 평가한다. 이 순서는 자기소개 기능이 관계 형성에 효과가 있다고 검증했다는 뜻이 아니라, 현재의 수동 회원 관리와 낯선 사람 사이의 첫 대화 문제를 더 직접적으로 다룬다는 제품 판단이다.
+
+## 2026-09-23 피드백에서 관리자 검토 가능한 명세로
+
+사용자에게 버그 여부를 먼저 고르게 하지 않는다. Herzig 등의 실증 연구에서는 BUG로 분류된 이슈의 평균 33.8%가 다른 범주였고, 사용자와 개발자의 관점 차이가 주요 원인으로 제시됐다. Bettenburg 등의 조사에서는 재현 단계와 관찰·기대 결과가 개발자에게 특히 유용했고, 잘못된 재현 단계와 불완전한 정보가 큰 지연을 만들었다. Femmer 등의 Requirements Smells 연구는 자동 검출이 결함의 신호는 줄 수 있지만 도메인 맥락과 리뷰를 대체하지 못하며 추가 노력을 낮춰야 한다고 지적했다. 후속 질문 생성 실험은 질문을 흔한 인터뷰 실수 유형으로 안내할 때 LLM 질문의 명확성·관련성·정보성이 개선될 수 있음을 보였다.
+
+- 모든 입력은 `feedback`으로 받고 `defect·improvement·question·documentation·unknown`은 시스템과 관리자가 판정한다.
+- OT1L 문서 계약과 원문 스레드를 근거로 사용자 문제, 관찰 또는 원하는 변화, 트리거, 수용 조건의 빈칸을 찾는다.
+- 한 번에 한 질문, 최대 3회로 제한한다. 3회는 논문이 제시한 보편 상수가 아니라 이 커뮤니티의 입력 부담을 제한하기 위한 운영 상한이다.
+- 3회 뒤에도 모르는 값은 추정하지 않고 관리자 카드에 남긴다.
+- 관리자 승인 뒤 Codex는 격리 브랜치와 draft PR까지만 만들며 자동 머지는 하지 않는다.
+
+근거: [What makes a good bug report?](https://ieeexplore.ieee.org/document/4814178), [It's Not a Bug, It's a Feature](https://www.microsoft.com/en-us/research/publication/its-not-a-bug-its-a-feature-how-misclassification-impacts-bug-prediction/), [Rapid quality assurance with Requirements Smells](https://arxiv.org/abs/1611.08847), [Requirements Elicitation Follow-Up Question Generation](https://arxiv.org/abs/2507.02858). OpenAI 공식 문서는 장기 작업에서 명세·계획·검증·상태 기록을 외부화하고, 부작용 도구 가까이에 승인 경계를 두며, 승인 상태를 저장해 같은 실행을 재개하도록 권고한다.

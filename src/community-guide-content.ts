@@ -1,3 +1,4 @@
+import { feedbackButton } from "./community-feedback-button";
 import { inviteButton } from "./community-member-actions";
 import type { CommunityEnv } from "./community-runtime";
 import { InputError } from "./input";
@@ -116,7 +117,7 @@ export function guideBlocks(userId: string, guide: WelcomeGuideContent, rendered
     ...sections,
     {
       type: "actions",
-      elements: [inviteButton()],
+      elements: [inviteButton(), feedbackButton()],
     },
     {
       type: "image",

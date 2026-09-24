@@ -7,6 +7,17 @@ import {
   type DraftBugPacket,
 } from "./community-bug-schema";
 
+const DATA_STATE_MISMATCH =
+  /(?:불일치|중복|안\s*맞|다르|달라|mismatch|duplicat|inconsisten|attribute|canvas|profile|db)/i;
+
+function fieldOrder(packet: DraftBugPacket): readonly BugField[] {
+  const context = [packet.actual, packet.expected]
+    .flatMap((fact) => (fact.status === "known" ? [fact.value] : []))
+    .join(" ");
+  if (!DATA_STATE_MISMATCH.test(context)) return BUG_FIELD_ORDER;
+  return ["actual", "expected", "frequency", "occurredAt", "location", "steps", "impact"];
+}
+
 const CORRECTION_TEXT = {
   actual: "아직 실제로 일어난 일을 확인하지 못했어요. 화면에 보인 결과를 그대로 알려주세요.",
   expected: "원래 나와야 했던 결과를 한 문장으로 다시 알려주세요.",
@@ -41,10 +52,11 @@ export function nextBugQuestion(
   if (latest && packet[latest].status === "unknown") return question(latest, true);
   const conflictField = contradictions.includes("actual_equals_expected") ? "actual" : undefined;
   if (conflictField) return question(conflictField, askedFields.includes(conflictField));
-  const unasked = BUG_FIELD_ORDER.find(
+  const order = fieldOrder(packet);
+  const unasked = order.find(
     (field) => packet[field].status === "unknown" && !askedFields.includes(field),
   );
   if (unasked) return question(unasked, false);
-  const missing = BUG_FIELD_ORDER.find((field) => packet[field].status === "unknown");
+  const missing = order.find((field) => packet[field].status === "unknown");
   return question(missing ?? "actual", true);
 }

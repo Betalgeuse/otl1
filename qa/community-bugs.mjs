@@ -423,7 +423,10 @@ globalThis.fetch = async (url, options) => {
         (item) =>
           item.teamId === input.teamId &&
           item.reporterId === input.reporterId &&
-          item.source.opaqueRef === input.sourceOpaqueRef &&
+          ((input.sourceOpaqueRef && item.source.opaqueRef === input.sourceOpaqueRef) ||
+            (!input.sourceOpaqueRef &&
+              item.source.channelId === input.sourceChannelId &&
+              item.source.thread === input.sourceThread)) &&
           ["new", "needs_info", "needs_info_exhausted"].includes(item.state),
       );
       return Response.json({ rows: [[JSON.stringify(row ?? null)]] });
@@ -807,6 +810,12 @@ try {
     thread: "10.000001",
     date: "2026-09-16",
   });
+
+  const compactModal = parseBugReportModal({
+    actual: { value: { value: "보내기를 누르면 연결 오류가 보여요" } },
+    expected: { value: { value: "오류 없이 접수되어야 해요" } },
+  });
+  assert.equal("errors" in compactModal, false, "the two-field feedback modal is accepted");
 
   const parsed = parseBugReportModal({
     actual: { value: { value: "등록 버튼을 누르면 오류가 보여요" } },
@@ -1965,7 +1974,8 @@ try {
     { ...env, BUG_PRIVATE_OBJECTS: undefined },
     (effect) => pending.push(effect),
   );
-  assert.deepEqual(await accepted?.json(), { response_action: "clear" });
+  assert.equal(accepted?.status, 200);
+  assert.equal(await accepted?.text(), "", "valid feedback submission closes with an empty ACK");
   await Promise.all(pending);
   assert.equal(
     calls.length,
@@ -1974,6 +1984,75 @@ try {
   );
   assert.equal(calls[0].target, "https://slack.com/api/chat.postEphemeral");
   assert.equal(calls[0].body.user, "UMEMBER");
+
+  calls.length = 0;
+  const routedPending = [];
+  const routedSubmission = {
+    ...submission,
+    view: {
+      ...submission.view,
+      id: "V-ROUTED",
+      private_metadata: JSON.stringify({
+        channelId: "CPUBLIC",
+        userId: "UMEMBER",
+        source: "29.000002",
+        thread: "29.000001",
+        date: "2026-09-16",
+      }),
+      state: {
+        values: {
+          actual: { value: { value: "자기소개 모음과 프로필 정보가 달라요" } },
+          expected: { value: { value: "한 곳에서 같은 정보가 보여야 해요" } },
+        },
+      },
+    },
+  };
+  const routedAck = await communityInteraction(routedSubmission, env, (effect) =>
+    routedPending.push(effect),
+  );
+  assert.equal(await routedAck?.text(), "");
+  await Promise.all(routedPending);
+  const routedPosts = calls.filter((call) => call.target.endsWith("/chat.postMessage"));
+  const feedbackRoot = routedPosts.find(
+    (call) => call.body.channel === "CFEEDBACK" && call.body.thread_ts === undefined,
+  );
+  assert.match(feedbackRoot.body.text, /<@UMEMBER>/);
+  assert.match(feedbackRoot.body.text, /자기소개 모음과 프로필 정보가 달라요/);
+  const feedbackThread = "20.000001";
+  const routedReplies = routedPosts.filter(
+    (call) => call.body.channel === "CFEEDBACK" && call.body.thread_ts === feedbackThread,
+  );
+  assert.equal(routedReplies.length, 2, "question and analysis stay in the feedback thread");
+  assert.match(routedReplies[0].body.text, /<@UMEMBER>/, "the next question mentions its reporter");
+  const routedBugId = /버그 키: (BUG-[A-Z0-9]+)/.exec(feedbackRoot.body.text)?.[1];
+  const routedDraft = routedBugId ? bugRows.get(routedBugId) : undefined;
+  assert.notEqual(routedDraft, undefined, "the canonical feedback thread is the dialogue source");
+  assert.deepEqual(
+    [routedDraft.source.channelId, routedDraft.source.thread],
+    ["CFEEDBACK", feedbackThread],
+  );
+  const routedQuestion = routedDraft.questions.find((question) => !question.answered);
+  assert.equal(
+    routedQuestion.fieldName,
+    "frequency",
+    "a transient data mismatch asks about recurrence before generic reproduction steps",
+  );
+  assert.equal(
+    await continueBugReport(
+      {
+        ...context,
+        scope: { ...context.scope, channelId: "CFEEDBACK" },
+        source: "29.000003",
+        thread: feedbackThread,
+        key: "incoming:29.000003",
+      },
+      "한 번",
+      routedQuestion.questionId,
+    ),
+    true,
+    "a reply in the canonical feedback thread resumes its routed draft",
+  );
+  assert.equal(routedQuestion.answered, true);
 
   calls.length = 0;
   const fullSubmission = {
@@ -2006,7 +2085,8 @@ try {
   const fullAccepted = await communityInteraction(fullSubmission, env, (effect) =>
     fullPending.push(effect),
   );
-  assert.deepEqual(await fullAccepted?.json(), { response_action: "clear" });
+  assert.equal(fullAccepted?.status, 200);
+  assert.equal(await fullAccepted?.text(), "");
   await Promise.all(fullPending);
   const completeDraft = [...bugRows.values()].find(
     (row) => row.source.opaqueRef === "slack:TQA:CPUBLIC:30.000001",
@@ -2020,8 +2100,12 @@ try {
   const summaryRetry = [];
   await communityInteraction(fullSubmission, env, (effect) => summaryRetry.push(effect));
   await Promise.all(summaryRetry);
-  const summaryCall = calls.findLast((call) =>
-    call.target.includes("slack.com/api/chat.postMessage"),
+  const summaryCall = calls.findLast(
+    (call) =>
+      call.target.includes("slack.com/api/chat.postMessage") &&
+      call.body.blocks?.some((block) =>
+        block.elements?.some((element) => element.action_id === "community_bug_confirm"),
+      ),
   );
   assert.equal(summaryCall.body.blocks[1].elements[0].action_id, "community_bug_confirm");
   assert.deepEqual([summaryDelivery.status, summaryDelivery.attempts], ["sent", 2]);
@@ -2055,7 +2139,14 @@ try {
     );
     const question = draft.questions.find((item) => item.fieldName === field && !item.answered);
     const message = calls.findLast(
-      (call) => call.target.endsWith("chat.postMessage") && call.body.thread_ts === thread,
+      (call) =>
+        call.target.endsWith("chat.postMessage") &&
+        call.body.thread_ts === thread &&
+        call.body.blocks?.some((block) =>
+          block.elements?.some((element) =>
+            element.action_id?.startsWith(`community_bug_answer:${field}:`),
+          ),
+        ),
     );
     const button = message.body.blocks[1].elements.find((element) =>
       element.action_id.endsWith(`:${option}`),
@@ -2946,21 +3037,10 @@ try {
     "needs_info",
     "needs_info",
     "needs_info",
-    "needs_info",
-    "needs_info",
+    "needs_info_exhausted",
+    "needs_info_exhausted",
     "needs_info_exhausted",
   ]);
-  assert.equal(
-    calls.some((call) =>
-      call.body.blocks?.some((block) =>
-        block.elements?.some((element) =>
-          /^community_bug_answer:(frequency|impact):[a-z_]+$/.test(element.action_id),
-        ),
-      ),
-    ),
-    true,
-    "enum clarification must provide machine-routed buttons",
-  );
   const fifthFrequencyPayload = bugQuestionPayload(
     { ...context, source: `${timestamp}.000007`, thread: eventTs },
     signedDraft.bugId,
@@ -2968,7 +3048,7 @@ try {
     5,
     bugQuestionForField("frequency"),
   );
-  assert.equal(fifthFrequencyPayload.text, "이 문제는 얼마나 자주 생기나요?");
+  assert.equal(fifthFrequencyPayload.text, "<@UMEMBER> 이 문제는 얼마나 자주 생기나요?");
   assert.deepEqual(
     fifthFrequencyPayload.blocks[1].elements.map((element) => element.action_id),
     [
@@ -2985,8 +3065,6 @@ try {
       questionId: `${signedDraft.bugId}:q5:frequency`,
       packetRevision: 5,
       answer,
-      thread: eventTs,
-      source: `${timestamp}.000007`,
     })),
   );
   const impactPayload = bugQuestionPayload(
@@ -3108,8 +3186,8 @@ try {
     "needs_info",
     "needs_info",
     "needs_info",
-    "needs_info",
-    "needs_info",
+    "needs_info_exhausted",
+    "needs_info_exhausted",
     "needs_info_exhausted",
   ]);
 

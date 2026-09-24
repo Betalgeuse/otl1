@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { parseExplicitGoal, sameGoalText } from "../src/community-explicit-goal.ts";
+import {
+  parseExplicitGoal,
+  resolveExplicitGoal,
+  sameGoalText,
+} from "../src/community-explicit-goal.ts";
 
 const date = "2026-09-17";
 const cases = [
@@ -7,10 +11,7 @@ const cases = [
     "원씽: 파이프라인 업데이트 완료 (진짜)\n사유: 합성 검증 사유",
     "파이프라인 업데이트 완료 (진짜)",
   ],
-  [
-    "원띵: 텐서연산 공부\n사유 : 연구에 쓰이는데 아직은 미숙함",
-    "텐서연산 공부",
-  ],
+  ["원띵: 텐서연산 공부\n사유 : 연구에 쓰이는데 아직은 미숙함", "텐서연산 공부"],
   [
     "• 원띵: 관심있는 랩실 위해 CV 수정 및 컨택메일 작성\n• 사유: 연구 경험을 쌓기 위해서",
     "관심있는 랩실 위해 CV 수정 및 컨택메일 작성",
@@ -38,6 +39,23 @@ for (const [text, expected] of cases)
 assert.equal(sameGoalText("  보고서  마무리 ", "보고서 마무리"), true);
 assert.equal(sameGoalText("Ａ 보고서", "A 보고서"), true);
 assert.equal(sameGoalText("보고서 마무리", "보고서 완료"), false);
+
+assert.deepEqual(
+  resolveExplicitGoal("9.23 원띵: RAG 개념 다시 익히기", {
+    contextDate: "2026-09-22",
+    serviceDate: "2026-09-22",
+    calendarDate: "2026-09-23",
+  }),
+  { date: "2026-09-23", goal: "RAG 개념 다시 익히기" },
+);
+assert.equal(
+  resolveExplicitGoal("9.24 원띵: 미래 목표", {
+    contextDate: "2026-09-22",
+    serviceDate: "2026-09-22",
+    calendarDate: "2026-09-23",
+  }),
+  null,
+);
 
 console.log(
   "PASS explicit goal fields outrank title verbs, isolate the goal line, preserve date safety, and compare normalized exact repeats",

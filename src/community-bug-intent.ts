@@ -20,10 +20,13 @@ export function parseBugIntakeCandidate(
   allowNatural = false,
 ): BugMessageIntent | null {
   const trimmed = text.trim();
+  if (/^피드백\s*:?[\s]*$/u.test(trimmed)) return { kind: "entry" };
   if (/^버그\s*제보\s*:?\s*$/u.test(trimmed)) return { kind: "entry" };
   if (/^버그\s*제보\s+계속$/u.test(trimmed)) return null;
   const explicit = /^(?:버그\s*제보\s*:\s*|버그\s*제보\s+|버그\s*:\s*)(\S.+)$/su.exec(trimmed);
   if (explicit?.[1]) return { kind: "report", report: explicit[1] };
+  const feedback = /^피드백\s*:\s*(\S.+)$/su.exec(trimmed);
+  if (feedback?.[1]) return { kind: "report", report: feedback[1] };
   if (!allowNatural) return null;
   const prefixed = /^(?:문제|오류)\s*:\s*(\S.*)$/su.exec(trimmed);
   if (prefixed?.[1])

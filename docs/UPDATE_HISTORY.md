@@ -71,7 +71,7 @@ daily-scrum의 완전한 Slack 회원 목록을 실행 시점마다 확인하고
 
 ## 2026-09-16 v0.0.54 버그 제보 기반 삽입 재번호화
 
-v0.0.54 버그 제보 정의 기반은 migration 014–021, 기존 private 관계형 원문의 1회 scrub·outbox 보정, 팀별 만료·delivery claim 격리와 비공개 전환·outbox 원자 커밋, 암호화 비공개 객체·정규화 ledger 경계, delivery outbox, 원자적 만료·job guard와 팀별 전역 Durable Object 시계까지 구현했고 exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web QA를 통과했다. 다만 당시 checkout은 canonical private `ops/main`이 아니고 정식 release authority가 없어서 출시 결과로 올리지 않았고, 그 시점의 운영 기준은 v0.0.53으로 유지했다. 아래는 기존 미출시 순서를 보존하면서 v0.0.54 뒤 항목을 한 칸씩 이동한 기록이다.
+v0.0.54 버그 제보 정의 기반은 migration 014–021, 기존 private 관계형 원문의 1회 scrub·outbox 보정, 팀별 만료·delivery claim 격리와 비공개 전환·outbox 원자 커밋, 암호화 비공개 객체·정규화 ledger 경계, delivery outbox, 원자적 만료·job guard와 팀별 전역 Durable Object 시계까지 구현했고 exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web QA를 통과했다. 다만 당시 checkout은 `public/main`과 공통 조상이 없는 작업 이력이어서 출시 결과로 올리지 않았고, 그 시점의 운영 기준은 v0.0.53으로 유지했다. 아래는 기존 미출시 순서를 보존하면서 v0.0.54 뒤 항목을 한 칸씩 이동한 기록이다.
 
 | 이전 번호 | 현재 번호 |
 | --- | --- |

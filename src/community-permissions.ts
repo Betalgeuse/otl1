@@ -53,12 +53,17 @@ const memberActions = new Set([
   "community_past_review",
   "community_past_review_list",
   "community_past_review_submit",
+  "community_quick_goal",
+  "community_quick_goal_submit",
+  "community_quick_review",
+  "community_quick_review_submit",
   "community_guide_open",
   "community_referral_link",
   "community_bug_open",
   "community_bug_submit",
   "community_bug_confirm",
   "community_bug_answer",
+  "community_feedback_admin_start",
 ]);
 
 export function authorizeCommunityAction(

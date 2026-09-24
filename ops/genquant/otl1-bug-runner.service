@@ -1,0 +1,24 @@
+[Unit]
+Description=OTL1 least-privilege Codex reproduction runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/otl1-bug-runner/env
+Environment=PATH=%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h/otl1-bug-runner/current
+ExecStart=/usr/bin/node automation/runner/genquant-runner.mjs
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.codex %h/.local/state/otl1-bug-runner
+StandardOutput=append:%h/.local/state/otl1-bug-runner/runner.log
+StandardError=append:%h/.local/state/otl1-bug-runner/runner.log
+
+[Install]
+WantedBy=default.target

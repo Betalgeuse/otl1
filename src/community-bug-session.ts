@@ -1,5 +1,6 @@
 import { restoreUnseenBugQuestion } from "./community-bug-answer-guard";
 import { armBugDeliveryClock } from "./community-bug-clock-client";
+import { findActiveBugDraftForContext } from "./community-bug-context";
 import { bugQuestionTemplate, deliverBugQuestion } from "./community-bug-delivery";
 import {
   deliverBugReceipt,
@@ -20,6 +21,7 @@ import { resumeBugDialogue } from "./community-bug-resume";
 import { canonicalJson, isBugField } from "./community-bug-schema";
 import { bugDialogueInput, exhaustBugReport } from "./community-bug-session-state";
 import { CommunityBugStore } from "./community-bug-store";
+import { postFeedbackAdminReview } from "./community-feedback";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import { InputError } from "./input";
 import { NeonStore } from "./store";
@@ -31,11 +33,7 @@ export async function continueBugReport(
 ): Promise<boolean> {
   if (context.thread === context.source && expectedQuestionId === undefined) return false;
   const store = new CommunityBugStore(new NeonStore(context.env.DATABASE_URL));
-  const active = await store.findActiveDraft({
-    teamId: context.scope.teamId,
-    reporterId: context.scope.userId,
-    sourceOpaqueRef: `slack:${context.scope.teamId}:${context.scope.channelId}:${context.thread}`,
-  });
+  const active = await findActiveBugDraftForContext(store, context);
   if (!active) return false;
   if (
     active.needsInfoStartedAt &&
@@ -228,6 +226,10 @@ export async function confirmBugReport(
   await deliverBugReceipt(context, {
     bugId,
     reporterId: draft.reporterId,
+    packetRevision: draft.packetRevision + 1,
+  });
+  await postFeedbackAdminReview(context, {
+    feedbackId: bugId,
     packetRevision: draft.packetRevision + 1,
   });
 }

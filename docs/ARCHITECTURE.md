@@ -95,13 +95,13 @@ welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_r
 
 ## 버그 제보 경계 v0.0.54 구현 상태
 
-`버그 제보`는 양식 진입을 열고 `버그: ...`는 관찰한 실제 결과를 초안으로 만듭니다. 빠진 값이나 모순은 실제 결과, 기대 결과, 두 단계 이상의 재현, 위치, 시각, 빈도, 영향 순으로 한 번에 하나만 묻습니다. 근거가 없는 값은 만들지 않으며, 24시간 안의 질문은 다섯 번을 넘기지 않습니다. 한도 또는 시간이 끝난 초안은 확정 대신 운영자 인계 대상이 됩니다.
+피드백은 하나의 짧은 모달에서 시작하고 feedback 채널의 제보자 멘션 글과 그 스레드에 정규화합니다. 최초 입력 위치는 링크로만 보존하고, 질문·분류·관리자 승인은 canonical feedback thread에서 진행합니다. 동일한 제출 재시도는 결정적인 버그 키와 최근 Slack history를 대조해 기존 스레드를 재사용합니다. 기존 암호화 ledger와 durable 질문 delivery를 재사용하되 사용자에게 버그 분류를 요구하지 않습니다. 문서 계약·관찰 결과·원하는 변화·트리거·검증 가능한 수용 조건을 기준으로 한 번에 하나만 물으며 세 번 뒤에는 불완전성을 표시한 관리자 검토 카드로 전환합니다.
 
 원문과 답변은 revision·schema·키 버전을 추가 인증 데이터로 묶은 AES-GCM 비공개 객체에 둡니다. 최초 incoming record는 `bug_intake` 표식과 SHA-256 digest만 저장하며 raw·normalized text를 저장하지 않습니다. 정규화 PostgreSQL에는 opaque reference, 암호문 digest, wrapped data key, nonce와 제한된 비민감 필드만 두고, migration 022의 소유자 범위 read가 후속 역질문에 필요한 암호화 객체 복원 정보만 반환합니다. `privacy` 또는 보안·개인정보 영향은 `private_incident`로 전이하면서 관계형 필드의 원문을 지우고 공개 export를 막아 비공개 운영자 채널로만 인계합니다. 제보자 소유권, revision, idempotency, 확인 시각, canonical packet·evidence digest가 모두 맞을 때만 `bug_packet.v1` 확정 패킷을 저장합니다. 암호화 객체 저장소와 키 설정이 없으면 제보를 부분 저장하지 않고 실패합니다. 새 비공개 초안·답변은 상태 전환, 관계형 원문 제거, receipt·관리자 handoff를 같은 트랜잭션에 묶고, 과거 중간 상태는 팀 범위의 idempotent reconciliation으로 한 번만 복구합니다. migration 021의 순차 upgrade backfill은 암호화 객체의 opaque reference·digest와 append-only event를 보존하면서 기존 관계형 원문을 scrub하고 누락된 private receipt·관리자 handoff만 보정하며, 신규 설치에서는 0건이어야 합니다.
 
 `bug_jobs`는 제공자와 분리된 재현·수정·검토·배포 작업 outbox입니다. `bug_deliveries`는 Slack에 질문·요약·접수 영수증·비공개 관리자 인계를 보내기 전의 durable record입니다. delivery key, 제보자 소유권, packet revision, template과 renderer가 같은 경우에만 idempotent하게 다시 읽고, worker lease를 가진 발송만 완료할 수 있습니다. 실패는 다음 시도 시각과 오류 분류를 남겨 독립적으로 재시도하며 세 번째 실패 뒤에는 retry 없이 `failed` dead-letter로 남깁니다. 만료와 delivery claim 함수는 team ID를 필수로 받아 다른 워크스페이스의 due 행을 건드리지 않습니다.
 
-현재 구현에는 `codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app`을 표현하는 무변경 dry-run handoff가 있으나 어느 제공자도 호출하지 않습니다. GitHub Actions는 사용하지 않습니다. 이후 격리된 GenQuant 서비스가 검사를 실행하고 GitHub Check Run을 게시하는 연결은 구현·권한·실제 검증이 남아 있습니다. v0.0.54는 exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`에서 Chrome Slack Web QA를 통과했으며, canonical private `ops/main`과 정식 release authority가 없어서만 pre-release입니다.
+관리자 승인 경계에서만 확정된 `bug_packet.v1`을 `bug_jobs`에 넣습니다. Workspace admin/owner 판정은 Slack `users.info` 응답으로 다시 확인하고, 승인 시점의 원격 branch SHA와 packet revision을 job event에 묶습니다. GenQuant 실행기는 공개 포트를 열지 않고 최소 권한 `otl_bug_runner` DB 역할로 `reproduce` job 하나만 lease합니다. Codex Cloud CLI가 만든 diff에서는 `bugs/runner/<bug-id>.reproduction.json` 하나만 허용하며, 이 파일의 결정적 schema와 실제 failure observation을 검증한 뒤에만 job을 완료하고 다음 `fix` job을 생성합니다. 시작·완료·실패 알림은 별도 DB outbox를 거쳐 원래 feedback 스레드로 돌아갑니다. Phase 1 실행기는 재현까지만 자동화하고 코드 수정·push·PR·merge는 수행하지 않습니다. GitHub Actions는 사용하지 않습니다.
 
 ## 확장 규칙
 

@@ -1,5 +1,6 @@
 import { slackCanvasUrl } from "./community-canvas";
 import { randomCustomEmoji } from "./community-emoji";
+import { feedbackButton } from "./community-feedback-button";
 import { syncIntroductionCanvas } from "./community-introduction-canvas";
 import type { IntroductionInput, IntroductionParseResult } from "./community-introduction-form";
 
@@ -30,6 +31,7 @@ export function introductionActionBlock(
     elements: [
       introductionButton(undefined, "자기소개 쓰기"),
       introductionDirectoryButton(env?.COMMUNITY_INTRO_CANVAS_URL),
+      feedbackButton(),
     ],
   };
 }

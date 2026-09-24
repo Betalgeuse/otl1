@@ -17,7 +17,7 @@
 | 버전 | 변경 하나 | 완료 조건 | 선행 조건 | 상태 |
 | --- | --- | --- | --- | --- |
 
-| v0.0.54 | 버그 제보 정의 기반 | 자연어 `버그 제보`·`버그: ...`로 초안을 시작하고, 근거 없는 값 없이 한 질문씩 확인한 뒤 제보자 확인이 있는 `bug_packet.v1`만 확정함. 보안·개인정보는 비공개 인계하고 질문은 24시간 다섯 번을 넘기지 않음. 질문·요약·접수 영수증·비공개 관리자 인계는 durable Slack delivery outbox에 기록하고 retry 뒤 dead-letter를 남김 | canonical private `ops/main` checkout, ruleset readback, 정식 release authority | exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20` Chrome Slack Web QA 통과, pre-release |
+| v0.0.54 | 버그 제보 정의 기반 | 자연어 `버그 제보`·`버그: ...`로 초안을 시작하고, 근거 없는 값 없이 한 질문씩 확인한 뒤 제보자 확인이 있는 `bug_packet.v1`만 확정함. 보안·개인정보는 비공개 인계하고 질문은 24시간 다섯 번을 넘기지 않음. 질문·요약·접수 영수증·비공개 관리자 인계는 durable Slack delivery outbox에 기록하고 retry 뒤 dead-letter를 남김 | `public/main` 공통 이력, ruleset readback, 정식 release authority | exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20` Chrome Slack Web QA 통과, pre-release |
 | v0.0.55 | welcome 가이드 발행본과 초대 이미지 | 관리자 원본을 버전·본문·이미지 순서·해시로 명시 발행하고 신규 회원에게 DB 최신 발행본을 한 번 전달함 | migration 026·028, 별도 관리자 발행 자격증명, 새 원본 Slack 메시지 | 운영 발행·지정 회원 봇 전달 Slack Web QA 완료. 자연스러운 신규 입장 경로 관찰은 남음 |
 | v0.0.56 | 봇 소유 welcome 안내 | 원문을 레포의 검토된 버전으로 고정하고 신규 회원 안내를 봇이 게시함 | migration 039, 별도 발행 관리자 DB, 신규 입장 Slack Web QA | 미출시 계획 |
 | v0.0.57 | 친구 초대하기 버튼 | welcome 안내와 기존 회원용 카드에서 본인 전용 초대 링크를 열고 복사할 수 있음 | v0.0.56, 유효한 활성 회원 링크, Slack Web 클릭 QA | 미출시 계획 |
