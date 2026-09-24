@@ -18,11 +18,14 @@ globalThis.fetch = async (url, options = {}) => {
                 bug_id: "BUG-ABCDEF123456",
                 channel_id: "CFEEDBACK",
                 thread_ts: "1790252981.933479",
-                kind: "task_started",
+                kind: "change_merged",
                 payload: {
                   taskUrl:
                     "https://chatgpt.com/codex/tasks/task_e_0123456789abcdef0123456789abcdef",
                   attempt: 1,
+                  reporterId: "UREPORTER",
+                  adminId: "UADMIN",
+                  summary: "입력 경계를 수정하고 회귀 검사를 통과했습니다.",
                 },
               },
             ]),
@@ -34,6 +37,8 @@ globalThis.fetch = async (url, options = {}) => {
   }
   if (parsed.pathname.endsWith("/chat.postMessage"))
     return Response.json({ ok: true, ts: "1790253000.000001" });
+  if (parsed.pathname.endsWith("/reactions.remove") || parsed.pathname.endsWith("/reactions.add"))
+    return Response.json({ ok: true });
   throw new Error(`unexpected request ${parsed.pathname}`);
 };
 try {
@@ -49,11 +54,15 @@ try {
   assert.deepEqual(result, { claimed: 1, sent: 1, failed: 0 });
   const post = calls.find((call) => call.url.includes("chat.postMessage"));
   assert.equal(post.body.thread_ts, "1790252981.933479");
-  assert.match(post.body.text, /GenQuant가 BUG-ABCDEF123456 재현 작업을 시작/);
-  assert.match(post.body.text, /chatgpt[.]com\/codex\/tasks\/task_e_/);
+  assert.match(post.body.text, /<@UADMIN> <@UREPORTER>/);
+  assert.match(post.body.text, /입력 경계를 수정하고 회귀 검사를 통과했습니다/);
+  const reactionMethods = calls
+    .filter((call) => call.url.includes("reactions."))
+    .map((call) => new URL(call.url).pathname.split("/").at(-1));
+  assert.deepEqual(reactionMethods, ["reactions.remove", "reactions.add"]);
   const finish = calls.find((call) => call.body.query?.includes("bug_runner_finish_notification"));
   assert.match(finish.body.params[0], /"status":"sent"/);
-  console.log("PASS agent notifications: leased runner result returns to the exact feedback thread once");
+  console.log("PASS agent notifications: merged result returns to the exact feedback thread and loading becomes check");
 } finally {
   globalThis.fetch = originalFetch;
 }

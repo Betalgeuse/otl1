@@ -101,7 +101,7 @@ welcome 가이드는 일반 DB 연결과 분리합니다. Worker의 `otl_guide_r
 
 `bug_jobs`는 제공자와 분리된 재현·수정·검토·배포 작업 outbox입니다. `bug_deliveries`는 Slack에 질문·요약·접수 영수증·비공개 관리자 인계를 보내기 전의 durable record입니다. delivery key, 제보자 소유권, packet revision, template과 renderer가 같은 경우에만 idempotent하게 다시 읽고, worker lease를 가진 발송만 완료할 수 있습니다. 실패는 다음 시도 시각과 오류 분류를 남겨 독립적으로 재시도하며 세 번째 실패 뒤에는 retry 없이 `failed` dead-letter로 남깁니다. 만료와 delivery claim 함수는 team ID를 필수로 받아 다른 워크스페이스의 due 행을 건드리지 않습니다.
 
-관리자 승인 경계에서만 확정된 `bug_packet.v1`을 `bug_jobs`에 넣습니다. Workspace admin/owner 판정은 Slack `users.info` 응답으로 다시 확인하고, 승인 시점의 원격 branch SHA와 packet revision을 job event에 묶습니다. GenQuant 실행기는 공개 포트를 열지 않고 최소 권한 `otl_bug_runner` DB 역할로 `reproduce` job 하나만 lease합니다. Codex Cloud CLI가 만든 diff에서는 `bugs/runner/<bug-id>.reproduction.json` 하나만 허용하며, 이 파일의 결정적 schema와 실제 failure observation을 검증한 뒤에만 job을 완료하고 다음 `fix` job을 생성합니다. 시작·완료·실패 알림은 별도 DB outbox를 거쳐 원래 feedback 스레드로 돌아갑니다. Phase 1 실행기는 재현까지만 자동화하고 코드 수정·push·PR·merge는 수행하지 않습니다. GitHub Actions는 사용하지 않습니다.
+관리자 승인 경계에서만 확정된 `bug_packet.v1`을 `bug_jobs`에 넣습니다. Workspace admin/owner 판정은 Slack `users.info` 응답으로 다시 확인하고, 승인 시점의 원격 branch SHA와 packet revision을 job event에 묶습니다. GenQuant 실행기는 공개 포트를 열지 않고 최소 권한 `otl_bug_runner` DB 역할로 job을 lease합니다. 재현 단계는 schema-bound artifact 한 파일만 허용합니다. 수정 단계는 금지 경로를 거절하고 전체 검사를 통과한 diff만 격리 브랜치와 Draft PR로 만든 뒤 보호된 `main`에 squash merge합니다. GitHub 작업 메시지는 Slack에 노출하지 않으며 OT1L이 원래 feedback 스레드에서 As-Is/To-Be 승인, 처리 중 반응, 병합 결과와 완료 반응만 관리합니다. GitHub Actions는 사용하지 않습니다.
 
 ## 확장 규칙
 

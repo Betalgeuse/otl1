@@ -98,7 +98,7 @@ export function bugConfirmationPayload(
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*실제* ${escapeSlackText(fields.actual)}\n*기대* ${escapeSlackText(fields.expected)}\n*영향* ${escapeSlackText(fields.impact)}`,
+          text: `*As-Is*\n${escapeSlackText(fields.actual)}\n\n*To-Be*\n${escapeSlackText(fields.expected)}`,
         },
       },
       {

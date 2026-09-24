@@ -62,6 +62,7 @@ globalThis.fetch = async (url, options = {}) => {
       ],
     });
   if (method === "chat.postMessage") return Response.json({ ok: true, ts: "123.456" });
+  if (method === "reactions.add") return Response.json({ ok: true });
   throw new Error(`unexpected ${method}`);
 };
 try {
@@ -123,10 +124,11 @@ try {
     },
   );
   const post = calls.find(
-    (call) => call.method === "chat.postMessage" && call.body.text.includes("GenQuant 작업 대기열"),
+    (call) => call.method === "chat.postMessage" && call.body.text.includes("수정과 검증을 시작"),
   );
   assert.equal(post.body.thread_ts, "123.100");
-  assert.match(post.body.text, /자동 병합은 하지 않습니다/);
+  assert.match(post.body.text, /관리자 승인을 확인했어요/);
+  assert.equal(calls.some((call) => call.method === "reactions.add" && call.body.name === "loading"), true);
   assert.equal(post.authorization, "Bearer fake");
   assert.equal(calls.find((call) => call.method === "users.info")?.authorization, "Bearer fake");
   const queueCall = calls.find((call) => call.method === "sql");

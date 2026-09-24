@@ -1,6 +1,8 @@
+import { CommunityBugStore } from "./community-bug-store";
+import { escapeSlackText } from "./community-messages";
 import { sha256Hex } from "./community-referral-service-auth";
 import { type CommunityContext, type CommunityEnv, post } from "./community-runtime";
-import { callSlack } from "./community-social";
+import { addReactions, callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
 import { InputError, object, string } from "./input";
 import { INTENT_MODEL, type IntentAI } from "./intent";
@@ -203,10 +205,15 @@ export async function startCodexFeedback(
     throw new InputError(
       "확정된 버그 명세만 자동 작업에 넣을 수 있어요. 스레드에서 명세를 먼저 보완해 주세요.",
     );
+  await addReactions(context.env.SLACK_BOT_TOKEN, {
+    channel: context.scope.channelId,
+    ts: context.thread,
+    names: ["loading"],
+  });
   await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
     channel: context.scope.channelId,
     thread_ts: context.thread,
-    text: `관리자 승인 완료 · ${input.feedbackId}\nGenQuant 작업 대기열에 등록했어요. 실행 시작과 재현 결과는 이 스레드에 이어서 알려드릴게요. 자동 병합은 하지 않습니다.`,
+    text: `관리자 승인을 확인했어요. OT1L이 수정과 검증을 시작합니다. · ${input.feedbackId}`,
   });
 }
 
@@ -218,19 +225,31 @@ export async function postFeedbackAdminReview(
   if (!channelId) throw new InputError("피드백 채널을 확인해 주세요.");
   const scope = { ...context.scope, channelId };
   const key = `feedback-admin-review:${input.feedbackId}:${input.packetRevision}`;
+  const draft = await new CommunityBugStore(new NeonStore(context.env.DATABASE_URL)).getDraft({
+    teamId: context.scope.teamId,
+    bugId: input.feedbackId,
+    reporterId: context.scope.userId,
+  });
+  const fields = draft.currentRevision.confirmedPacket?.fields ?? draft.sanitizedFields;
+  const asIs =
+    typeof fields.actual === "string" && fields.actual ? fields.actual : "현재 상태 확인 필요";
+  const toBe =
+    typeof fields.expected === "string" && fields.expected
+      ? fields.expected
+      : "원하는 상태 확인 필요";
   await context.store.putRecord({ ...scope, key, kind: "feedback_admin_review", body: input });
   if (!(await context.store.claimRecord({ ...scope, key }))) return;
   try {
     await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: channelId,
       ...(channelId === context.scope.channelId ? { thread_ts: context.thread } : {}),
-      text: `명세 확인 대기 · ${input.feedbackId}`,
+      text: `OT1L 개선안 승인 대기 · ${input.feedbackId}`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*명세 확인 대기* · ${input.feedbackId}\nOT1L이 최대 3회의 확인을 마쳤습니다. 스레드와 문서 기준을 확인한 뒤 Codex 작업을 시작할 수 있어요.`,
+            text: `*As-Is*\n${escapeSlackText(asIs)}\n\n*To-Be*\n${escapeSlackText(toBe)}\n\n이대로 개선을 시작할까요?`,
           },
         },
         {
@@ -238,7 +257,7 @@ export async function postFeedbackAdminReview(
           elements: [
             {
               type: "button",
-              text: { type: "plain_text", text: "명세 승인·Codex 시작" },
+              text: { type: "plain_text", text: "이대로 개선하기" },
               style: "primary",
               action_id: "community_feedback_admin_start",
               value: JSON.stringify({
