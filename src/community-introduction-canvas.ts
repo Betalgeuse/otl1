@@ -18,7 +18,7 @@ export function introductionCanvasUrl(env: IntroductionCanvasEnv): string {
 
 export function introductionCanvasMarkdown(entries: readonly MemberIntroduction[]): string {
   const sections = entries.map((entry) => {
-    const heading = `## ![](@${entry.userId})${entry.confirmedName ? ` · ${escapeCanvasText(entry.confirmedName)}` : ""}`;
+    const heading = `## ${entry.confirmedName ? escapeCanvasText(entry.confirmedName) : "이름 확인 중"}`;
     const links = [
       ...(entry.linkedin ? [`[LinkedIn](${entry.linkedin})`] : []),
       ...(entry.details ? [escapeCanvasText(entry.details)] : []),

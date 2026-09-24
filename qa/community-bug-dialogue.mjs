@@ -102,7 +102,7 @@ async function executeFixture(testCase) {
         base(
           [message(testCase.id, testCase.text)],
           [],
-          Array.from({ length: 5 }, () => ({ field: "actual", askedAt: now })),
+          Array.from({ length: 3 }, () => ({ field: "actual", askedAt: now })),
         ),
       );
       break;
@@ -253,26 +253,26 @@ async function runCases() {
     ),
   );
   assert.equal(stale.question.field, "actual");
-  const five = ["actual", "expected", "steps", "location", "occurredAt"].map((field) => ({
+  const three = ["actual", "expected", "steps"].map((field) => ({
     field,
     askedAt: now,
   }));
-  const exhausted = await advanceBugDialogue(base([message("m", "오류 내용")], [], five));
+  const exhausted = await advanceBugDialogue(base([message("m", "오류 내용")], [], three));
   assert.equal(exhausted.status, "exhausted");
   assert.equal(exhausted.handoff, true);
   const prefilledCompletesAtFive = await advanceBugDialogue(
-    base(completeMessages, completeCandidates, five),
+    base(completeMessages, completeCandidates, three),
   );
   assert.equal(
     prefilledCompletesAtFive.status,
     "awaiting_confirmation",
-    "a prefilled report that completes within five answers must reach confirmation",
+    "a prefilled report that completes within three answers must reach confirmation",
   );
   const repeated = await advanceBugDialogue(
     base(
       [message("m", "오류 내용")],
       [],
-      Array.from({ length: 5 }, () => ({ field: "actual", askedAt: now })),
+      Array.from({ length: 3 }, () => ({ field: "actual", askedAt: now })),
     ),
   );
   assert.equal(repeated.status, "exhausted");
@@ -327,43 +327,7 @@ async function runCases() {
   scheduledResult = await advanceBugDialogue(
     base(scheduled.messages, scheduled.candidates, beforeCorrectionAsked),
   );
-  assert.equal(scheduledResult.question.field, "occurredAt");
-  assert.match(scheduledResult.question.text, /가장 최근에 실제로 발생한 날짜와 시각/);
-
-  scheduled = appendBugAnswer(
-    scheduled,
-    "occurredAt",
-    "b7-time-correction",
-    "2026-09-17T18:00:00+09:00",
-  );
-  const afterCorrectionAsked = [...beforeCorrectionAsked, { field: "occurredAt", askedAt: now }];
-  scheduledResult = await advanceBugDialogue(
-    base(scheduled.messages, scheduled.candidates, afterCorrectionAsked),
-  );
-  assert.equal(scheduledResult.question.field, "impact");
-  scheduled = appendBugAnswer(scheduled, "impact", "b7-impact", "불편");
-  scheduledResult = await advanceBugDialogue(
-    base(scheduled.messages, scheduled.candidates, [
-      ...afterCorrectionAsked,
-      { field: "impact", askedAt: now },
-    ]),
-  );
-  assert.equal(scheduledResult.status, "awaiting_confirmation");
-
-  const invalidImpact = appendBugAnswer(
-    appendBugAnswer(scheduled, "impact", "b7-invalid-impact", "잘 모르겠어요"),
-    "occurredAt",
-    "b7-invalid-time-copy",
-    "2026-09-17T18:00:00+09:00",
-  );
-  const exhaustedInvalid = await advanceBugDialogue(
-    base(
-      invalidImpact.messages,
-      invalidImpact.candidates.filter((candidate) => candidate.messageId !== "b7-impact:0"),
-      [...afterCorrectionAsked, { field: "impact", askedAt: now }],
-    ),
-  );
-  assert.equal(exhaustedInvalid.status, "exhausted");
+  assert.equal(scheduledResult.status, "exhausted");
   const cancelled = await advanceBugDialogue(
     base(completeMessages, completeCandidates, [], {
       cancelledAt: now,
@@ -393,6 +357,18 @@ async function runCases() {
   const first = await advanceBugDialogue(
     base([message("m", "저장이 안 돼요")], [span("actual", "m", "저장이 안 돼요")]),
   );
+  const mismatchMessages = [
+    message("ma", "자기소개 Canvas와 프로필 이름이 서로 안 맞아요"),
+    message("me", "자기소개를 갱신해도 같은 이름이 보여야 해요"),
+  ];
+  const mismatch = await advanceBugDialogue(
+    base(mismatchMessages, [
+      span("actual", "ma", mismatchMessages[0].text),
+      span("expected", "me", mismatchMessages[1].text),
+    ]),
+  );
+  assert.equal(mismatch.status, "needs_info");
+  assert.equal(mismatch.question.field, "frequency");
   const resumed = await advanceBugDialogue(
     JSON.parse(
       JSON.stringify(

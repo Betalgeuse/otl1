@@ -30,11 +30,11 @@ bun run check
 
 ### 배포 권한 구분
 
-정식 출시·canonical 배포는 private `ops/main`의 merge queue 결과만 사용합니다. 비공개 운영 저장소의 canonical preflight가 현재 full SHA, 정확한 remote, clean `main`, ruleset API readback과 GenQuant 영수증을 모두 확인해야 하며, 실패한 checkout에서 정식 배포·release·public mirror 게시를 진행하지 않습니다.
+정식 출시·canonical 배포는 공개 저장소 `public/main`의 리뷰·squash merge 결과만 사용합니다. canonical preflight는 현재 full SHA, 단일 `public` remote, clean `main`, Actions 비활성화와 ruleset API readback을 확인해야 하며, 실패한 checkout이나 `main`과 공통 조상이 없는 브랜치에서 배포하지 않습니다.
 
-이미 존재하는 Worker에서 최종 Slack 동작을 확인해야 할 때는 명시적으로 승인된 **pre-release QA 배포**만 예외로 허용합니다. 승인된 시나리오, clean full SHA, 이전·새 Worker version, migration 목록, maintenance 차단과 해제, read-only health·binding·Cron 보존, 별도 clock readiness 근거, rollback 대상과 정리 범위를 한 영수증에 묶습니다. `/health`는 liveness와 정적 capability만 증명하며 clock readiness는 식별자를 제거한 Durable Object inspect/admin·배포 영수증 또는 서명된 activity로 증명합니다. 이 예외는 승인된 기존 Worker version upload·deploy 범위만 허용하며 Git push, merge, release 게시, public mirror 게시, provider 실행 또는 canonical 판정을 허용하지 않습니다. migration은 forward-only이므로 코드 rollback도 적용된 schema와 호환돼야 합니다.
+이미 존재하는 Worker에서 최종 Slack 동작을 확인해야 할 때는 명시적으로 승인된 pre-release QA 배포만 예외로 허용합니다. 승인된 시나리오, clean full SHA, 이전·새 Worker version, migration 목록, maintenance 차단과 해제, read-only health·binding·Cron 보존, 별도 clock readiness 근거, rollback 대상과 정리 범위를 한 영수증에 묶습니다. 이 예외는 feature SHA를 canonical로 만들지 않으며, 정식 배포는 리뷰를 거쳐 `main`에 합쳐진 SHA만 사용합니다.
 
-exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`은 이 예외에서 Chrome Slack Web QA를 통과했습니다. 현재 checker는 계속 `canonical: false`이고 private `ops/main` release authority가 없으므로, v0.0.54는 그 이유 하나로 pre-release입니다.
+exact SHA `4f05ae75f93ad5f7bca6ebfcb7c3613fbe8dae20`은 과거 예외에서 Chrome Slack Web QA를 통과했지만 당시 `main`과 분리된 이력이어서 pre-release로만 보존합니다.
 
 ## DB 설치와 이관
 
@@ -62,6 +62,10 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/028_welcome_guide_
 ```
 
 번호 순서는 001부터 028까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger부터 023 현재 채널 회원 스냅샷까지의 순서를 바꾸지 않고, 024 잔디 delivery → 025 projection → 026 welcome 발행본 → 027 회원·안내 delivery 감사 경계 → 028 welcome DB 역할 분리 순서로 적용합니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
+
+GenQuant 재현 실행기를 활성화하려면 048 뒤에 `049_bug_runner_handoff.sql`을 적용합니다. DB 소유자 연결은 migration과 `bootstrap-bug-runner-db-role.mjs`에서만 사용합니다. 부트스트랩은 무작위 비밀번호의 `otl_bug_runner_login`을 만들고, 완성된 URL을 `BUG_RUNNER_SECRET_SINK`의 표준입력으로만 전달합니다. URL을 명령 인자·로그·Git에 쓰지 않습니다. 실행기 로그인은 runner 함수만 호출할 수 있고 bug·member·agent table을 직접 읽을 수 없습니다.
+
+`ops/genquant/otl1-bug-runner.service`를 설치하기 전에 `runner.env.example`을 사용자 전용 `~/.config/otl1-bug-runner/env`로 옮기고 mode 0600을 확인합니다. `BUG_RUNNER_ROOT`도 실행 사용자만 접근 가능한 디렉터리여야 합니다. 서비스는 Cloudflare나 Slack의 inbound 포트를 열지 않으며 Neon과 Codex Cloud로 outbound 요청만 보냅니다. 최초 운영 검증은 확정된 비공개 QA bug 하나로 실행하고, `task_started`와 `task_ready`가 같은 feedback 스레드에 한 번씩 돌아오는지 확인합니다.
 
 Migration 028 뒤에는 DB 소유자 연결로 [환영 안내 DB 권한 부트스트랩](GUIDE_DATABASE_SECURITY.md)을 한 번 실행해 `GUIDE_DATABASE_URL`과 `GUIDE_ADMIN_DATABASE_URL`을 서로 다른 로그인으로 발급합니다. 소유자 연결은 migration과 부트스트랩에만 쓰고 Worker에는 넣지 않습니다. Worker에는 런타임 자격증명만, 발행 CLI를 실행하는 로컬 비밀 저장소에는 관리자 자격증명만 둡니다.
 
@@ -110,7 +114,7 @@ node scripts/maintainer-dry-run.mjs --input qa/fixtures/bug-packets/confirmed-va
 
 `community-bug-slack-validator`는 인증 없이 Slack의 side-effect-free `blocks.validate`만 호출하는 명시적 네트워크 계약 검사입니다. 일반 단위 테스트 allowlist에는 넣지 않으며, 네트워크 장애를 제품 회귀로 오판하지 않습니다.
 
-마지막 명령은 도구가 소유한 비공개 임시 경로의 새 직접 자식만 받아 `bug_packet.v1`의 digest, base SHA, dirty 상태를 영수증으로 남깁니다. `codex_cloud_github`, `genquant_codex_switch`, `slack_codex_app`은 handoff의 허용 제공자 이름일 뿐 호출 대상이 아닙니다. GitHub Actions workflow는 만들지 않습니다. 향후 검사는 격리된 GenQuant 서비스에서 수행하고 GitHub Check Run으로 게시해야 하며, 그 연결은 이 구현의 검증 범위 밖입니다.
+마지막 명령은 도구가 소유한 비공개 임시 경로의 새 직접 자식만 받아 `bug_packet.v1`의 digest, base SHA, dirty 상태를 영수증으로 남깁니다. Phase 1의 `automation/runner/genquant-runner.mjs`만 최소 권한 `otl_bug_runner` 역할로 승인된 reproduce job을 lease하고 Codex Cloud CLI를 호출할 수 있습니다. 재현 diff는 단일 schema artifact로 제한하며 코드 변경·push·PR은 거절합니다. GitHub Actions workflow는 만들지 않습니다.
 
 ## Git과 공개 코드
 

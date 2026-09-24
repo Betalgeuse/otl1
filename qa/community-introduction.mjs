@@ -185,14 +185,19 @@ try {
   const introductionPost = calls.find((call) => call.method === "chat.postMessage");
   assert.deepEqual(
     introductionPost.body.blocks[1].elements.map((element) => element.text.text),
-    ["자기소개 쓰기", "자기소개 모두 보기"],
+    ["자기소개 쓰기", "자기소개 모두 보기", "피드백 남기기"],
   );
   assert.equal(current.revision, 1);
   assert.equal(current.messageTs, "2.000001");
   const firstCanvas = calls.find((call) => call.method === "canvases.edit");
   assert.equal(firstCanvas.body.canvas_id, "FINTRO01");
   assert.doesNotMatch(firstCanvas.body.changes[0].document_content.markdown, /^#/);
-  assert.match(firstCanvas.body.changes[0].document_content.markdown, /!\[\]\(@UNEW\).*홍길동/s);
+  assert.match(firstCanvas.body.changes[0].document_content.markdown, /## 홍길동/);
+  assert.doesNotMatch(
+    firstCanvas.body.changes[0].document_content.markdown,
+    /@UNEW/,
+    "the directory renders the confirmed name once without a Slack mention",
+  );
   const reactions = calls.filter((call) => call.method === "reactions.add");
   assert.equal(reactions.length, 3, "a published introduction receives three custom reactions");
   assert.equal(new Set(reactions.map((call) => call.body.name)).size, 3);
@@ -217,7 +222,7 @@ try {
   assert.equal(update.body.ts, "2.000001");
   assert.deepEqual(
     update.body.blocks[1].elements.map((element) => element.action_id),
-    ["community_introduction", "community_introduction_directory"],
+    ["community_introduction", "community_introduction_directory", "community_bug_open"],
   );
   assert.equal(update.body.blocks[1].elements[1].url, env.COMMUNITY_INTRO_CANVAS_URL);
   assert.equal(current.revision, 2);

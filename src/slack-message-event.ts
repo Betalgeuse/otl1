@@ -1,5 +1,13 @@
 import { object, string } from "./input";
 
+export function communityEditRelevant(
+  editTs: unknown,
+  isFeedbackThread: boolean,
+  text: string,
+): boolean {
+  return editTs === undefined || isFeedbackThread || /후기|회고|수정|정정|변경/.test(text);
+}
+
 export function messageEvent(raw: Record<string, unknown>): Record<string, unknown> {
   if (raw.type !== "message" || raw.subtype !== "message_changed") return raw;
   const message = object(raw.message);

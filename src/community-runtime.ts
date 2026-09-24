@@ -42,6 +42,9 @@ export type CommunityEnv = {
   readonly COMMUNITY_ADMIN_ID?: string;
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
   readonly COMMUNITY_FEEDBACK_CHANNEL_ID?: string;
+  readonly COMMUNITY_CODEX_REPOSITORY?: string;
+  readonly COMMUNITY_CODEX_BRANCH?: string;
+  readonly BUG_RUNNER_ENABLED?: string;
   readonly COMMUNITY_SHAREINFO_CHANNEL_ID?: string;
   readonly COMMUNITY_CHAPTER_CHANNEL_IDS?: string;
   readonly COMMUNITY_RELEASE_CHANNEL_ID?: string;
@@ -90,6 +93,7 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
     "community_bug_submit",
     "community_bug_confirm",
     "community_bug_answer",
+    "community_feedback_admin_start",
   ].includes(actionId);
   const introductionAction = [
     "community_introduction",
@@ -98,13 +102,18 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
   ].includes(actionId);
   const referralLinkAction = actionId === "community_referral_link";
   const guideAction = actionId === "community_guide_open";
+  const communityActionChannels = [
+    env.COMMUNITY_CHANNEL_ID,
+    env.COMMUNITY_PUBLIC_CHANNEL_ID,
+    env.COMMUNITY_RELEASE_CHANNEL_ID,
+    env.COMMUNITY_INTRO_CHANNEL_ID,
+    env.COMMUNITY_FEEDBACK_CHANNEL_ID,
+    env.COMMUNITY_WELCOME_CHANNEL_ID,
+    env.COMMUNITY_SHAREINFO_CHANNEL_ID,
+    ...(env.COMMUNITY_CHAPTER_CHANNEL_IDS?.split(",") ?? []),
+  ];
   const expandedChannelAllowed =
-    (bugAction &&
-      [
-        env.COMMUNITY_RELEASE_CHANNEL_ID,
-        env.COMMUNITY_INTRO_CHANNEL_ID,
-        env.COMMUNITY_FEEDBACK_CHANNEL_ID,
-      ].includes(channelId)) ||
+    (bugAction && communityActionChannels.includes(channelId)) ||
     (introductionAction &&
       [
         env.COMMUNITY_RELEASE_CHANNEL_ID,

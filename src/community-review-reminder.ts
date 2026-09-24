@@ -1,4 +1,4 @@
-import { type MemberNavigation, memberActionBlock } from "./community-member-actions";
+import { type MemberNavigation, memberActionBlocks } from "./community-member-actions";
 import { CommunitySlackError, callSlack } from "./community-social";
 import type { ReminderBatch, ReminderBatchFinish, ReminderJob } from "./community-types";
 import { type Json, list, object, string } from "./input";
@@ -84,7 +84,8 @@ export async function deliverReviewReminder(input: {
       .split("\n\n")
       .filter((value) => value.includes("<@"))
       .map((value) => ({ type: "section", text: { type: "mrkdwn", text: value } }));
-    if (input.memberActions) blocks.push(memberActionBlock(input.navigation));
+    if (input.memberActions)
+      blocks.push(...memberActionBlocks(input.navigation, input.batch.jobs[0]?.date));
     const messageTs =
       reconciled ??
       string(

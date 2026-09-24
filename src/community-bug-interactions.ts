@@ -6,6 +6,7 @@ import {
   parseBugReportModal,
   submitBugReportModal,
 } from "./community-bugs";
+import { startCodexFeedback } from "./community-feedback";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import { InputError, object, string } from "./input";
 
@@ -32,7 +33,7 @@ export async function handleBugView(
       });
     }),
   );
-  return Response.json({ response_action: "clear" });
+  return new Response(null, { status: 200 });
 }
 
 export async function handleBugAction(
@@ -44,6 +45,24 @@ export async function handleBugAction(
   triggerId: unknown,
   waitUntil: WaitUntil,
 ): Promise<Response | null> {
+  if (id === "community_feedback_admin_start") {
+    const packetRevision = value.packetRevision;
+    if (
+      typeof packetRevision !== "number" ||
+      !Number.isSafeInteger(packetRevision) ||
+      packetRevision < 1
+    )
+      throw new InputError("버그 제보 버전을 확인할 수 없어요.");
+    await startCodexFeedback(context, {
+      feedbackId: string(value.feedbackId),
+      publicAlias: string(value.publicAlias),
+      sourceChannel: string(value.sourceChannel),
+      sourceThread: string(value.sourceThread),
+      reporterId: string(value.reporterId),
+      packetRevision,
+    });
+    return new Response(null, { status: 200 });
+  }
   if (id === "community_bug_open") {
     await openBugReportModal(context, string(triggerId));
     return new Response(null, { status: 200 });

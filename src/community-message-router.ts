@@ -3,7 +3,7 @@ import { continueBugReport, handleBugReportMessage } from "./community-bugs";
 import { groupCard, settingsCard } from "./community-controls";
 import { decideCommunityRecord } from "./community-decision";
 import { prepareRecordEdit } from "./community-edits";
-import { parseExplicitGoal, sameGoalText } from "./community-explicit-goal";
+import { resolveExplicitGoal, sameGoalText } from "./community-explicit-goal";
 import { classifyCommunityIntent } from "./community-language";
 import { communityConfirmationMessage } from "./community-messages";
 import { answerCommunityQuestion } from "./community-questions";
@@ -19,7 +19,7 @@ import {
 } from "./community-runtime";
 import { targetDateContext } from "./community-temporal";
 import type { DayChange } from "./community-types";
-import { koreaDate } from "./input";
+import { koreaCalendarDate, koreaDate } from "./input";
 
 export async function dispatchCommunityMessage(
   context: CommunityContext,
@@ -53,20 +53,24 @@ export async function dispatchCommunityMessage(
     typeof context.store.lifecycleEligibility === "function"
       ? await context.store.lifecycleEligibility(context.scope)
       : { state: "active" as const, revision: null };
+  const today = koreaDate(Date.now() / 1000);
+  const explicitGoal = resolveExplicitGoal(text, {
+    contextDate: context.date,
+    serviceDate: today,
+    calendarDate: koreaCalendarDate(Number(context.source)),
+  });
   if (eligibility.state === "dormant") {
-    const today = koreaDate(Date.now() / 1000);
-    const goal = parseExplicitGoal(text, context.date, today);
-    if (goal !== null && context.date === today && eligibility.revision !== null) {
-      const day = await context.store.day({ ...context.scope, date: context.date });
+    if (explicitGoal !== null && eligibility.revision !== null) {
+      const day = await context.store.day({ ...context.scope, date: explicitGoal.date });
       await applyChange(context, {
         ...context.scope,
-        date: context.date,
+        date: explicitGoal.date,
         key: `change:${context.key}`,
         expectedRevision: day.revision,
         expectedLifecycleRevision: eligibility.revision,
         now: new Date().toISOString(),
         action: "goal",
-        text: goal,
+        text: explicitGoal.goal,
       });
       return;
     }
@@ -89,27 +93,31 @@ export async function dispatchCommunityMessage(
     return;
   }
   if (await handleReflectionReport(context, text)) return;
-  const today = koreaDate(Date.now() / 1000);
-  const explicitGoal = parseExplicitGoal(text, context.date, today);
   if (explicitGoal !== null) {
-    const day = await context.store.day({ ...context.scope, date: context.date });
+    const day = await context.store.day({ ...context.scope, date: explicitGoal.date });
     if (day.goal) {
-      if (sameGoalText(day.goal, explicitGoal)) return;
-      await confirmChange(context, day, explicitGoal, "goal");
+      if (sameGoalText(day.goal, explicitGoal.goal)) return;
+      await confirmChange({ ...context, date: explicitGoal.date }, day, explicitGoal.goal, "goal");
       return;
     }
-    if (context.date !== today) {
-      await confirmChange(context, day, explicitGoal, "goal");
+    if (
+      explicitGoal.date !== today &&
+      explicitGoal.date !== koreaCalendarDate(Number(context.source))
+    ) {
+      await confirmChange({ ...context, date: explicitGoal.date }, day, explicitGoal.goal, "goal");
       return;
     }
-    await applyChange(context, {
-      ...context.scope,
-      date: context.date,
-      key: `change:${context.key}`,
-      expectedRevision: day.revision,
-      action: "goal",
-      text: explicitGoal,
-    });
+    await applyChange(
+      { ...context, date: explicitGoal.date },
+      {
+        ...context.scope,
+        date: explicitGoal.date,
+        key: `change:${context.key}`,
+        expectedRevision: day.revision,
+        action: "goal",
+        text: explicitGoal.goal,
+      },
+    );
     return;
   }
   if (await prepareRecordEdit(context, text)) return;

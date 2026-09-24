@@ -42,13 +42,28 @@ export function bugQuestionPayload(
   };
   if (question.kind === "free_text")
     return {
-      text: escapeSlackText(question.text),
-      blocks: [{ type: "section", text: { type: "plain_text", text: question.text } }, identity],
+      text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
+          },
+        },
+        identity,
+      ],
     };
   return {
-    text: escapeSlackText(question.text),
+    text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
     blocks: [
-      { type: "section", text: { type: "plain_text", text: question.text } },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `<@${context.scope.userId}> ${escapeSlackText(question.text)}`,
+        },
+      },
       {
         type: "actions",
         elements: question.options.map((option) => ({
@@ -61,8 +76,6 @@ export function bugQuestionPayload(
             questionId,
             packetRevision,
             answer: optionLabel(option),
-            thread: context.thread,
-            source: context.source,
           }),
         })),
       },
@@ -105,15 +118,18 @@ export function bugConfirmationPayload(
 
 export function bugEntryPayload(context: CommunityContext) {
   return {
-    text: "버그 제보를 시작합니다.",
+    text: "피드백을 남겨주세요.",
     blocks: [
-      { type: "section", text: { type: "plain_text", text: "버그 제보를 시작합니다." } },
+      {
+        type: "section",
+        text: { type: "plain_text", text: "불편한 점이나 바라는 변화를 편하게 남겨주세요." },
+      },
       {
         type: "actions",
         elements: [
           {
             type: "button",
-            text: { type: "plain_text", text: "버그 제보" },
+            text: { type: "plain_text", text: "피드백 남기기" },
             action_id: "community_bug_open",
             value: JSON.stringify({
               ownerId: context.scope.userId,
@@ -129,6 +145,7 @@ export function bugEntryPayload(context: CommunityContext) {
 }
 
 function modalText(values: Record<string, unknown>, field: keyof typeof FIELD_LABELS): string {
+  if (values[field] === undefined) return "";
   return string(object(object(values[field]).value).value ?? "").trim();
 }
 
@@ -165,6 +182,7 @@ export function parseBugReportModal(input: unknown): ModalResult {
     candidates.push({ ...bugCandidate("steps", id, value), value: [value] });
   }
   for (const field of ["frequency", "impact"] as const) {
+    if (values[field] === undefined) continue;
     const selection = object(object(values[field]).value).selected_option;
     const selected = selection ? string(object(selection).value) : "";
     const quote = OPTION_LABELS[selected as keyof typeof OPTION_LABELS];
@@ -176,26 +194,17 @@ export function parseBugReportModal(input: unknown): ModalResult {
   return { messages, candidates };
 }
 
-function selectBlock(id: string, label: string, options: readonly (readonly [string, string])[]) {
-  return {
-    type: "input",
-    block_id: id,
-    optional: true,
-    label: { type: "plain_text", text: label },
-    element: {
-      type: "static_select",
-      action_id: "value",
-      options: options.map(([text, value]) => ({ text: { type: "plain_text", text }, value })),
-    },
-  };
-}
-
 export async function openBugReportModal(
   context: CommunityContext,
   triggerId: string,
 ): Promise<void> {
   if (!triggerId) throw new InputError("버그 제보 화면을 열 수 없어요.");
-  const inputs = Object.entries(FIELD_LABELS).map(([blockId, label]) => ({
+  const inputs = (
+    [
+      ["actual", "불편했거나 바라는 점"],
+      ["expected", "어떻게 되면 좋을까요? (선택)"],
+    ] as const
+  ).map(([blockId, label]) => ({
     type: "input",
     block_id: blockId,
     optional: blockId !== "actual",
@@ -203,7 +212,7 @@ export async function openBugReportModal(
     element: {
       type: "plain_text_input",
       action_id: "value",
-      multiline: blockId === "actual" || blockId === "expected" || blockId === "steps",
+      multiline: true,
     },
   }));
   await callSlack(context.env.SLACK_BOT_TOKEN, "views.open", {
@@ -218,23 +227,10 @@ export async function openBugReportModal(
         thread: context.thread,
         date: context.date,
       }),
-      title: { type: "plain_text", text: "버그 제보" },
-      submit: { type: "plain_text", text: "초안 만들기" },
+      title: { type: "plain_text", text: "피드백 남기기" },
+      submit: { type: "plain_text", text: "보내기" },
       close: { type: "plain_text", text: "취소" },
-      blocks: [
-        ...inputs,
-        selectBlock("frequency", "발생 빈도", [
-          ["항상", "always"],
-          ["가끔", "sometimes"],
-          ["한 번", "once"],
-        ]),
-        selectBlock("impact", "영향", [
-          ["불편", "inconvenience"],
-          ["기능 사용 불가", "blocked"],
-          ["잘못된 데이터", "wrong_data"],
-          ["보안·개인정보", "security_privacy"],
-        ]),
-      ],
+      blocks: [...inputs],
     },
   });
 }

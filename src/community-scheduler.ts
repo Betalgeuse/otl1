@@ -1,6 +1,7 @@
 import { isOptionalDay, isWeekend } from "./calendar";
 import { enqueueCommonDelivery, sendCommonDeliveries } from "./community-common-delivery";
 import { customBotEmoji } from "./community-emoji";
+import { sendDailyFeedbackPrompt } from "./community-feedback";
 import { collectCurrentChannelMembers } from "./community-membership";
 import { sendReminderBatches } from "./community-reminder-batch";
 import type { CommunityStore } from "./community-store";
@@ -14,6 +15,7 @@ export type CommunityScheduleEnv = {
   readonly COMMUNITY_ADMIN_ID: string;
   readonly COMMUNITY_PUBLIC_CHANNEL_ID?: string;
   readonly COMMUNITY_BOT_USER_ID?: string;
+  readonly COMMUNITY_FEEDBACK_CHANNEL_ID?: string;
   readonly REVIEW_THREAD_V2?: string;
   readonly COMMUNITY_GUIDE_CANVAS_URL?: string;
   readonly COMMUNITY_INTRO_CANVAS_URL?: string;
@@ -95,6 +97,7 @@ export async function runCommunitySchedule(
   const local = new Date(nowDate.getTime() + 9 * 60 * 60 * 1000).toISOString();
   const date = local.slice(0, 10);
   const minute = local.slice(11, 16);
+  await sendDailyFeedbackPrompt(env, store, date, minute);
   const optionalDay = isOptionalDay(date);
   const settings = await store.getRecord({ ...scope, key: "group-schedule" });
   const minutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));

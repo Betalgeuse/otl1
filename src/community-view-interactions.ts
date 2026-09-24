@@ -5,6 +5,7 @@ import { parseIntroduction, submitIntroduction } from "./community-introduction"
 import { escapeSlackText } from "./community-messages";
 import { submitCommunityPalette } from "./community-palette";
 import { parsePastReviewSubmission, pastReviewChange } from "./community-past-review";
+import { parseQuickEntrySubmission, submitQuickEntry } from "./community-quick-entry";
 import { applyChange } from "./community-records";
 import { type CommunityContext, type CommunityEnv, ephemeral, post } from "./community-runtime";
 import type { CommunityStore } from "./community-store";
@@ -54,6 +55,19 @@ export async function handleCommunityView(input: ViewInteraction): Promise<Respo
     input.waitUntil(
       applyChange({ ...input.context, date: parsed.date }, pastReviewChange(input.context, parsed)),
     );
+    return Response.json({ response_action: "clear" });
+  }
+  if (input.id === "community_quick_goal_submit" || input.id === "community_quick_review_submit") {
+    const parsed = parseQuickEntrySubmission(input.view);
+    if ("errors" in parsed)
+      return Response.json({ response_action: "errors", errors: parsed.errors });
+    const current = await input.store.day({ ...input.scope, date: parsed.date });
+    if (current.revision !== parsed.revision)
+      return Response.json({
+        response_action: "errors",
+        errors: { text: "그 사이 기록이 바뀌었어요. 닫고 다시 열어 주세요." },
+      });
+    input.waitUntil(submitQuickEntry(input.context, string(input.view.id), parsed));
     return Response.json({ response_action: "clear" });
   }
   if (input.id === "community_palette_submit")

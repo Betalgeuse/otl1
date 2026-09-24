@@ -9,10 +9,11 @@ import {
   openPastReviewPickerModal,
   pastReviewBinding,
 } from "./community-past-review";
+import { openQuickEntryModal } from "./community-quick-entry";
 import { processRecordAction } from "./community-record-interactions";
 import { type CommunityContext, ephemeral } from "./community-runtime";
 import type { CommunityScope } from "./community-types";
-import { InputError, object, string } from "./input";
+import { date, InputError, object, string } from "./input";
 
 type ActionInteraction = {
   readonly id: string;
@@ -47,6 +48,7 @@ export async function handleCommunityAction(input: ActionInteraction): Promise<R
       throw new InputError("기록 위치를 확인할 수 없어요.");
     context = { ...context, thread, source };
   }
+  if (value.date !== undefined) context = { ...context, date: date(value.date) };
   if (input.id === "community_palette") {
     await openCommunityPalette(context, string(input.data.trigger_id), key);
     return new Response(null, { status: 200 });
@@ -77,6 +79,14 @@ export async function handleCommunityAction(input: ActionInteraction): Promise<R
   }
   if (input.id === "community_past_review_list") {
     await openPastReviewPickerModal(context, string(input.data.trigger_id));
+    return new Response(null, { status: 200 });
+  }
+  if (input.id === "community_quick_goal" || input.id === "community_quick_review") {
+    await openQuickEntryModal(
+      context,
+      string(input.data.trigger_id),
+      input.id === "community_quick_goal" ? "goal" : "review",
+    );
     return new Response(null, { status: 200 });
   }
   const bugResponse = await handleBugAction(

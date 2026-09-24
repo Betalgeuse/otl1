@@ -24,3 +24,20 @@ export function parseExplicitGoal(text: string, contextDate: string, today: stri
   const goal = EXPLICIT_GOAL.exec(firstLine)?.[1]?.trim() ?? "";
   return goal && goal.length <= 200 ? goal : null;
 }
+
+export function resolveExplicitGoal(
+  text: string,
+  input: {
+    readonly contextDate: string;
+    readonly serviceDate: string;
+    readonly calendarDate: string;
+  },
+): { readonly date: string; readonly goal: string } | null {
+  const target = targetDateContext(text, input.contextDate, input.serviceDate);
+  const resolvedDate =
+    target.kind === "different" && target.targetDate === input.calendarDate
+      ? input.calendarDate
+      : input.contextDate;
+  const goal = parseExplicitGoal(text, resolvedDate, input.serviceDate);
+  return goal === null ? null : { date: resolvedDate, goal };
+}
