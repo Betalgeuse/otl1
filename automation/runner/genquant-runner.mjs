@@ -254,6 +254,18 @@ async function waitForTask(db, config, lease, workerId, leaseToken, taskId, star
 async function processOne(config) {
   const db = sqlClient(config.BUG_RUNNER_DATABASE_URL);
   const workerId = config.BUG_RUNNER_WORKER_ID ?? "genquant-primary";
+  const repository = new URL(config.CODEX_REPOSITORY_URL).pathname.replace(/^\/+|[.]git$/g, "");
+  const remoteHead = command("git", ["ls-remote", config.CODEX_REPOSITORY_URL, `refs/heads/${config.CODEX_BASE_BRANCH}`])
+    .split(/\s+/)[0];
+  if (!/^[a-f0-9]{40,64}$/.test(remoteHead)) throw new Error("repository head unavailable");
+  await db("bug_runner_update_head", {
+    teamId: config.SLACK_TEAM_ID,
+    repository,
+    branch: config.CODEX_BASE_BRANCH,
+    headSha: remoteHead,
+    workerId,
+    observedAt: new Date().toISOString(),
+  });
   const leaseToken = randomUUID();
   const runnerImageDigest = sha256(
     `${process.version}|${command("codex", ["--version"])}|${command("git", ["--version"])}`,

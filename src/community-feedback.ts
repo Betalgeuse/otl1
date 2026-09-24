@@ -4,7 +4,7 @@ import { sha256Hex } from "./community-referral-service-auth";
 import { type CommunityContext, type CommunityEnv, post } from "./community-runtime";
 import { addReactions, callSlack } from "./community-social";
 import type { CommunityStore } from "./community-store";
-import { InputError, object, string } from "./input";
+import { InputError, object } from "./input";
 import { INTENT_MODEL, type IntentAI } from "./intent";
 import { NeonStore } from "./store";
 
@@ -169,20 +169,8 @@ export async function startCodexFeedback(
   const branch = context.env.COMMUNITY_CODEX_BRANCH;
   if (!repository || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || !branch)
     throw new InputError("GenQuant 작업 저장소 연결을 확인해 주세요.");
-  const response = await fetch(
-    `https://api.github.com/repos/${repository}/commits/${encodeURIComponent(branch)}`,
-    {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "otl1-worker" },
-      redirect: "manual",
-      signal: AbortSignal.timeout(10_000),
-    },
-  );
-  if (!response.ok) throw new InputError("작업 기준 브랜치를 확인하지 못했어요.");
-  const baseSha = string(object(await response.json()).sha);
-  if (!/^[a-f0-9]{40,64}$/.test(baseSha))
-    throw new InputError("작업 기준 SHA를 확인하지 못했어요.");
   const approvalReceipt = await sha256Hex(
-    `${context.scope.teamId}:${context.scope.userId}:${input.feedbackId}:${input.packetRevision}:${baseSha}`,
+    `${context.scope.teamId}:${context.scope.userId}:${input.feedbackId}:${input.packetRevision}:${repository}:${branch}`,
   );
   const queued = object(
     await new NeonStore(context.env.DATABASE_URL).queryJson(
@@ -194,13 +182,18 @@ export async function startCodexFeedback(
           reporterId: input.reporterId,
           adminId: context.scope.userId,
           packetRevision: input.packetRevision,
-          baseSha,
+          repository,
+          branch,
           approvalReceipt,
-          idempotencyKey: `admin-queue:${input.feedbackId}:${input.packetRevision}:${baseSha}`,
+          idempotencyKey: `admin-queue:${input.feedbackId}:${input.packetRevision}:${repository}:${branch}`,
         }),
       ],
     ),
   );
+  if (queued.accepted !== true && queued.reason === "runner_head_stale")
+    throw new InputError(
+      "자동 작업 서버가 기준 코드를 확인하는 중이에요. 잠시 뒤 다시 눌러 주세요.",
+    );
   if (queued.accepted !== true)
     throw new InputError(
       "확정된 버그 명세만 자동 작업에 넣을 수 있어요. 스레드에서 명세를 먼저 보완해 주세요.",

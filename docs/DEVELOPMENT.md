@@ -63,7 +63,7 @@ psql -X --single-transaction -v ON_ERROR_STOP=1 -f migrations/028_welcome_guide_
 
 번호 순서는 001부터 028까지 유지합니다. 이 설치 프로필은 초대 정책을 쓰지 않으므로 002~004를 건너뛰며, 006·007은 반드시 한 트랜잭션으로 적용합니다. 014 ledger부터 023 현재 채널 회원 스냅샷까지의 순서를 바꾸지 않고, 024 잔디 delivery → 025 projection → 026 welcome 발행본 → 027 회원·안내 delivery 감사 경계 → 028 welcome DB 역할 분리 순서로 적용합니다. 특히 016을 적용하기 전에는 delivery retry를 활성화하지 않습니다. 워크스페이스의 `primary_goal_channel_id`는 실제 공개 목표 채널로 명시적으로 연결하며 QA 채널을 추측해 넣지 않습니다.
 
-GenQuant 자동 개선 실행기를 활성화하려면 048 뒤에 `049_bug_runner_handoff.sql`, `050_bug_runner_auto_merge.sql`을 순서대로 적용합니다. DB 소유자 연결은 migration과 `bootstrap-bug-runner-db-role.mjs`에서만 사용합니다. 부트스트랩은 무작위 비밀번호의 `otl_bug_runner_login`을 만들고, 완성된 URL을 `BUG_RUNNER_SECRET_SINK`의 표준입력으로만 전달합니다. URL을 명령 인자·로그·Git에 쓰지 않습니다. 실행기 로그인은 runner 함수만 호출할 수 있고 bug·member·agent table을 직접 읽을 수 없습니다.
+GenQuant 자동 개선 실행기를 활성화하려면 048 뒤에 `049_bug_runner_handoff.sql`, `050_bug_runner_auto_merge.sql`, `051_bug_runner_repository_head.sql`을 순서대로 적용합니다. DB 소유자 연결은 migration과 `bootstrap-bug-runner-db-role.mjs`에서만 사용합니다. 부트스트랩은 무작위 비밀번호의 `otl_bug_runner_login`을 만들고, 완성된 URL을 `BUG_RUNNER_SECRET_SINK`의 표준입력으로만 전달합니다. URL을 명령 인자·로그·Git에 쓰지 않습니다. 실행기 로그인은 runner 함수만 호출할 수 있고 bug·member·agent table을 직접 읽을 수 없습니다.
 
 `ops/genquant/otl1-bug-runner.service`를 설치하기 전에 `runner.env.example`을 사용자 전용 `~/.config/otl1-bug-runner/env`로 옮기고 mode 0600을 확인합니다. `BUG_RUNNER_ROOT`도 실행 사용자만 접근 가능한 디렉터리여야 합니다. 서비스는 Cloudflare나 Slack의 inbound 포트를 열지 않으며 Neon과 Codex Cloud로 outbound 요청만 보냅니다. 최초 운영 검증은 확정된 비공개 QA bug 하나로 실행하고, `task_started`와 `task_ready`가 같은 feedback 스레드에 한 번씩 돌아오는지 확인합니다.
 
