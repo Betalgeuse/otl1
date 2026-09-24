@@ -316,6 +316,18 @@ export async function startCodexFeedback(
   const user = object(profile.user);
   if (user.is_admin !== true && user.is_owner !== true)
     throw new InputError("Slack 관리자만 Codex 작업을 시작할 수 있어요.");
+  await queueCodexFeedback(context, input, context.scope.userId);
+}
+
+async function queueCodexFeedback(
+  context: CommunityContext,
+  input: {
+    readonly feedbackId: string;
+    readonly reporterId: string;
+    readonly packetRevision: number;
+  },
+  adminId: string,
+): Promise<void> {
   if (context.env.BUG_RUNNER_ENABLED !== "true")
     throw new InputError("GenQuant 자동 작업은 아직 준비 중이에요.");
   const repository = context.env.COMMUNITY_CODEX_REPOSITORY;
@@ -326,7 +338,7 @@ export async function startCodexFeedback(
   let packetRevision = input.packetRevision;
   const queue = async () => {
     const approvalReceipt = await sha256Hex(
-      `${context.scope.teamId}:${context.scope.userId}:${input.feedbackId}:${packetRevision}:${repository}:${branch}`,
+      `${context.scope.teamId}:${adminId}:${input.feedbackId}:${packetRevision}:${repository}:${branch}`,
     );
     return object(
       await new NeonStore(context.env.DATABASE_URL).queryJson(
@@ -336,7 +348,7 @@ export async function startCodexFeedback(
             teamId: context.scope.teamId,
             bugId: input.feedbackId,
             reporterId: input.reporterId,
-            adminId: context.scope.userId,
+            adminId,
             packetRevision,
             repository,
             branch,
@@ -385,7 +397,57 @@ export async function startCodexFeedback(
   await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
     channel: context.scope.channelId,
     thread_ts: context.thread,
-    text: `관리자 승인을 확인했어요. OT1L이 수정과 검증을 시작합니다. · ${input.feedbackId}`,
+    text: `피드백을 접수했어요. OT1L이 수정안과 검증 결과를 준비합니다. · ${input.feedbackId}`,
+  });
+}
+
+export async function startCodexFeedbackAutomatically(
+  context: CommunityContext,
+  input: {
+    readonly feedbackId: string;
+    readonly reporterId: string;
+    readonly packetRevision: number;
+  },
+): Promise<void> {
+  const adminId = context.env.COMMUNITY_ADMIN_ID;
+  if (!adminId) throw new InputError("피드백 병합 관리자를 확인해 주세요.");
+  await queueCodexFeedback(context, input, adminId);
+}
+
+export async function approveCodexMerge(
+  context: CommunityContext,
+  input: {
+    readonly feedbackId: string;
+    readonly packetRevision: number;
+    readonly prNumber: number;
+  },
+): Promise<void> {
+  const profile = object(
+    await callSlack(context.env.SLACK_BOT_TOKEN, "users.info", { user: context.scope.userId }),
+  );
+  const user = object(profile.user);
+  if (user.is_admin !== true && user.is_owner !== true)
+    throw new InputError("Slack 관리자만 병합을 승인할 수 있어요.");
+  const approved = object(
+    await new NeonStore(context.env.DATABASE_URL).queryJson(
+      "SELECT otl.bug_admin_approve_merge($1::jsonb)",
+      [
+        JSON.stringify({
+          teamId: context.scope.teamId,
+          bugId: input.feedbackId,
+          adminId: context.scope.userId,
+          packetRevision: input.packetRevision,
+          prNumber: input.prNumber,
+          idempotencyKey: `merge-approval:${input.feedbackId}:${input.prNumber}:${context.scope.userId}`,
+        }),
+      ],
+    ),
+  );
+  if (approved.accepted !== true) throw new InputError("이 수정안은 지금 병합할 수 없어요.");
+  await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
+    channel: context.scope.channelId,
+    thread_ts: context.thread,
+    text: `병합 승인을 확인했어요. 반영이 끝나면 여기에서 알려드릴게요. · ${input.feedbackId}`,
   });
 }
 
@@ -415,35 +477,14 @@ export async function postFeedbackAdminReview(
     await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
       channel: channelId,
       ...(channelId === context.scope.channelId ? { thread_ts: context.thread } : {}),
-      text: `OT1L 개선안 승인 대기 · ${input.feedbackId}`,
+      text: `OT1L 피드백 정보 확인 필요 · ${input.feedbackId}`,
       blocks: [
         {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*As-Is*\n${escapeSlackText(asIs)}\n\n*To-Be*\n${escapeSlackText(toBe)}\n\n이대로 개선을 시작할까요?`,
+            text: `*As-Is*\n${escapeSlackText(asIs)}\n\n*To-Be*\n${escapeSlackText(toBe)}\n\n자동 수정안을 만들기에는 정보가 부족해 관리자가 확인해야 합니다.`,
           },
-        },
-        {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: { type: "plain_text", text: "이대로 개선하기" },
-              style: "primary",
-              action_id: "community_feedback_admin_start",
-              value: JSON.stringify({
-                ownerId: "actor",
-                key: input.feedbackId,
-                feedbackId: input.feedbackId,
-                publicAlias: input.feedbackId,
-                sourceChannel: context.scope.channelId,
-                sourceThread: context.thread,
-                reporterId: context.scope.userId,
-                packetRevision: input.packetRevision,
-              }),
-            },
-          ],
         },
       ],
     });

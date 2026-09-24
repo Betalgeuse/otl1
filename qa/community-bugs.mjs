@@ -98,6 +98,9 @@ const env = {
   COMMUNITY_PUBLIC_CHANNEL_ID: "CPUBLIC",
   COMMUNITY_RELEASE_CHANNEL_ID: "CRELEASE",
   COMMUNITY_FEEDBACK_CHANNEL_ID: "CFEEDBACK",
+  BUG_RUNNER_ENABLED: "true",
+  COMMUNITY_CODEX_REPOSITORY: "Betalgeuse/otl1",
+  COMMUNITY_CODEX_BRANCH: "main",
   BUG_PRIVATE_KEK: key,
   BUG_PRIVATE_KEK_VERSION: "qa-v1",
   BUG_PRIVATE_OBJECTS: {
@@ -680,6 +683,8 @@ globalThis.fetch = async (url, options) => {
         ],
       });
     }
+    if (query.includes("bug_admin_queue"))
+      return Response.json({ rows: [[JSON.stringify({ accepted: true, state: "queued" })]] });
     throw new Error(`unexpected SQL: ${query}`);
   }
   if (forcedSlackError && target.includes(`slack.com/api/${forcedSlackPath}`))
@@ -2022,12 +2027,8 @@ try {
   const routedReplies = routedPosts.filter(
     (call) => call.body.channel === "CFEEDBACK" && call.body.thread_ts === feedbackThread,
   );
-  assert.equal(routedReplies.length, 1, "clear feedback goes straight to one admin review");
-  assert.match(routedReplies[0].body.text, /OT1L 개선안 승인 대기/);
-  assert.equal(
-    routedReplies[0].body.blocks[1].elements[0].action_id,
-    "community_feedback_admin_start",
-  );
+  assert.equal(routedReplies.length, 1, "clear feedback starts branch preparation immediately");
+  assert.match(routedReplies[0].body.text, /수정안과 검증 결과를 준비/);
   const routedBugId = /버그 키: (BUG-[A-Z0-9]+)/.exec(feedbackRoot.body.text)?.[1];
   const routedDraft = routedBugId ? bugRows.get(routedBugId) : undefined;
   assert.notEqual(routedDraft, undefined, "the canonical feedback thread is the dialogue source");

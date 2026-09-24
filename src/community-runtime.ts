@@ -96,6 +96,7 @@ export function actionIdentity(data: Record<string, unknown>, env: CommunityEnv,
     "community_bug_answer_open",
     "community_bug_answer_submit",
     "community_feedback_admin_start",
+    "community_feedback_merge_approve",
   ].includes(actionId);
   const introductionAction = [
     "community_introduction",
