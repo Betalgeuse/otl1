@@ -115,6 +115,7 @@ globalThis.fetch = async (url, options = {}) => {
       ],
     });
   if (method === "chat.postMessage") return Response.json({ ok: true, ts: "123.456" });
+  if (method === "chat.update") return Response.json({ ok: true, ts: body.ts });
   if (method === "reactions.add") return Response.json({ ok: true });
   throw new Error(`unexpected ${method}`);
 };
@@ -177,7 +178,8 @@ try {
     },
   );
   const post = calls.find(
-    (call) => call.method === "chat.postMessage" && call.body.text.includes("수정안과 검증 결과를 준비"),
+    (call) =>
+      call.method === "chat.postMessage" && call.body.text.includes("수정안과 검증 결과를 준비"),
   );
   assert.equal(post.body.thread_ts, "123.100");
   assert.match(post.body.text, /피드백을 접수했어요/);
@@ -212,6 +214,12 @@ try {
       (call) => call.method === "chat.postMessage" && call.body.text.includes("병합 승인을 확인"),
     ),
     true,
+  );
+  const approvalUpdate = calls.find((call) => call.method === "chat.update");
+  assert.equal(approvalUpdate.body.ts, "123.100");
+  assert.equal(
+    approvalUpdate.body.blocks.some((block) => block.type === "actions"),
+    false,
   );
   queueAccepted = false;
   const postsBeforeMismatch = calls.filter((call) => call.method === "chat.postMessage").length;
