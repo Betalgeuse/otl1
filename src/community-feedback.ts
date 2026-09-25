@@ -444,6 +444,20 @@ export async function approveCodexMerge(
     ),
   );
   if (approved.accepted !== true) throw new InputError("이 수정안은 지금 병합할 수 없어요.");
+  await callSlack(context.env.SLACK_BOT_TOKEN, "chat.update", {
+    channel: context.scope.channelId,
+    ts: context.source,
+    text: `병합 승인됨 · PR #${input.prNumber} 반영 중`,
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*병합 승인됨*\n<https://github.com/Betalgeuse/otl1/pull/${input.prNumber}|변경 내용 보기> · 반영 중`,
+        },
+      },
+    ],
+  });
   await callSlack(context.env.SLACK_BOT_TOKEN, "chat.postMessage", {
     channel: context.scope.channelId,
     thread_ts: context.thread,
