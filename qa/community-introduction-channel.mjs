@@ -16,17 +16,18 @@ const intros = [
 ];
 class FakeStore {
   async putRecord(input) {
-    if (!records.has(input.userId)) records.set(input.userId, { ...input, status: "pending" });
-    return records.get(input.userId);
+    const key = `${input.userId}:${input.key}`;
+    if (!records.has(key)) records.set(key, { ...input, status: "pending" });
+    return records.get(key);
   }
   async claimRecord(input) {
-    const record = records.get(input.userId);
+    const record = records.get(`${input.userId}:${input.key}`);
     if (record?.status !== "pending") return false;
     record.status = "claimed";
     return true;
   }
   async finishRecord(input, status) {
-    records.get(input.userId).status = status;
+    records.get(`${input.userId}:${input.key}`).status = status;
     return true;
   }
   async introduction(_teamId, userId) {
@@ -37,8 +38,12 @@ class FakeStore {
   }
 }
 mock.module("../src/community-store.ts", () => ({ CommunityStore: FakeStore }));
-const { remindMissingIntroductions, showIntroductionDirectory, welcomeIntroductionMember } =
-  await import("../src/community-introduction-channel.ts");
+const {
+  remindMissingIntroductions,
+  sendDailyIntroductionReminders,
+  showIntroductionDirectory,
+  welcomeIntroductionMember,
+} = await import("../src/community-introduction-channel.ts");
 
 const env = {
   SLACK_TEAM_ID: "TQA",
@@ -126,8 +131,26 @@ try {
   );
   assert.match(reminder.body.text, /<@UNEW>/);
   assert.doesNotMatch(reminder.body.text, /<@UHAS>|<@UBOT>/);
+
+  assert.equal(
+    await sendDailyIntroductionReminders(env, context.store, "2026-09-16", "10:00"),
+    1,
+  );
+  assert.equal(
+    await sendDailyIntroductionReminders(env, context.store, "2026-09-16", "10:01"),
+    0,
+  );
+  const directReminders = calls.filter(
+    (call) => call.method === "chat.postMessage" && call.body.channel === "UNEW",
+  );
+  assert.equal(directReminders.length, 1, "daily retries do not duplicate the DM");
+  assert.match(directReminders[0].body.text, /자기소개를 남겨주세요/);
+  assert.equal(
+    directReminders[0].body.blocks[1].elements[0].action_id,
+    "community_introduction",
+  );
   console.log(
-    "PASS introduction channel: join prompt, owner action, readable Canvas directory, missing-member mention",
+    "PASS introduction channel: join prompt, owner action, readable Canvas directory, missing-member mention, daily missing-member DM",
   );
 } finally {
   globalThis.fetch = original;
