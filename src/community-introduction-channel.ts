@@ -3,6 +3,7 @@ import { introductionCanvasUrl } from "./community-introduction-canvas";
 import { type CommunityContext, type CommunityEnv, ephemeral } from "./community-runtime";
 import { callSlack } from "./community-social";
 import { CommunityStore } from "./community-store";
+import type { CommunityRecord, CommunityScope } from "./community-types";
 import { koreaDate, list, object, string } from "./input";
 import { NeonStore } from "./store";
 
@@ -13,7 +14,16 @@ function isJoin(event: Record<string, unknown>): boolean {
   );
 }
 
-async function humanMember(userId: string, env: CommunityEnv): Promise<boolean> {
+type IntroductionReminderEnv = Pick<
+  CommunityEnv,
+  | "SLACK_TEAM_ID"
+  | "SLACK_BOT_TOKEN"
+  | "COMMUNITY_BOT_USER_ID"
+  | "COMMUNITY_INTRO_CHANNEL_ID"
+  | "COMMUNITY_INTRO_CANVAS_URL"
+>;
+
+async function humanMember(userId: string, env: IntroductionReminderEnv): Promise<boolean> {
   if (!/^[UW][A-Z0-9]+$/.test(userId) || userId === env.COMMUNITY_BOT_USER_ID) return false;
   const user = object((await callSlack(env.SLACK_BOT_TOKEN, "users.info", { user: userId })).user);
   return (
@@ -105,7 +115,7 @@ export async function showIntroductionDirectory(context: CommunityContext): Prom
   });
 }
 
-async function channelMemberIds(env: CommunityEnv): Promise<readonly string[]> {
+async function channelMemberIds(env: IntroductionReminderEnv): Promise<readonly string[]> {
   const result: string[] = [];
   let cursor = "";
   do {
@@ -118,6 +128,58 @@ async function channelMemberIds(env: CommunityEnv): Promise<readonly string[]> {
     cursor = string(object(page.response_metadata ?? {}).next_cursor ?? "");
   } while (cursor);
   return result;
+}
+
+type IntroductionReminderStore = {
+  introductions(teamId: string): Promise<readonly { readonly userId: string }[]>;
+  putRecord(record: Omit<CommunityRecord, "status">): Promise<unknown>;
+  claimRecord(scope: CommunityScope & { readonly key: string }): Promise<boolean>;
+  finishRecord(
+    scope: CommunityScope & { readonly key: string },
+    status: "sent" | "failed",
+  ): Promise<unknown>;
+};
+
+export async function sendDailyIntroductionReminders(
+  env: IntroductionReminderEnv,
+  store: IntroductionReminderStore,
+  date: string,
+  minute: string,
+): Promise<number> {
+  if (!env.COMMUNITY_INTRO_CHANNEL_ID || minute < "10:00" || minute > "10:05") return 0;
+  const introduced = new Set(
+    (await store.introductions(env.SLACK_TEAM_ID)).map((entry) => entry.userId),
+  );
+  let sent = 0;
+  for (const userId of await channelMemberIds(env)) {
+    if (introduced.has(userId) || !(await humanMember(userId, env))) continue;
+    const scope = {
+      teamId: env.SLACK_TEAM_ID,
+      channelId: env.COMMUNITY_INTRO_CHANNEL_ID,
+      userId,
+      key: `introduction-reminder:${date}`,
+    };
+    await store.putRecord({
+      ...scope,
+      kind: "introduction_reminder",
+      body: { date },
+    });
+    if (!(await store.claimRecord(scope))) continue;
+    const text = "아직 자기소개가 없어요. 동료들이 알아볼 수 있도록 자기소개를 남겨주세요.";
+    try {
+      await callSlack(env.SLACK_BOT_TOKEN, "chat.postMessage", {
+        channel: userId,
+        text,
+        blocks: [{ type: "section", text: { type: "mrkdwn", text } }, introductionActionBlock(env)],
+      });
+      await store.finishRecord(scope, "sent");
+      sent += 1;
+    } catch (error) {
+      await store.finishRecord(scope, "failed");
+      throw error;
+    }
+  }
+  return sent;
 }
 
 export async function remindMissingIntroductions(context: CommunityContext): Promise<void> {
