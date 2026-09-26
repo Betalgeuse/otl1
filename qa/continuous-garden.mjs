@@ -106,6 +106,13 @@ const day17Url = await boardLink(day17, {
   today: "2026-09-26",
 });
 assert.deepEqual((await readBoardLink(day17Url.split("/board/")[1], "secret")).cells, day17.cells);
+const day17Png = await renderBoard(day17);
+const dimensions = new DataView(day17Png.buffer, day17Png.byteOffset + 16, 8);
+assert.deepEqual(
+  [dimensions.getUint32(0), dimensions.getUint32(4)],
+  [1248, 1152],
+  "32-cell garden renders as eight columns by four rows with a proportional OT1L header",
+);
 console.log(
-  "PASS seasonal garden grows through 32 cells, keeps weekend participation, signs and renders PNG",
+  "PASS seasonal garden grows through 32 cells, renders 8x4 with OT1L branding, keeps weekend participation, signs and renders PNG",
 );
