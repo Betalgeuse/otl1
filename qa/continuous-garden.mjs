@@ -85,6 +85,27 @@ assert.deepEqual(decoded.cells, day9.cells);
 const png = await renderBoard(decoded);
 assert.deepEqual([...png.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
 assert.ok(png.length > 1000);
+
+const day17 = buildBoard(
+  {
+    startDate: "2026-09-01",
+    palette,
+    goals: weekdays("2026-09-01", "2026-09-26").concat({
+      date: "2026-09-26",
+      text: "optional Saturday goal",
+      completed: false,
+    }),
+  },
+  "2026-09-26",
+);
+assert.equal(day17.cells.length, 32);
+assert.ok(day17.cells.at(-1).date > "2026-10-10", "32 visible cells may extend past 14 days");
+const day17Url = await boardLink(day17, {
+  baseUrl: "https://test.example",
+  secret: "secret",
+  today: "2026-09-26",
+});
+assert.deepEqual((await readBoardLink(day17Url.split("/board/")[1], "secret")).cells, day17.cells);
 console.log(
-  "PASS seasonal garden grows 4-to-8 without rolling, keeps weekend participation, signs and renders PNG",
+  "PASS seasonal garden grows through 32 cells, keeps weekend participation, signs and renders PNG",
 );

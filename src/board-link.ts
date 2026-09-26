@@ -48,8 +48,12 @@ export async function readBoardLink(token: string, secret: string): Promise<Boar
   const origin = Date.parse(`${date(decoded.origin)}T00:00:00Z`);
   const today = date(decoded.today);
   const todayStamp = Date.parse(`${today}T00:00:00Z`);
+  const encodedCells = list(decoded.cells);
+  if (encodedCells.length < 1 || encodedCells.length > 512)
+    throw new InputError("잔디 칸 수가 올바르지 않습니다.");
+  const lastAllowedStamp = todayStamp + Math.max(14, encodedCells.length * 2) * 86_400_000;
   let previous = 0;
-  const cells = list(decoded.cells).map((value): Cell => {
+  const cells = encodedCells.map((value): Cell => {
     const cell = object(value);
     const status = string(cell.status);
     if (status !== "empty" && status !== "written" && status !== "complete")
@@ -57,7 +61,7 @@ export async function readBoardLink(token: string, secret: string): Promise<Boar
     const cellDate = date(cell.date);
     const stamp = Date.parse(`${cellDate}T00:00:00Z`);
     const day = Math.floor((stamp - origin) / 86_400_000) + 1;
-    if (day <= previous || day < 1 || stamp > todayStamp + 14 * 86_400_000)
+    if (day <= previous || day < 1 || stamp > lastAllowedStamp)
       throw new InputError("잔디 날짜 순서가 올바르지 않습니다.");
     previous = day;
     return {
@@ -69,8 +73,6 @@ export async function readBoardLink(token: string, secret: string): Promise<Boar
       today: stamp === todayStamp,
     };
   });
-  if (cells.length < 1 || cells.length > 512)
-    throw new InputError("잔디 칸 수가 올바르지 않습니다.");
   return {
     cells,
     palette: palette(decoded.palette),
