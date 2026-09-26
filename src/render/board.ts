@@ -7,14 +7,32 @@ const TEXT = color("#24292F");
 const SECONDARY = color("#57606A");
 const BORDER = color("#D0D7DE");
 const TODAY = color("#0969DA");
+const BRAND_RED = color("#ED1C24");
+const COLUMNS = 8;
+const COLUMN_WIDTH = 76;
+const ROW_HEIGHT = 130;
+const BRAND_HEIGHT = 44;
+const BOARD_WIDTH = COLUMNS * COLUMN_WIDTH + 16;
+
+function drawBrand(raster: Raster): void {
+  const center = BOARD_WIDTH / 2;
+  for (const [offset, glyph, ink] of [
+    [-33, "O", TEXT],
+    [-11, "T", TEXT],
+    [11, "1", BRAND_RED],
+    [33, "L", TEXT],
+  ] as const) {
+    label(raster, glyph, { center: { x: center + offset, y: 8 }, ink, scale: 4 });
+  }
+}
 
 function drawCell(
   raster: Raster,
   cell: Cell,
   placement: { readonly index: number; readonly board: Board },
 ): void {
-  const x = 8 + (placement.index % 4) * 76;
-  const y = 12 + Math.floor(placement.index / 4) * 130;
+  const x = 8 + (placement.index % COLUMNS) * COLUMN_WIDTH;
+  const y = BRAND_HEIGHT + 12 + Math.floor(placement.index / COLUMNS) * ROW_HEIGHT;
   const centerX = x + 38;
   label(raster, "DAY", { center: { x: centerX, y }, ink: SECONDARY });
   label(raster, String(cell.day), { center: { x: centerX, y: y + 20 }, ink: TEXT });
@@ -79,7 +97,11 @@ function assertNever(value: never): never {
 }
 
 export async function renderBoard(board: Board): Promise<Uint8Array> {
-  const raster = new Raster({ width: 320, height: Math.ceil(board.cells.length / 4) * 130 + 12 });
+  const raster = new Raster({
+    width: BOARD_WIDTH,
+    height: BRAND_HEIGHT + Math.ceil(board.cells.length / COLUMNS) * ROW_HEIGHT + 12,
+  });
+  drawBrand(raster);
   for (const [index, cell] of board.cells.entries()) drawCell(raster, cell, { index, board });
   return encodePng(raster.pixels, raster);
 }
