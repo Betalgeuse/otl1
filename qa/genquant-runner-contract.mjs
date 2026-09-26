@@ -74,6 +74,8 @@ const feedbackLease = parseLease({
 });
 const feedbackPrompt = buildReproductionPrompt(feedbackLease);
 assert.match(feedbackPrompt, /Request type: product feedback/);
+assert.match(feedbackPrompt, /product feedback repository inspection/);
+assert.match(feedbackPrompt, /continue to the fix stage/);
 assert.doesNotMatch(feedbackPrompt, /Reproduction steps:/);
 assert.throws(
   () =>
