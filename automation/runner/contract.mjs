@@ -138,7 +138,7 @@ export function parseTaskStatus(output) {
   return match[1].toLowerCase();
 }
 
-export function parseReproductionReceipt(raw, expectedBugId) {
+export function parseReproductionReceipt(raw, expectedBugId, allowNotReproduced = false) {
   let value;
   try {
     value = JSON.parse(raw);
@@ -151,7 +151,10 @@ export function parseReproductionReceipt(raw, expectedBugId) {
   if (JSON.stringify(keys) !== JSON.stringify(expected)) fail("INVALID_ARTIFACT", "receipt keys differ");
   if (receipt.schemaVersion !== "bug_reproduction.v1" || receipt.bugId !== expectedBugId)
     fail("INVALID_ARTIFACT", "receipt identity differs");
-  if (receipt.failureObserved !== true) fail("NOT_REPRODUCED", "failure was not observed");
+  if (typeof receipt.failureObserved !== "boolean")
+    fail("INVALID_ARTIFACT", "failureObserved is invalid");
+  if (!receipt.failureObserved && !allowNotReproduced)
+    fail("NOT_REPRODUCED", "failure was not observed");
   text(receipt.summary, "summary", 4_000);
   for (const name of ["commands", "evidence"]) {
     if (!Array.isArray(receipt[name]) || receipt[name].length < 1 || receipt[name].length > 30)

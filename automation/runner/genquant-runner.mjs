@@ -209,6 +209,7 @@ async function validateTaskArtifact(config, lease, taskId, runId) {
     return parseReproductionReceipt(
       await readFile(join(worktree, expectedPath), "utf8"),
       lease.bugId,
+      lease.packet.schemaVersion === "feedback_packet.v1",
     );
   } finally {
     try {
@@ -519,7 +520,8 @@ async function processOne(config) {
       leaseToken,
       runId,
       status: "succeeded",
-      exitClass: "reproduced",
+      exitClass: artifact.receipt.failureObserved ? "reproduced" : "inspected",
+      failureObserved: artifact.receipt.failureObserved,
       elapsedMs: Date.now() - startedAt,
       artifactDigest: artifact.artifactDigest,
       resultDigest,
