@@ -126,6 +126,19 @@ assert.throws(
     ),
   /failure was not observed/,
 );
+const inspection = parseReproductionReceipt(
+  JSON.stringify({
+    schemaVersion: "bug_reproduction.v1",
+    bugId: feedbackLease.bugId,
+    failureObserved: false,
+    summary: "저장소 검사에서는 운영 증상을 재현하지 못했다",
+    commands: ["bun qa/garden-publication.mjs"],
+    evidence: ["static route test passes"],
+  }),
+  feedbackLease.bugId,
+  true,
+);
+assert.equal(inspection.receipt.failureObserved, false);
 assert.throws(
   () => parseTaskUrl("prefix https://chatgpt.com/codex/tasks/task_e_0123456789abcdef0123456789abcdef"),
   /canonical task URL/,

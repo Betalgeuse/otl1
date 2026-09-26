@@ -124,7 +124,7 @@ Cron 등록이 실제로 stale이라는 Cloudflare 설정·호출 증거가 있�
 
 Slack delivery 실패 로그의 `providerSubcode`는 `invalid_blocks`, `invalid_arguments`, `invalid_form_data`, `msg_too_long`, `http_429`, `provider_5xx`, `other` 중 하나만 남깁니다. 원문 응답, 메타데이터 메시지, 사용자 입력은 로그나 delivery ledger에 저장하지 않습니다.
 
-확정된 피드백은 원문에 `loading` 반응을 달고 원격 branch SHA에 묶인 GenQuant job을 자동 생성합니다. 재현 artifact와 수정 diff는 별도 경계로 검사하며, 금지 경로가 없고 전체 검사가 통과한 변경만 Draft PR까지 만듭니다. OT1L은 As-Is·To-Be·수정 파일 요약·변경 내용 링크와 **병합 승인** 버튼을 같은 스레드에 게시합니다. 승인 전 PR은 Draft로 남습니다. Slack workspace admin 또는 owner의 승인 영수증을 DB에 기록한 뒤에만 GenQuant가 PR을 ready로 바꾸고 squash merge합니다. 병합 뒤 OT1L이 관리자와 원제보자를 멘션해 결과를 남기고 `loading`을 `white_check_mark`로 교체합니다. GitHub Actions는 사용하지 않습니다.
+확정된 피드백은 원문에 `loading` 반응을 달고 원격 branch SHA에 묶인 GenQuant job을 자동 생성합니다. 재현 artifact와 수정 diff는 별도 경계로 검사합니다. `bug_packet.v1`은 실제 실패 재현을 요구합니다. `feedback_packet.v1`은 저장소 검사에서 `failureObserved=false`여도 이를 실패로 위장하지 않고 `inspected` 증거로 남긴 뒤 수정 단계로 이어갑니다. 운영 DB·Slack 관찰을 요구한 제보가 로컬 테스트 통과만으로 종료되면 안 됩니다. 금지 경로가 없고 전체 검사가 통과한 변경만 Draft PR까지 만듭니다. OT1L은 As-Is·To-Be·수정 파일 요약·변경 내용 링크와 **병합 승인** 버튼을 같은 스레드에 게시합니다. 승인 전 PR은 Draft로 남습니다. Slack workspace admin 또는 owner의 승인 영수증을 DB에 기록한 뒤에만 GenQuant가 PR을 ready로 바꾸고 squash merge합니다. 병합 뒤 OT1L이 관리자와 원제보자를 멘션해 결과를 남기고 `loading`을 `white_check_mark`로 교체합니다. GitHub Actions는 사용하지 않습니다.
 
 피드백 채널로 정규화된 초안은 opaque intake key와 함께 실제 `source_channel_id`·`source_thread`로도 다시 찾습니다. 따라서 새 피드백 스레드의 일반 댓글과 **답변하기** 모달 모두 같은 질문에 한 번만 연결됩니다. 명확한 `As-Is / To-Be`는 곧바로 승인 대기로 보내며 내부 분류 후보나 누락 필드 목록을 채널에 노출하지 않습니다. Qwen은 구현 판단을 바꾸는 정보가 없을 때만 한 질문을 만들고, 개선 제안에는 발생 시각과 빈도를 묻지 않습니다. 모델이 실패하면 이미 명확한 두 문장은 그대로 진행하고, 기대 결과가 비었을 때만 안전한 기본 질문 하나를 사용합니다.
 
