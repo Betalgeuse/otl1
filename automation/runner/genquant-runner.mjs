@@ -1,7 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
+import {
+  closeSync,
+  constants,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { lstat, mkdir, open, readFile, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import {
   buildFixPrompt,
@@ -32,6 +40,31 @@ function command(binary, args, options = {}) {
     if (options.acceptOutputOnFailure && typeof error?.stdout === "string" && error.stdout.trim())
       return error.stdout.trimEnd();
     throw error;
+  }
+}
+
+function boundedCommandOutput(binary, args, options = {}) {
+  const directory = mkdtempSync(join(tmpdir(), "otl1-runner-command-"));
+  const stdoutPath = join(directory, "stdout");
+  const stderrPath = join(directory, "stderr");
+  const stdout = openSync(stdoutPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+  const stderr = openSync(stderrPath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+  try {
+    execFileSync(binary, args, {
+      cwd: options.cwd,
+      encoding: "utf8",
+      stdio: ["ignore", stdout, stderr],
+      timeout: options.timeout ?? 20_000,
+    });
+    return readFileSync(stdoutPath, "utf8").trimEnd();
+  } catch (error) {
+    const output = readFileSync(stdoutPath, "utf8").trimEnd();
+    if (options.acceptOutputOnFailure && output) return output;
+    throw error;
+  } finally {
+    closeSync(stdout);
+    closeSync(stderr);
+    rmSync(directory, { recursive: true, force: true });
   }
 }
 
@@ -297,7 +330,10 @@ async function waitForTask(db, config, lease, workerId, leaseToken, taskId, star
   while (Date.now() - startedAt < 20 * 60_000) {
     await sleep(10_000);
     const status = parseTaskStatus(
-      command("codex", ["cloud", "status", taskId], { acceptOutputOnFailure: true }),
+      boundedCommandOutput("codex", ["cloud", "status", taskId], {
+        acceptOutputOnFailure: true,
+        timeout: 20_000,
+      }),
     );
     if (["ready", "failed", "cancelled"].includes(status)) return status;
     if (Date.now() - lastHeartbeat >= 240_000) {
