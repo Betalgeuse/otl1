@@ -232,6 +232,7 @@ export const PUBLIC_QA_NAMES = [
   "bug-expiry-job-guard-contract.sql",
   "bug-db-integrity-contract.sql",
   "bug-runner-contract.sql",
+  "feedback-inspection-contract.sql",
   "bug-team-scope-contract.sql",
   "bug-private-atomic-contract.sql",
   "bug-private-backfill-contract.sql",
